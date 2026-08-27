@@ -27,6 +27,7 @@ import { rect, type Selection } from './selection.js'
 import { runStep, type Tab } from './store.js'
 import { celler, kolumner, rader } from '../core/locale/sv.js'
 import type { Stadning } from '../core/ops/clean.js'
+import type { Profilsteg } from '../core/ops/profil.js'
 
 /** Kolumner i den ordning markeringen räknar dem: synliga, i visningsordning. */
 export function selectableColumns(tab: Tab): Column[] {
@@ -63,12 +64,14 @@ function korOverKolumner(
   kind: string,
   kolumner: Column[],
   utfor: () => void,
+  profil?: Profilsteg,
 ): void {
   const bilder = new Map<ColumnId, ColumnSnapshot>()
   for (const col of kolumner) bilder.set(col.id, snapshotColumn(col))
   runStep(tab, {
     label,
     kind,
+    profil,
     apply: utfor,
     revert: () => {
       for (const col of kolumner) {
@@ -264,12 +267,18 @@ export function klistraIn(tab: Tab, sel: Selection, plan: PasteRequest, utoka: b
 
 /* ---------- Rader ---------- */
 
-export function taBortRader(tab: Tab, radlista: number[], etikett?: string): void {
+export function taBortRader(
+  tab: Tab,
+  radlista: number[],
+  etikett?: string,
+  profil?: Profilsteg,
+): void {
   if (radlista.length === 0) return
   let sparade: SavedRow[] = []
   runStep(tab, {
     label: etikett ?? `Tog bort ${rader(radlista.length)}`,
     kind: 'deleteRows',
+    profil,
     apply: () => {
       sparade = deleteRows(tab.frame, radlista)
     },
@@ -309,7 +318,9 @@ export function dupliceraRader(tab: Tab, radlista: number[]): void {
 export function taBortTommaRader(tab: Tab): number {
   const tomma = findEmptyRows(tab.frame)
   if (tomma.length === 0) return 0
-  taBortRader(tab, tomma, `Tog bort ${rader(tomma.length)} som var helt tomma`)
+  taBortRader(tab, tomma, `Tog bort ${rader(tomma.length)} som var helt tomma`, {
+    typ: 'tommaRader',
+  })
   return tomma.length
 }
 
@@ -326,6 +337,7 @@ export function taBortTommaKolumner(tab: Tab): number {
   runStep(tab, {
     label: `Tog bort ${kolumner(tomma.length)} som var helt tomma`,
     kind: 'dropEmptyColumns',
+    profil: { typ: 'tommaKolumner' },
     apply: () => {
       tab.frame.columns = tab.frame.columns.filter((c) => !tomma.includes(c.id))
     },
@@ -351,30 +363,8 @@ export function stadaKolumner(tab: Tab, valda: Column[], stadning: Stadning): nu
       andrade = 0
       for (const col of valda) andrade += mapColumnValues(col, stadning.fn)
     },
+    { typ: 'stada', kolumner: valda.map((c) => c.name), stadning: stadning.id },
   )
-  return andrade
-}
-
-/* ---------- Omskrivning av en kolumn ---------- */
-
-/**
- * Kör en godtycklig transform över en kolumn som ett ångringsbart steg.
- *
- * Det här är den gemensamma vägen in för samtliga städverktyg — datum,
- * e-post→namn, sök & ersätt, talstädning. De skiljer sig åt i vilken funktion
- * de skickar in och vad de kallar steget, inte i hur ändringen görs.
- */
-export function omvandlaKolumn(
-  tab: Tab,
-  col: Column,
-  etikett: string,
-  kind: string,
-  fn: (value: string) => string,
-): number {
-  let andrade = 0
-  korOverKolumner(tab, etikett, kind, [col], () => {
-    andrade = mapColumnValues(col, fn)
-  })
   return andrade
 }
 
@@ -386,11 +376,18 @@ export function tillampaForhandsvisning(tab: Tab, forh: Forhandsvisning): number
 
   const fn = forh.fn
   let andrade = 0
-  korOverKolumner(tab, forh.etikett, forh.kind, [kall], () => {
-    andrade = mapColumnValues(kall, fn)
-    // Typen ingår i ögonblicksbilden, så den följer med tillbaka vid ångra.
-    if (forh.nyTyp !== undefined && !kall.typeLocked) kall.type = forh.nyTyp
-  })
+  korOverKolumner(
+    tab,
+    forh.etikett,
+    forh.kind,
+    [kall],
+    () => {
+      andrade = mapColumnValues(kall, fn)
+      // Typen ingår i ögonblicksbilden, så den följer med tillbaka vid ångra.
+      if (forh.nyTyp !== undefined && !kall.typeLocked) kall.type = forh.nyTyp
+    },
+    forh.profil,
+  )
   return andrade
 }
 
@@ -450,6 +447,7 @@ function skapaKolumnerFran(tab: Tab, kall: Column, forh: Forhandsvisning): numbe
   runStep(tab, {
     label: forh.etikett,
     kind: forh.kind,
+    profil: forh.profil,
     apply: () => {
       tab.frame.columns.splice(index, 0, ...nya)
     },

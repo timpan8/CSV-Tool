@@ -37,6 +37,7 @@ export function ReplaceTool(props: {
         : beraknaForhandsvisning(col, {
             etikett: `Ersatte ”${kort(inst.sok)}” med ”${kort(inst.ersatt)}” i ”${col.name}”`,
             kind: 'replace',
+            profil: { typ: 'ersatt', kolumn: col.name, inst },
             fn,
           }),
     [col, props.dataRevision, fn],

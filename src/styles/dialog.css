@@ -721,3 +721,83 @@
   color: var(--text-svag);
   font-size: 14px;
 }
+
+/* ---------- Profiler ---------- */
+
+.profilsteg {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 190px;
+  overflow-y: auto;
+  border: 1px solid var(--linje);
+  border-radius: var(--radie);
+  padding: 4px;
+}
+
+.profilsteg__rad {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 4px;
+  border-radius: var(--radie-liten);
+  font-size: 12px;
+}
+
+.profilsteg__rad:hover {
+  background: var(--yta-3);
+}
+
+.profilsteg__rad--av {
+  color: var(--text-svagast);
+}
+
+.profilsteg__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profilsteg__skal {
+  font-size: 11px;
+  color: var(--text-svagast);
+  white-space: nowrap;
+}
+
+.profil {
+  border: 1px solid var(--linje);
+  border-radius: var(--radie);
+  padding: 7px 9px;
+  margin-bottom: 6px;
+}
+
+.profil__rubrik {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profil__antal {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-svagast);
+}
+
+.profil__steg {
+  margin: 5px 0 0;
+  padding-left: 20px;
+  font-size: 12px;
+  color: var(--text-svag);
+}
+
+.profil__saknade {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--varning);
+}
+
+.profil .restrad__skriv {
+  opacity: 1;
+}

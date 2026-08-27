@@ -40,8 +40,15 @@ function contentSecurityPolicy(): Plugin {
 
 export default defineConfig({
   plugins: [contentSecurityPolicy()],
-  // Relativ bas gör bygget sökvägsoberoende: fungerar på GitHub Pages under
-  // /CSV-Tool/, på ett eget domännamn, och när dist/ öppnas direkt från disk.
+  // Relativ bas gör bygget sökvägsoberoende: det fungerar på GitHub Pages
+  // under /CSV-Tool/ lika väl som på ett eget domännamn, utan att sökvägen
+  // behöver byggas in.
+  //
+  // Det räcker däremot inte för att öppna dist/index.html direkt från disk.
+  // Bygget laddar sin kod som ES-moduler, och från file:// är sidans ursprung
+  // opakt — webbläsaren blockerar då både modulskriptet, modul-workern och de
+  // dynamiska importerna som korsursprung. Ett bygge som startar från disk
+  // kräver att allt inlineas i en enda fil, vilket är en egen sak.
   base: './',
   esbuild: {
     jsx: 'automatic',

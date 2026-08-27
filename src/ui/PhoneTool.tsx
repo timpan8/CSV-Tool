@@ -55,6 +55,7 @@ export function PhoneTool(props: {
       beraknaForhandsvisning(col, {
         etikett: `Normaliserade telefonnummer i ”${col.name}”`,
         kind: 'phone',
+        profil: { typ: 'telefon', kolumn: col.name, inst },
         fn: telefonTransform(inst),
         arProblem: (v) => tolkaTelefon(v, inst).siffror === null,
       }),

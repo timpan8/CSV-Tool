@@ -88,7 +88,9 @@ import { Filterrad } from './Filterrad.jsx'
 import { MergeDialog } from './MergeDialog.jsx'
 import { Verkstad } from './Verkstad.jsx'
 import { oppnaVerkstad, stangVerkstad, verkstad } from '../state/matchning.js'
+import type { Profilsteg } from '../core/ops/profil.js'
 import { Kombinera } from './Kombinera.jsx'
+import { ProfilDialog } from './ProfilDialog.jsx'
 import { kombineraOppen, mallTabId, oppnaKombinera, vantarPaMall } from '../state/kombinera.js'
 import { nyRegelId, TOMT_FILTER, type Filterregel } from '../core/ops/filter.js'
 import {
@@ -119,6 +121,7 @@ export function App() {
   const [kö, setKö] = useState<File[]>([])
   const [exportOppen, setExportOppen] = useState(false)
   const [slaIhopOppen, setSlaIhopOppen] = useState(false)
+  const [profilerOppna, setProfilerOppna] = useState(false)
   const [meny, setMeny] = useState<MenyLage | null>(null)
   const [laddar, setLaddar] = useState<string | null>(null)
   const [slappOver, setSlappOver] = useState(false)
@@ -225,9 +228,22 @@ export function App() {
 
   /* ---------- Kolumnåtgärder ---------- */
 
-  const kor = (label: string, kind: string, apply: () => void, revert: () => void) => {
+  /**
+   * Kör en kolumnåtgärd som ett ångringsbart steg.
+   *
+   * `profil` är samma ändring uttryckt som data. Åtgärder utan beskrivning —
+   * flytta, infoga och duplicera — går inte att köra om på en annan fil utan
+   * att gissa: positionen och namnet ”Ny kolumn” betyder ingenting där.
+   */
+  const kor = (
+    label: string,
+    kind: string,
+    apply: () => void,
+    revert: () => void,
+    profil?: Profilsteg,
+  ) => {
     if (!tab) return
-    runStep(tab, { label, kind, apply, revert })
+    runStep(tab, { label, kind, apply, revert, profil })
   }
 
   const flyttaKolumn = (id: ColumnId, toIndex: number) => {
@@ -258,6 +274,7 @@ export function App() {
       () => {
         col.hidden = !nyDold
       },
+      { typ: 'doljKolumn', kolumn: col.name, dold: nyDold },
     )
   }
 
@@ -297,6 +314,7 @@ export function App() {
       () => {
         frame.columns.splice(index, 0, col)
       },
+      { typ: 'taBortKolumn', kolumn: col.name },
     )
     notify(`Kolumnen ”${col.name}” togs bort.`, {
       atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) },
@@ -324,6 +342,7 @@ export function App() {
       () => {
         col.name = gammalt
       },
+      { typ: 'dopOm', kolumn: gammalt, till: nytt },
     )
   }
 
@@ -350,7 +369,9 @@ export function App() {
   const sattTyp = (id: ColumnId, typ: ColumnType) => {
     if (!frame) return
     const col = findColumn(frame, id)
-    if (!col || col.type === typ) return
+    // Att välja den typ kolumnen redan har är inte ett tomt val: det låser
+    // den, så att automatisk omtolkning inte gör 01234 till ett tal.
+    if (!col || (col.type === typ && col.typeLocked)) return
     const gammal = col.type
     const gammalLast = col.typeLocked
     kor(
@@ -365,6 +386,7 @@ export function App() {
         col.type = gammal
         col.typeLocked = gammalLast
       },
+      { typ: 'sattTyp', kolumn: col.name, kolumntyp: typ },
     )
   }
 
@@ -867,6 +889,14 @@ export function App() {
         >
           Kombinera…
         </button>
+        <button
+          class="knapp"
+          disabled={!frame || egenVy}
+          title="Spara den här filens arbetsgång och kör om den på nästa fil."
+          onClick={() => setProfilerOppna(true)}
+        >
+          Profiler…
+        </button>
         <button class="knapp" disabled={!frame || egenVy} onClick={() => setExportOppen(true)}>
           Exportera
         </button>
@@ -1145,6 +1175,10 @@ export function App() {
           }}
           onOppna={(settings) => void laddaFil(kö[0]!, settings)}
         />
+      )}
+
+      {profilerOppna && tab && (
+        <ProfilDialog tab={tab} onStang={() => setProfilerOppna(false)} />
       )}
 
       {exportOppen && frame && (

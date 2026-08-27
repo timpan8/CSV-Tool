@@ -52,6 +52,13 @@ export function EmailTool(props: {
       beraknaForhandsvisning(col, {
         etikett: `${EPOSTFALT.find((f) => f.varde === falt)!.etikett} ur ”${col.name}”`,
         kind: 'email',
+        profil: {
+          typ: 'epost',
+          kolumn: col.name,
+          falt,
+          val: { efternamnForst },
+          namn: namn.trim() === '' ? 'Ny kolumn' : namn.trim(),
+        },
         fn: epostTransform(falt, { efternamnForst }),
         // Ett problem är en cell som inte ger något värde alls: adressen går
         // inte att tolka, eller saknar den del man bett om.
