@@ -2,7 +2,7 @@ import type { ColumnType } from '../types.js'
 import type { Delning } from './columns.js'
 import type { Datuminstallning } from './dates.js'
 import type { Epostfalt, Epostval } from './email.js'
-import type { Talinstallning } from './numbers.js'
+import type { Talformat, Talinstallning } from './numbers.js'
 import type { Telefoninstallning } from './phone.js'
 import type { Ersattning } from './replace.js'
 import { stadningarEfterId } from './clean.js'
@@ -47,6 +47,17 @@ export type Profilsteg =
   | { typ: 'ersatt'; kolumn: string | string[]; inst: Ersattning }
   | { typ: 'dela'; kolumn: string; delning: Delning; namn: string[] }
   | { typ: 'mall'; mall: string; namn: string; stadaLuckor: boolean }
+  /**
+   * Beräknad kolumn. Formeln nämner sina kolumner vid namn, precis som
+   * mallen, och är därför lika körbar på nästa fil.
+   */
+  | {
+      typ: 'formel'
+      uttryck: string
+      namn: string
+      format: Talformat
+      decimaler: number | null
+    }
   | { typ: 'dopOm'; kolumn: string; till: string }
   | { typ: 'taBortKolumn'; kolumn: string }
   | { typ: 'doljKolumn'; kolumn: string; dold: boolean }
@@ -102,6 +113,7 @@ export function stegetsKolumner(steg: Profilsteg): string[] {
     case 'sattTyp':
       return [steg.kolumn]
     case 'mall':
+    case 'formel':
     case 'tommaRader':
     case 'tommaKolumner':
       return []
@@ -137,6 +149,8 @@ export function beskrivSteg(steg: Profilsteg): string {
       return `Dela ${steg.kolumn} i ${steg.namn.join(', ')}`
     case 'mall':
       return `Slå ihop kolumner till ”${steg.namn}”`
+    case 'formel':
+      return `Räkna ut ”${steg.namn}” som ${steg.uttryck}`
     case 'dopOm':
       return `Döp om ${steg.kolumn} till ${steg.till}`
     case 'taBortKolumn':

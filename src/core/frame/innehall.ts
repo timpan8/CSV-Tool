@@ -30,7 +30,15 @@ import { STANDARDVAL as TALVAL, tolkaTal } from '../ops/numbers.js'
  * filen som avgör vilket av dem som passar. `src/ui/verktyg.tsx` exporterar
  * den vidare tillsammans med etiketterna.
  */
-export type Verktygsnamn = 'datum' | 'tal' | 'telefon' | 'epost' | 'dela' | 'slaihop' | 'ersatt'
+export type Verktygsnamn =
+  | 'datum'
+  | 'tal'
+  | 'telefon'
+  | 'epost'
+  | 'dela'
+  | 'slaihop'
+  | 'rakna'
+  | 'ersatt'
 
 export interface Verktygsforslag {
   verktyg: Verktygsnamn
