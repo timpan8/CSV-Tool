@@ -10,9 +10,18 @@ export default defineConfig({
     launchOptions: process.env.CI ? {} : { executablePath: '/opt/pw-browsers/chromium' },
   },
   webServer: {
-    command: 'npx vite preview --port 4173 --strictPort',
+    // --host 127.0.0.1 är avgörande. Utan den binder Vite till namnet
+    // "localhost", som på en del maskiner slås upp till ::1. Servern lyssnar
+    // då bara på IPv6 medan Playwright pollar 127.0.0.1, och väntan går ut
+    // efter 60 s utan att ett enda test har körts.
+    command: 'npx vite preview --host 127.0.0.1 --port 4173 --strictPort',
     url: 'http://127.0.0.1:4173',
-    reuseExistingServer: true,
-    timeout: 60_000,
+    // I CI ska servern alltid startas färsk; lokalt är återanvändning bekvämt.
+    reuseExistingServer: !process.env.CI,
+    // Kall npm-cache på en byggagent kan behöva mer än en minut.
+    timeout: 120_000,
+    // Serverns utskrift följer med i byggloggen, så nästa fel syns direkt.
+    stdout: 'pipe',
+    stderr: 'pipe',
   },
 })
