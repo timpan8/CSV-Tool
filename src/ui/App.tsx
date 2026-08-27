@@ -986,6 +986,24 @@ export function App() {
 
   /* ---------- Tangentbord ---------- */
 
+  /**
+   * Lägen som tangentbordshanteraren måste se *direkt*.
+   *
+   * Hanteraren registreras i en effekt, och effekter körs efter ritningen.
+   * Paletten kan alltså stå på skärmen medan hanteraren fortfarande bär det
+   * gamla värdet — och då gick Escape till rutnätet, som inte gör någonting
+   * med den, i stället för till paletten. Lokalt hann effekten alltid före;
+   * i CI, med två arbetare på en långsammare maskin, gjorde den det inte.
+   *
+   * Ref:en skrivs under renderingen och är därför sann i samma ögonblick som
+   * paletten syns. Samma resonemang gäller översikten och sökraden: de har
+   * inte visat felet, men de bygger på samma antagande.
+   */
+  const lagen = useRef({ palett: false, oversikt: false, sok: false })
+  lagen.current.palett = palettOppen
+  lagen.current.oversikt = oversiktOppen
+  lagen.current.sok = sokOppen
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null
@@ -1009,7 +1027,7 @@ export function App() {
        * efteråt om man klickat någon annanstans. En Escape som ibland inte
        * stänger är värre än ingen Escape alls.
        */
-      if (palettOppen) {
+      if (lagen.current.palett) {
         if (e.key === 'Escape') {
           e.preventDefault()
           setPalettOppen(false)
@@ -1022,7 +1040,7 @@ export function App() {
       // Med en egen vy öppen är rutnätet inte det man tittar på. Ctrl+Z hade
       // annars ångrat i den aktiva fliken medan rättningen gjordes i den
       // andra, och piltangenterna hade flyttat en markering ingen ser.
-      if (verkstad.value || kombineraOppen.value || oversiktOppen) return
+      if (verkstad.value || kombineraOppen.value || lagen.current.oversikt) return
       const { tab, frame, kolumner: synligaKolumner, sel: markering } = nu
 
       if (mod) {
@@ -1125,7 +1143,7 @@ export function App() {
           }
           break
         case 'Escape':
-          if (sokOppen) {
+          if (lagen.current.sok) {
             setSokOppen(false)
             clearViewSpec(tab)
           }
