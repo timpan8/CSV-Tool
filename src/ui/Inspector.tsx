@@ -3,6 +3,7 @@ import type { Column, ColumnType, Frame } from '../core/types.js'
 import { filledCount, valueCounts } from '../core/frame/column.js'
 import { TYPE_LABELS, violatesType } from '../core/infer.js'
 import { formatCount } from '../core/locale/sv.js'
+import { VERKTYG, type Verktygsnamn } from './verktyg.jsx'
 
 const TYPER: ColumnType[] = ['text', 'number', 'date', 'email', 'bool']
 
@@ -59,6 +60,7 @@ export function Inspector(props: {
   onRename: () => void
   onDuplicate: () => void
   onDelete: () => void
+  onVerktyg: (namn: Verktygsnamn) => void
 }) {
   const { column, frame } = props
   const stat = useMemo(
@@ -163,6 +165,21 @@ export function Inspector(props: {
             </div>
           </div>
         )}
+
+        <div class="insp__grupp">
+          <span class="falt__etikett">Städa kolumnen</span>
+          <div class="insp__knappar" style={{ marginTop: 6 }}>
+            {VERKTYG.map((v) => (
+              <button
+                key={v.namn}
+                class={`knapp${v.foreslasFor.includes(column.type) ? ' knapp--primar' : ''}`}
+                onClick={() => props.onVerktyg(v.namn)}
+              >
+                {v.etikett}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div class="insp__grupp" style={{ borderBottom: 0 }}>
           <span class="falt__etikett">Åtgärder</span>

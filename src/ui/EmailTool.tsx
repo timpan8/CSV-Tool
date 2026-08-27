@@ -56,7 +56,7 @@ export function EmailTool(props: {
         // Ett problem är en cell som inte ger något värde alls: adressen går
         // inte att tolka, eller saknar den del man bett om.
         arProblem: (v) => epostTransform(falt, { efternamnForst })(v) === '',
-        nyKolumn: namn.trim() === '' ? 'Ny kolumn' : namn.trim(),
+        nyaKolumner: [namn.trim() === '' ? 'Ny kolumn' : namn.trim()],
       }),
     [col, props.dataRevision, falt, efternamnForst, namn],
   )

@@ -3,7 +3,7 @@ import { getCell, matchDictionary } from '../core/frame/column.js'
 import { findColumn, identityView } from '../core/frame/frame.js'
 import { violatesType } from '../core/infer.js'
 import { normalizeAlways, stripDiacritics } from '../core/locale/sv.js'
-import { ANDRAD, PROBLEM, type Forhandsvisning } from './preview.js'
+import { ANDRAD, PROBLEM, uppslag, type Forhandsvisning } from './preview.js'
 
 /**
  * Beskrivningen av vad som visas.
@@ -87,7 +87,7 @@ function begransaTillForhandsvisning(
   const kvar: number[] = []
   for (let i = 0; i < grund.view.length; i++) {
     const r = grund.view[i]!
-    if (((forh.status[col.codes[r]!] ?? 0) & bit) !== 0) kvar.push(r)
+    if (((forh.status[uppslag(forh, col, r)] ?? 0) & bit) !== 0) kvar.push(r)
   }
   return { ...grund, view: Uint32Array.from(kvar) }
 }

@@ -64,7 +64,6 @@ import {
   type PasteRequest,
 } from '../state/edits.js'
 import { aggregera, cell, klamp, rect, type Selection } from '../state/selection.js'
-import type { Forhandsvisning } from '../state/preview.js'
 import { VirtualGrid, type Flytt } from './grid/VirtualGrid.jsx'
 import { ColumnPanel } from './ColumnPanel.jsx'
 import { Inspector } from './Inspector.jsx'
@@ -73,16 +72,12 @@ import { ImportDialog, type ImportSettings } from './ImportDialog.jsx'
 import { ExportDialog } from './ExportDialog.jsx'
 import { SearchBar } from './SearchBar.jsx'
 import { PasteDialog } from './PasteDialog.jsx'
-import { DateTool } from './DateTool.jsx'
-import { EmailTool } from './EmailTool.jsx'
-import { ReplaceTool } from './ReplaceTool.jsx'
+import { VERKTYG, Verktyg, type Verktygsnamn } from './verktyg.jsx'
 import { Meny, Toastar, type MenyPost } from './parts.jsx'
 import { EXEMPELFIL } from './exempel.js'
 
 const TYPCYKEL: ColumnType[] = ['text', 'number', 'date', 'email', 'bool']
 
-/** Städverktygen som bor i sidopanelen. */
-type Verktygsnamn = 'datum' | 'epost' | 'ersatt'
 
 interface MenyLage {
   x: number
@@ -838,6 +833,7 @@ export function App() {
             <Verktyg
               namn={verktyg.id}
               col={verktygKolumn}
+              frame={frame}
               dataRevision={tab.dataRevision}
               visaBara={tab.viewSpec.visaBara}
               onVisaBara={(v) => setViewSpec(tab, { visaBara: v })}
@@ -846,7 +842,7 @@ export function App() {
                 const antal = tillampaForhandsvisning(tab, f)
                 stangVerktyg()
                 notify(
-                  f.nyKolumn === null
+                  f.nyaKolumner.length === 0
                     ? `${f.etikett} — ${celler(antal)} skrevs om.`
                     : `${f.etikett} — ny kolumn med ${celler(antal)} ifyllda.`,
                   { atgard: { etikett: 'Ångra', kor: () => undo(tab) } },
@@ -864,6 +860,7 @@ export function App() {
               onRename={() => aktivKolumn && dopOmKolumn(aktivKolumn.id)}
               onDuplicate={() => aktivKolumn && dupliceraKolumn(aktivKolumn.id)}
               onDelete={() => aktivKolumn && taBortKolumn(aktivKolumn.id)}
+              onVerktyg={(namn) => aktivKolumn && oppnaVerktyg(namn, aktivKolumn.id)}
             />
           )}
         </div>
@@ -940,30 +937,6 @@ export function App() {
   )
 }
 
-/**
- * Väljer verktygspanel.
- *
- * Alla verktyg har samma gränssnitt mot appen — en kolumn in, en
- * förhandsvisning ut — så valet är en rad och inte en förgrening genom
- * resten av koden.
- */
-interface VerktygProps {
-  namn: Verktygsnamn
-  col: Column
-  dataRevision: number
-  visaBara: 'andrade' | 'problem' | undefined
-  onVisaBara: (v: 'andrade' | 'problem' | undefined) => void
-  onForhandsvisning: (forh: Forhandsvisning | null) => void
-  onTillampa: (forh: Forhandsvisning) => void
-  onStang: () => void
-}
-
-function Verktyg({ namn, ...rest }: VerktygProps) {
-  if (namn === 'datum') return <DateTool {...rest} />
-  if (namn === 'epost') return <EmailTool {...rest} />
-  return <ReplaceTool {...rest} />
-}
-
 function stadMeny(
   stada: (id: string) => void,
   rader: { tommaRader: () => void; tommaKolumner: () => void },
@@ -1024,9 +997,10 @@ function kolumnMeny(
     { etikett: 'Flytta först', kor: () => handlers.flyttaForst(id) },
     { etikett: 'Flytta sist', kor: () => handlers.flyttaSist(id) },
     'avdelare',
-    { etikett: 'Datum…', kor: () => handlers.verktyg('datum', id) },
-    { etikett: 'E-post → namn…', kor: () => handlers.verktyg('epost', id) },
-    { etikett: 'Sök och ersätt…', kor: () => handlers.verktyg('ersatt', id) },
+    ...VERKTYG.map((v): MenyPost => ({
+      etikett: v.etikett,
+      kor: () => handlers.verktyg(v.namn, id),
+    })),
     { etikett: 'Visa rader som inte går att tolka', kor: () => handlers.visaOgiltiga(id) },
     'avdelare',
     { etikett: 'Ta bort kolumnen', fara: true, kor: () => handlers.taBort(id) },

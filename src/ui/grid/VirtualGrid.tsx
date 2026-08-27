@@ -5,7 +5,7 @@ import { getCell, filledCount, flagCount, matchDictionary } from '../../core/fra
 import { TYPE_BADGES, TYPE_LABELS, violatesType } from '../../core/infer.js'
 import { formatCount } from '../../core/locale/sv.js'
 import { cellenMatchar, type ViewSpec } from '../../state/view.js'
-import { forCell, PROBLEM, type Forhandsvisning } from '../../state/preview.js'
+import { forCell, spokvarde, uppslag, PROBLEM, type Forhandsvisning } from '../../state/preview.js'
 import { innehaller, rect, type Selection } from '../../state/selection.js'
 
 const DEFAULT_WIDTH = 168
@@ -114,7 +114,7 @@ export function VirtualGrid(props: GridProps) {
   // källa. Den ligger inte i ramen och går inte att markera, så
   // markeringens kolumnindex räknar fortfarande bara riktiga kolumner.
   const spokeEfter =
-    props.forhandsvisning?.nyKolumn != null
+    (props.forhandsvisning?.nyaKolumner.length ?? 0) > 0
       ? columns.findIndex((c) => c.id === props.forhandsvisning!.colId)
       : -1
 
@@ -171,14 +171,15 @@ export function VirtualGrid(props: GridProps) {
             onCancel={props.onCancelEdit}
           />,
           ...(kol === spokeEfter
-            ? [
+            ? props.forhandsvisning!.nyaKolumner.map((_, mal) => (
                 <SpokCell
-                  key="spoke"
+                  key={`spoke${mal}`}
                   kall={col}
                   row={physical}
+                  mal={mal}
                   forh={props.forhandsvisning!}
-                />,
-              ]
+                />
+              ))
             : []),
         ])}
       </div>,
@@ -249,17 +250,17 @@ export function VirtualGrid(props: GridProps) {
             }}
           />,
           ...(index === spokeEfter
-            ? [
+            ? props.forhandsvisning!.nyaKolumner.map((namn, mal) => (
                 <div
-                  key="spoke"
+                  key={`spoke${mal}`}
                   class="rubrik rubrik--spoke"
                   style={{ width: `${col.width ?? DEFAULT_WIDTH}px` }}
                   role="columnheader"
                 >
-                  <span class="rubrik__namn">{props.forhandsvisning!.nyKolumn}</span>
+                  <span class="rubrik__namn">{namn}</span>
                   <span class="rubrik__spoke">ny kolumn</span>
-                </div>,
-              ]
+                </div>
+              ))
             : []),
         ])}
       </div>
@@ -284,10 +285,10 @@ export function VirtualGrid(props: GridProps) {
  * inte markerbar och går inte att redigera. Kolumnen finns inte i ramen förrän
  * någon klickat Tillämpa.
  */
-function SpokCell(props: { kall: Column; row: number; forh: Forhandsvisning }) {
-  const kod = props.kall.codes[props.row]!
-  const value = props.forh.nya[kod] ?? ''
-  const problem = ((props.forh.status[kod] ?? 0) & PROBLEM) !== 0
+function SpokCell(props: { kall: Column; row: number; mal: number; forh: Forhandsvisning }) {
+  const value = spokvarde(props.forh, props.kall, props.row, props.mal)
+  const problem =
+    ((props.forh.status[uppslag(props.forh, props.kall, props.row)] ?? 0) & PROBLEM) !== 0
   return (
     <div
       class={`rutnat__cell rutnat__cell--forhand rutnat__cell--spoke${

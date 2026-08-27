@@ -223,14 +223,14 @@ describe('ny kolumn i stallet for omskrivning', () => {
       kind: 'email',
       fn: epostTransform('fornamn'),
       arProblem: (v) => epostTransform('fornamn')(v) === '',
-      nyKolumn: 'Fornamn',
+      nyaKolumner: ['Fornamn'],
     })
 
   it('raknar allt som ger ett varde som en andring', () => {
     // Det finns inget att jamfora med i en kolumn som inte finns an.
     const frame = frameOf(['epost'], [['anna.karlsson@a.se'], ['info@a.se'], ['']])
     const forh = epostForh(frame.columns[0]!)
-    expect(forh.nyKolumn).toBe('Fornamn')
+    expect(forh.nyaKolumner).toEqual(['Fornamn'])
     expect(forh.andrade).toBe(1)
     expect(forh.problem).toBe(1)
   })
