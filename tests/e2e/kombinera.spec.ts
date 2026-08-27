@@ -96,3 +96,58 @@ test('en ändrad koppling flyttar värdena till en annan spalt', async ({ page }
   await expect(page.locator('.statusrad')).toContainText('30 rader')
   await expect(page.getByRole('gridcell', { name: 'Petra Sund', exact: true })).toHaveCount(0)
 })
+
+/** Öppnar exempelmallen inifrån kombineringsvyn och väljer den som målform. */
+async function valjExempelmall(page: Page) {
+  await page.getByRole('button', { name: 'Exempelmall' }).click()
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await expect(page.getByLabel('Målform')).toHaveValue(/.+/)
+}
+
+test('en mallfil bestämmer resultatets form', async ({ page }) => {
+  await oppnaKombinera(page)
+  await valjExempelmall(page)
+
+  // Mallens rubriker, i mallens ordning, före de kolumner mallen inte har.
+  const rader = page.locator('.aliasrad')
+  await expect(rader.nth(0)).toHaveAttribute('data-mal', 'Namn')
+  await expect(rader.nth(1)).toHaveAttribute('data-mal', 'E-post')
+  await expect(rader.nth(2)).toHaveAttribute('data-mal', 'Ort')
+  await expect(rader.nth(3)).toHaveAttribute('data-mal', 'Land')
+
+  // Exempelraden är en ledtråd om vad kolumnen ska innehålla — inte data.
+  await expect(rad(page, 'Namn')).toContainText('t.ex. Anna Karlsson')
+  await expect(page.locator('.kombinera__kropp')).toContainText(
+    'är exempel och tas inte med i resultatet',
+  )
+
+  // Land finns i mallen men i ingen fil, och det ska sägas före körningen.
+  await expect(page.locator('.inventering')).toContainText('fylls inte av någon fil')
+})
+
+test('mallen får inte bli ett tyst filter', async ({ page }) => {
+  await oppnaKombinera(page)
+  await valjExempelmall(page)
+
+  // Mallens egna kolumner behöver inga beslut — mallen är beslutet.
+  await expect(rad(page, 'Ort')).not.toHaveClass(/aliasrad--obeslutad/)
+  // Men kolumner som finns i filerna och inte i mallen kastas inte tyst.
+  await expect(rad(page, 'Belopp')).toHaveClass(/aliasrad--obeslutad/)
+  await expect(rad(page, 'Summa')).toHaveClass(/aliasrad--obeslutad/)
+  await expect(page.getByRole('button', { name: 'Kombinera', exact: true })).toBeDisabled()
+})
+
+test('mallens form fylls med data ur båda filerna', async ({ page }) => {
+  await oppnaKombinera(page)
+  await valjExempelmall(page)
+
+  const hoppaOver = page.getByRole('button', { name: 'Hoppa över' })
+  while ((await hoppaOver.count()) > 0) await hoppaOver.first().click()
+  await page.getByRole('button', { name: 'Kombinera', exact: true }).click()
+
+  // 16 kundrader + 14 orderrader. Mallens exempelrad är inte med.
+  await expect(page.locator('.statusrad')).toContainText('30 rader')
+  await expect(page.locator('.rubrik[title="Land"]')).toBeVisible()
+  await expect(page.locator('.rubrik[title="Belopp"]')).toHaveCount(0)
+  await expect(page.getByRole('gridcell', { name: 'Petra Sund', exact: true })).toBeVisible()
+})

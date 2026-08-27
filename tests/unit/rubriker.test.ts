@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createColumn, intern } from '../../src/core/frame/column.js'
 import { createFrame } from '../../src/core/frame/frame.js'
 import type { ColumnId, Frame } from '../../src/core/types.js'
-import { hittaAlias, rubriknyckel, sammaRubrik, synonymgrupp } from '../../src/core/ops/rubriker.js'
+import { hittaAlias, rubriknyckel, synonymgrupp } from '../../src/core/ops/rubriker.js'
 
 function frameOf(headers: string[]): Frame {
   const columns = headers.map((name) => createColumn(name, 1))
@@ -25,19 +25,34 @@ describe('rubriknyckel', () => {
 })
 
 describe('synonymer', () => {
+  const grupp = (namn: string) => synonymgrupp(rubriknyckel(namn))
+
   it('binder svenska och engelska rubriker som betyder samma sak', () => {
-    expect(sammaRubrik('Namn', 'Name')).toBe(true)
-    expect(sammaRubrik('E-post', 'mail')).toBe(true)
-    expect(sammaRubrik('Ort', 'City')).toBe(true)
+    expect(grupp('Namn')).toBe(grupp('Name'))
+    expect(grupp('E-post')).toBe(grupp('mail'))
+    expect(grupp('Ort')).toBe(grupp('City'))
+  })
+
+  it('kundnamn är också ett namn', () => {
+    expect(grupp('Kundnamn')).toBe(grupp('Namn'))
+  })
+
+  it('men efternamn är det inte', () => {
+    // En ändelseregel hade bundit Efternamn, Förnamn och Filnamn till Namn.
+    // Listan är kort och uttrycklig just därför.
+    expect(grupp('Efternamn')).toBe(-1)
+    expect(grupp('Förnamn')).toBe(-1)
+  })
+
+  it('ett ensamt id är ingen synonym för kundnummer', () => {
+    // Fil 1:s Kundnr och fil 2:s ID, som är ett ordernummer, skulle annars
+    // hamna i samma spalt utan att någon ser det.
+    expect(grupp('ID')).toBe(-1)
+    expect(grupp('Kundnr')).not.toBe(-1)
   })
 
   it('binder inte rubriker som bara ser lika ut', () => {
-    expect(sammaRubrik('Namn', 'Nummer')).toBe(false)
-    expect(synonymgrupp('leveransdatum')).toBe(-1)
-  })
-
-  it('två tomma rubriker är inte samma rubrik', () => {
-    expect(sammaRubrik('', '')).toBe(false)
+    expect(grupp('leveransdatum')).toBe(-1)
   })
 })
 

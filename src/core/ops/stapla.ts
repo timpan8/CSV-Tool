@@ -1,4 +1,4 @@
-import type { Column, ColumnId, Frame } from '../types.js'
+import { Flag, type Column, type ColumnId, type Frame } from '../types.js'
 import { createColumn, intern } from '../frame/column.js'
 import { findColumn, identityView, newFrameId, uniqueColumnName, visibleColumns } from '../frame/frame.js'
 import { inferAllTypes } from '../infer.js'
@@ -21,8 +21,8 @@ import { hittaAlias } from './rubriker.js'
  * kopieringen ett heltalssvep. Det är samma princip som `mapColumnValues`,
  * `byggNycklar` och `hittaDubbletter` redan följer.
  *
- * **En kolumn som saknas i en fil kostar ingenting.** Kod 0 är alltid tomma
- * strängen, så blocket lämnas orört i stället för att fyllas.
+ * **En kolumn som saknas i en fil kostar nästan ingenting.** Kod 0 är alltid
+ * tomma strängen, så bara flaggorna behöver skrivas.
  */
 
 /** Var en målkolumns värden hämtas i en källfil. */
@@ -42,8 +42,19 @@ export interface Malkolumn {
    * vissa gör det: tas den med blir den tom för de andra filerna, och tas den
    * inte med försvinner data. Båda kan vara rätt, och att gissa är inte
    * verktygets sak.
+   *
+   * `stapla` behandlar `null` som *inte med* — det är gränssnittet som spärrar
+   * körningen tills allt är besluta, se `obeslutade`.
    */
   med: boolean | null
+  /**
+   * Ett exempelvärde ur mallfilen.
+   *
+   * Det är hela skälet att en mall får innehålla exempeldata: den visar vad
+   * kolumnen ska innehålla, och det är precis vad man behöver se när man
+   * väljer källkolumn. Värdet följer aldrig med i resultatet.
+   */
+  ledtrad?: string
 }
 
 export interface Kalla {
@@ -64,7 +75,7 @@ export interface Staplingsresultat {
   frame: Frame
   /** Antal rader varje källa bidrog med, i samma ordning. */
   perKalla: number[]
-  /** Målkolumner som ingen fil fyller — tomma i hela resultatet. */
+  /** Målkolumner som blev tomma i hela resultatet. */
   ofyllda: string[]
 }
 
@@ -85,7 +96,11 @@ export function kallnamn(kallor: readonly { frame: Frame }[]): string[] {
 }
 
 export function stapla(kallor: readonly Kalla[], plan: Staplingsplan): Staplingsresultat {
-  const med = plan.kolumner.filter((k) => k.med === true)
+  // Hämtningarna är positionella. Vore listan kortare än källorna skulle
+  // värden ur fil 3 hamna under fil 2:s rubrik, tyst.
+  const med = plan.kolumner
+    .filter((k) => k.med === true)
+    .map((k) => normaliseraHamtning(k, kallor.length))
   let totalRader = 0
   for (const k of kallor) totalRader += k.rader.length
 
@@ -151,15 +166,34 @@ function byggKolumn(
     const kall =
       hamtning && hamtning.fran === 'kolumn' ? findColumn(kalla.frame, hamtning.colId) : undefined
     if (!kall) {
-      // Kod 0 är tomma strängen och arrayen är redan nollställd.
+      // Kolumnen fanns inte i den här filen. Det är samma sak som en rad med
+      // för få fält: värdet *saknades*, det var inte tomt — och den skillnaden
+      // är hela poängen med att fråga per kolumn. Kod 0 är redan tomma
+      // strängen, så bara flaggan behöver skrivas.
+      col.flags.fill(Flag.Padded, ut, ut + kalla.rader.length)
       ut += kalla.rader.length
       continue
     }
     bidragande.push(kall)
 
-    // En internering per unikt värde, sedan ett heltalssvep över raderna.
+    /*
+     * Omskrivningstabellen byggs en gång per unikt värde, inte per rad.
+     *
+     * När hela kolumnen följer med är ordboken den billigaste vägen. Vid ett
+     * urval — ett filter, en frusen vy, en förhandsvisning på tre rader — är
+     * den däremot både dyrare *och fel*: `inferType` läser ordboken, så värden
+     * som inte är med i resultatet skulle vara med och bestämma dess typ.
+     */
     const remap = new Uint32Array(kall.dict.length)
-    for (let kod = 1; kod < kall.dict.length; kod++) remap[kod] = intern(col, kall.dict[kod]!)
+    if (kalla.rader.length >= kall.codes.length) {
+      for (let kod = 1; kod < kall.dict.length; kod++) remap[kod] = intern(col, kall.dict[kod]!)
+    } else {
+      for (let r = 0; r < kalla.rader.length; r++) {
+        const kod = kall.codes[kalla.rader[r]!]!
+        // `intern` ger aldrig 0 för ett icke-tomt värde, så 0 duger som "osedd".
+        if (kod !== 0 && remap[kod] === 0) remap[kod] = intern(col, kall.dict[kod]!)
+      }
+    }
 
     for (let r = 0; r < kalla.rader.length; r++) {
       const rad = kalla.rader[r]!
@@ -179,7 +213,16 @@ function byggKolumn(
     col.typeLocked = true
   }
 
-  return { col, fylld: bidragande.length > 0 }
+  // Ordboken har bara det som faktiskt hamnade i kolumnen, så den är det
+  // sanna svaret på om någon fil fyllde den.
+  return { col, fylld: col.dict.length > 1 }
+}
+
+/** Ser till att hämtningslistan har exakt en post per källa. */
+function normaliseraHamtning(kol: Malkolumn, antal: number): Malkolumn {
+  if (kol.hamtning.length === antal) return kol
+  const hamtning = Array.from({ length: antal }, (_, i) => kol.hamtning[i] ?? TOMT)
+  return { ...kol, hamtning }
 }
 
 function byggKallkolumn(namn: string, kallor: readonly Kalla[], totalRader: number): Column {
@@ -204,8 +247,23 @@ function byggKallkolumn(namn: string, kallor: readonly Kalla[], totalRader: numb
  */
 export function malformAvKallor(kallor: readonly Frame[]): Malkolumn[] {
   const tagna = kallor.map(() => new Set<ColumnId>())
-  const ut: Malkolumn[] = []
+  return laggTillObundna([], kallor, tagna, (hamtning) =>
+    antalKallor(hamtning) === kallor.length ? true : null,
+  )
+}
 
+/**
+ * Lägger till en målkolumn för varje källkolumn som ingen ännu bundit.
+ *
+ * Girigheten går i filordning: den första filen som har kolumnen får ge den
+ * dess namn, och de följande binder sina alias till den.
+ */
+function laggTillObundna(
+  ut: Malkolumn[],
+  kallor: readonly Frame[],
+  tagna: Set<ColumnId>[],
+  beslut: (hamtning: readonly Hamtning[]) => boolean | null,
+): Malkolumn[] {
   for (let i = 0; i < kallor.length; i++) {
     for (const col of visibleColumns(kallor[i]!)) {
       if (tagna[i]!.has(col.id)) continue
@@ -221,7 +279,7 @@ export function malformAvKallor(kallor: readonly Frame[]): Malkolumn[] {
         }
       }
 
-      ut.push({ namn: col.name, hamtning, med: antalKallor(hamtning) === kallor.length ? true : null })
+      ut.push({ namn: col.name, hamtning, med: beslut(hamtning) })
     }
   }
   return ut
@@ -237,4 +295,50 @@ export function antalKallor(hamtning: readonly Hamtning[]): number {
 /** Målkolumner som ännu inte fått ett beslut. */
 export function obeslutade(kolumner: readonly Malkolumn[]): Malkolumn[] {
   return kolumner.filter((k) => k.med === null)
+}
+
+/**
+ * Målform ur en mallfils rubriker, i mallens ordning.
+ *
+ * En mall är ett dokument som bara innehåller rubriker, eventuellt med några
+ * exempelrader. Den bestämmer resultatets form: vilka kolumner det har, vad de
+ * heter och i vilken ordning de kommer. Därför behöver ingen mallkolumn ett
+ * beslut — mallen *är* beslutet.
+ *
+ * Mallens egna rader följer aldrig med. De är exempel, inte data, och det
+ * första ifyllda värdet per kolumn blir i stället en ledtråd i kartan.
+ *
+ * Källkolumner som mallen *inte* har läggs till sist och obeslutade, så att
+ * mallen aldrig blir ett tyst filter.
+ *
+ * En mallkolumn som ingen fil fyller tas med som tom kolumn och rapporteras i
+ * `ofyllda`. Den ska vara med: en saknad kolumn i ett importformat är inte
+ * samma sak som ingen kolumn. Men att den blir tom ska stå i klartext före
+ * körningen, inte upptäckas i resultatet.
+ */
+export function malformAvMall(mall: Frame, kallor: readonly Frame[]): Malkolumn[] {
+  const tagna = kallor.map(() => new Set<ColumnId>())
+  const ut: Malkolumn[] = visibleColumns(mall).map((malkol) => {
+    const hamtning: Hamtning[] = kallor.map((kalla, j) => {
+      const traff = hittaAlias(kalla, malkol.name, tagna[j]!)
+      if (traff === null) return TOMT
+      tagna[j]!.add(traff)
+      return { fran: 'kolumn', colId: traff }
+    })
+    return { namn: malkol.name, hamtning, med: true, ledtrad: forstaVardet(mall, malkol) }
+  })
+
+  // Källkolumner som mallen inte har läggs till sist, obeslutade. Att tyst
+  // utelämna dem vore att kasta data — samma regel som för unionen, och skälet
+  // att mallen inte får vara ett tyst filter.
+  return laggTillObundna(ut, kallor, tagna, () => null)
+}
+
+/** Mallens första ifyllda värde i en kolumn, som ledtråd. */
+function forstaVardet(mall: Frame, col: Column): string {
+  for (let r = 0; r < mall.rowCount; r++) {
+    const kod = col.codes[r]
+    if (kod !== undefined && kod !== 0) return col.dict[kod] ?? ''
+  }
+  return ''
 }

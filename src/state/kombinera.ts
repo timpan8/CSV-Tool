@@ -12,10 +12,25 @@ import { signal } from '@preact/signals'
  */
 export const kombineraOppen = signal(false)
 
+/**
+ * Fliken som används som mall, eller null för filernas egna kolumner.
+ *
+ * Den ligger här och inte i komponenten, eftersom en nyöppnad mallfil landar
+ * som en flik via den vanliga importen — och den vägen går genom `App`, inte
+ * genom vyn.
+ */
+export const mallTabId = signal<string | null>(null)
+
+/** Sant medan en fil öppnas som ska bli mall när den landat. */
+export const vantarPaMall = signal(false)
+
 export function oppnaKombinera(): void {
+  mallTabId.value = null
+  vantarPaMall.value = false
   kombineraOppen.value = true
 }
 
 export function stangKombinera(): void {
   kombineraOppen.value = false
+  vantarPaMall.value = false
 }

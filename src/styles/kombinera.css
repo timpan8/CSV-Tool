@@ -98,9 +98,13 @@
   vertical-align: middle;
 }
 
+/*
+ * Rubrikraden är medvetet inte klistrad. En sticky rubrik i en panel som
+ * skrollar tillsammans med notiser och förhandsvisning lägger sig över
+ * radernas knappar och fångar klicken — och en knapp man inte kan trycka på
+ * är sämre än en rubrik som skrollar bort.
+ */
 .aliaskarta thead th {
-  position: sticky;
-  top: 0;
   background: var(--yta-2);
   font-size: 11px;
   font-weight: 700;
@@ -162,4 +166,12 @@
 .knapp--liten {
   padding: 2px 7px;
   font-size: 11px;
+}
+
+.aliaskarta__ledtrad {
+  display: block;
+  margin-top: 1px;
+  font-size: 11px;
+  color: var(--text-svagast);
+  font-style: italic;
 }

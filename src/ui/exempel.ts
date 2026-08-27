@@ -64,3 +64,22 @@ export const EXEMPELFIL_ORDER = [
   'ORD-1014;Nils Ödman (avliden);nils.odman@nordbyg.se;880,00;Ja',
   '',
 ].join('\r\n')
+
+/**
+ * Exempelmall: ett dokument som bara innehåller rubriker och en exempelrad.
+ *
+ * Så ser en importmall ut i verkligheten — den bestämmer vilka kolumner
+ * mottagaren väntar sig, vad de heter och i vilken ordning de kommer.
+ * Exempelraden är just ett exempel: den följer aldrig med i resultatet, men
+ * den visar vad kolumnen ska innehålla, vilket är precis vad man behöver se
+ * när man väljer källkolumn.
+ *
+ * `Land` finns med fast ingen av exempelfilerna har den. Det är det vanliga
+ * fallet, och verktyget ska säga det före körningen i stället för att låta
+ * användaren upptäcka en tom spalt i resultatet.
+ */
+export const EXEMPELFIL_MALL = [
+  'Namn;E-post;Ort;Land',
+  'Anna Karlsson;anna.karlsson@nordbygg.se;Malmö;Sverige',
+  '',
+].join('\r\n')

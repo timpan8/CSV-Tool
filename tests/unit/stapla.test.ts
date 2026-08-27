@@ -7,6 +7,7 @@ import {
   antalKallor,
   kallnamn,
   malformAvKallor,
+  malformAvMall,
   obeslutade,
   stapla,
   TOMT,
@@ -172,6 +173,45 @@ describe('stapla', () => {
     expect([0, 1].map((r) => getCell(frame.columns[0]!, r))).toEqual(['Eva', 'Cia'])
   })
 
+  it('en kolumn som saknades i filen märks som utfylld, inte som tom', () => {
+    // Skillnaden mellan "fil 2 hade kolumnen men cellen var tom" och "fil 2
+    // hade ingen sådan kolumn" är hela poängen med att fråga per kolumn.
+    const { frame } = stapla(
+      [alla(KUNDER), alla(ORDER)],
+      plan(beslutade(malformAvKallor([KUNDER, ORDER]))),
+    )
+    const ort = frame.columns.find((c) => c.name === 'Ort')!
+    expect(ort.flags[0]).toBe(0)
+    expect(ort.flags[2]).toBe(Flag.Padded)
+  })
+
+  it('ett urval drar inte med sig värden som inte är med i resultatet', () => {
+    // inferType läser ordboken, inte raderna. Interneras hela källordboken
+    // skulle bortfiltrerade värden vara med och bestämma resultatets typ.
+    const f = frameOf('f', ['Blandat'], [['1'], ['2'], ['inte ett tal']])
+    const { frame } = stapla(
+      [{ frame: f, rader: [0, 1] }],
+      plan(beslutade(malformAvKallor([f]))),
+    )
+    expect(frame.columns[0]!.dict).toEqual(['', '1', '2'])
+    expect(frame.columns[0]!.type).toBe('number')
+  })
+
+  it('en kolumn som blev tom i hela resultatet rapporteras', () => {
+    const f = frameOf('f', ['Land'], [[''], ['']])
+    const { ofyllda } = stapla([alla(f)], plan(beslutade(malformAvKallor([f]))))
+    expect(ofyllda).toEqual(['Land'])
+  })
+
+  it('en hämtningslista som är för kort glider inte', () => {
+    // Vore listan positionellt fel skulle värden ur fil 2 hamna under fil 1.
+    const form: Malkolumn[] = [
+      { namn: 'Namn', hamtning: [{ fran: 'kolumn', colId: KUNDER.columns[0]!.id }], med: true },
+    ]
+    const { frame } = stapla([alla(KUNDER), alla(ORDER)], plan(form))
+    expect([0, 1, 2].map((r) => getCell(frame.columns[0]!, r))).toEqual(['Anna', 'Bo', ''])
+  })
+
   it('flaggorna hör till cellen och följer med', () => {
     const a = frameOf('a', ['Namn'], [['Anna']])
     a.columns[0]!.flags[0] = Flag.UserEdited
@@ -245,5 +285,52 @@ describe('egenskaper', () => {
       ),
       { numRuns: 200 },
     )
+  })
+})
+
+describe('malformAvMall', () => {
+  const MALL = frameOf(
+    'mall.csv',
+    ['Namn', 'E-post', 'Land'],
+    [['Anna Karlsson', 'anna@x.se', 'Sverige']],
+  )
+
+  it('mallens rubriker blir målformen, i mallens ordning', () => {
+    const form = malformAvMall(MALL, [KUNDER])
+    expect(form.slice(0, 3).map((k) => k.namn)).toEqual(['Namn', 'E-post', 'Land'])
+  })
+
+  it('mallens kolumner behöver inga beslut — mallen är beslutet', () => {
+    const form = malformAvMall(MALL, [KUNDER, ORDER])
+    expect(form.slice(0, 3).every((k) => k.med === true)).toBe(true)
+  })
+
+  it('mallens exempelrad blir en ledtråd, inte data', () => {
+    const form = malformAvMall(MALL, [KUNDER])
+    expect(form[0]!.ledtrad).toBe('Anna Karlsson')
+    // Mallen är aldrig en källa, så raden kan inte hamna i resultatet.
+    const { frame } = stapla([alla(KUNDER)], plan(beslutade(form)))
+    expect(frame.rowCount).toBe(KUNDER.rowCount)
+  })
+
+  it('hämtar ur källorna även när rubrikerna heter olika', () => {
+    const form = malformAvMall(MALL, [KUNDER, ORDER])
+    // Namn ↔ Name och E-post ↔ mail.
+    expect(antalKallor(form[0]!.hamtning)).toBe(2)
+    expect(antalKallor(form[1]!.hamtning)).toBe(2)
+  })
+
+  it('en mallkolumn ingen fil fyller blir en tom kolumn och rapporteras', () => {
+    const form = malformAvMall(MALL, [KUNDER])
+    expect(antalKallor(form[2]!.hamtning)).toBe(0)
+    const { frame, ofyllda } = stapla([alla(KUNDER)], plan(beslutade(form)))
+    expect(ofyllda).toContain('Land')
+    expect(frame.columns.map((c) => c.name)).toContain('Land')
+  })
+
+  it('källkolumner mallen saknar läggs till obeslutade i stället för att kastas', () => {
+    // Mallen får inte bli ett tyst filter — det är samma regel som för unionen.
+    const form = malformAvMall(MALL, [KUNDER])
+    expect(obeslutade(form).map((k) => k.namn)).toEqual(['Ort'])
   })
 })

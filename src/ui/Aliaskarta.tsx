@@ -12,7 +12,7 @@ import { formatCount } from '../core/locale/sv.js'
  * rad — och det går inte i en flexrad.
  */
 export function Aliaskarta(props: {
-  kallor: readonly { id: string; frame: Frame }[]
+  kallor: readonly { id: string; frame: Frame; radantal: number }[]
   kolumner: readonly Malkolumn[]
   /** Sant när en mall bestämmer namnen — då står de fast. */
   namnLast: boolean
@@ -35,9 +35,15 @@ export function Aliaskarta(props: {
         <tbody>
           {props.kolumner.map((kol, i) => {
             const fyllda = antalKallor(kol.hamtning)
+            let tomma = 0
+            for (let j = 0; j < props.kallor.length; j++) {
+              if ((kol.hamtning[j] ?? TOMT).fran === 'tomt') tomma += props.kallor[j]!.radantal
+            }
             return (
               <tr
-                key={`${kol.namn}-${i}`}
+                // Nyckeln måste vara stabil medan namnet skrivs, annars river
+                // Preact raden vid varje tecken och fältet tappar fokus.
+                key={i}
                 data-mal={kol.namn}
                 class={
                   kol.med === null
@@ -58,8 +64,12 @@ export function Aliaskarta(props: {
                       onInput={(e) => props.onNamn(i, (e.currentTarget as HTMLInputElement).value)}
                     />
                   )}
+                  {kol.ledtrad ? (
+                    <span class="aliaskarta__ledtrad">t.ex. {kol.ledtrad}</span>
+                  ) : null}
                   <span class="aliaskarta__not">
                     finns i {formatCount(fyllda)} av {formatCount(props.kallor.length)}
+                    {tomma > 0 && ` · ${formatCount(tomma)} rader blir tomma`}
                   </span>
                 </th>
 

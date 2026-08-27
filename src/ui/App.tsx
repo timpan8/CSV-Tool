@@ -89,7 +89,7 @@ import { MergeDialog } from './MergeDialog.jsx'
 import { Verkstad } from './Verkstad.jsx'
 import { oppnaVerkstad, stangVerkstad, verkstad } from '../state/matchning.js'
 import { Kombinera } from './Kombinera.jsx'
-import { kombineraOppen, oppnaKombinera } from '../state/kombinera.js'
+import { kombineraOppen, mallTabId, oppnaKombinera, vantarPaMall } from '../state/kombinera.js'
 import { nyRegelId, TOMT_FILTER, type Filterregel } from '../core/ops/filter.js'
 import {
   hittaDubbletter,
@@ -99,7 +99,7 @@ import {
 import { beskrivSortering } from '../core/ops/sort.js'
 import type { Riktning } from '../core/ops/sort.js'
 import { Meny, Toastar, type MenyPost } from './parts.jsx'
-import { EXEMPELFIL, EXEMPELFIL_ORDER } from './exempel.js'
+import { EXEMPELFIL, EXEMPELFIL_MALL, EXEMPELFIL_ORDER } from './exempel.js'
 
 const TYPCYKEL: ColumnType[] = ['text', 'number', 'date', 'email', 'bool']
 
@@ -171,7 +171,14 @@ export function App() {
           ? { sheet: settings.sheet, decimal: settings.decimal }
           : undefined,
       )
-      openFrame(parsed)
+      const flik = openFrame(parsed)
+      // Filen öppnades från kombineringsvyns "Öppna mallfil…". Den gick samma
+      // väg som alla andra filer, genom importdialogen — en mall som lästs med
+      // fel avgränsare blir annars en enda kolumn som heter hela rubrikraden.
+      if (vantarPaMall.value) {
+        mallTabId.value = flik.id
+        vantarPaMall.value = false
+      }
       const varningar = parsed.meta.warnings.filter((w) => w.kind !== 'encoding-uncertain')
       notify(
         `${file.name} öppnad — ${formatCount(parsed.rowCount)} rader, ${formatCount(parsed.columns.length)} kolumner.` +
@@ -181,6 +188,7 @@ export function App() {
         { ton: varningar.length > 0 ? 'varning' : 'info' },
       )
     } catch (error) {
+      vantarPaMall.value = false
       notify(`Kunde inte öppna ${file.name}: ${(error as Error).message}`, { ton: 'fara' })
     } finally {
       setLaddar(null)
@@ -201,6 +209,12 @@ export function App() {
       exempelfil(EXEMPELFIL, 'exempel-kunder.csv'),
       exempelfil(EXEMPELFIL_ORDER, 'exempel-order.csv'),
     ])
+  }
+
+  /** Exempelmallen, så att mallvägen går att prova utan egen fil. */
+  const oppnaExempelmall = () => {
+    vantarPaMall.value = true
+    setKö((current) => [...current, exempelfil(EXEMPELFIL_MALL, 'exempel-mall.csv')])
   }
 
   /** Öppnar text från urklipp som en ny flik. */
@@ -945,6 +959,8 @@ export function App() {
             openFrame(resultat)
             notify(text)
           }}
+          onFiler={oppnaFiler}
+          onExempelmall={oppnaExempelmall}
         />
       ) : iVerkstaden ? (
         <Verkstad
@@ -1123,7 +1139,10 @@ export function App() {
       {kö.length > 0 && (
         <ImportDialog
           file={kö[0]!}
-          onAvbryt={() => setKö((current) => current.slice(1))}
+          onAvbryt={() => {
+            vantarPaMall.value = false
+            setKö((current) => current.slice(1))
+          }}
           onOppna={(settings) => void laddaFil(kö[0]!, settings)}
         />
       )}

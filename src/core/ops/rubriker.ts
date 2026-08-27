@@ -28,12 +28,16 @@ export function rubriknyckel(namn: string): string {
  * användaren att sluta läsa den.
  */
 export const SYNONYMER: string[][] = [
-  ['namn', 'name', 'fullname', 'kund', 'customer'],
+  ['namn', 'name', 'fullname', 'kund', 'customer', 'kundnamn', 'customername'],
   ['epost', 'email', 'mail', 'emailaddress', 'epostadress'],
   ['telefon', 'phone', 'tel', 'mobil', 'mobile'],
   ['ort', 'city', 'stad', 'postort'],
   ['postnr', 'postnummer', 'zip', 'zipcode', 'postalcode'],
-  ['kundnr', 'kundnummer', 'customerid', 'customernumber', 'id'],
+  // Bara `id` står medvetet inte här. I matchningsdialogen kostar en
+  // felgissning ingenting — den ger noll träffar, och nollan räknas fram och
+  // visas innan något körs. I en aliaskarta kostar den allt: fil 1:s Kundnr
+  // och fil 2:s ID, som är ett ordernummer, skulle hamna i samma spalt tyst.
+  ['kundnr', 'kundnummer', 'customerid', 'customernumber'],
   ['land', 'country'],
   ['adress', 'address', 'gatuadress', 'street'],
   ['foretag', 'company', 'organisation', 'org'],
@@ -42,16 +46,6 @@ export const SYNONYMER: string[][] = [
 /** Vilken synonymgrupp en rubriknyckel hör till, eller -1. */
 export function synonymgrupp(nyckel: string): number {
   return SYNONYMER.findIndex((grupp) => grupp.includes(nyckel))
-}
-
-/** Sant när två rubriker rimligen betyder samma sak. */
-export function sammaRubrik(a: string, b: string): boolean {
-  const na = rubriknyckel(a)
-  const nb = rubriknyckel(b)
-  if (na === '' || nb === '') return false
-  if (na === nb) return true
-  const grupp = synonymgrupp(na)
-  return grupp !== -1 && grupp === synonymgrupp(nb)
 }
 
 /**
