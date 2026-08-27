@@ -22,8 +22,8 @@ jobs:
     name: Typkontroll, tester och bygge
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -40,17 +40,19 @@ jobs:
           npx playwright test
       - name: Spara röktestets rapport vid fel
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-rapport
           path: test-results/
           retention-days: 7
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
         if: github.ref == 'refs/heads/main'
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         if: github.ref == 'refs/heads/main'
         with:
           path: dist
+          # v5 exkluderar dolda filer som standard, och dist/.nojekyll måste med.
+          include-hidden-files: true
 
   publicera:
     name: Publicera till GitHub Pages
@@ -62,4 +64,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
