@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'preact/hooks'
+import { useCallback, useEffect, useState, useRef } from 'preact/hooks'
 import type { Column, ColumnId, ColumnType, Frame } from '../core/types.js'
 import {
   columnIndex,
@@ -91,6 +91,8 @@ import { oppnaVerkstad, stangVerkstad, verkstad } from '../state/matchning.js'
 import type { Profilsteg } from '../core/ops/profil.js'
 import { Kombinera } from './Kombinera.jsx'
 import { ProfilDialog } from './ProfilDialog.jsx'
+import { Kommandopalett } from './Kommandopalett.jsx'
+import { byggKommandon } from './kommandon.js'
 import { kombineraOppen, mallTabId, oppnaKombinera, vantarPaMall } from '../state/kombinera.js'
 import { nyRegelId, TOMT_FILTER, type Filterregel } from '../core/ops/filter.js'
 import {
@@ -122,6 +124,8 @@ export function App() {
   const [exportOppen, setExportOppen] = useState(false)
   const [slaIhopOppen, setSlaIhopOppen] = useState(false)
   const [profilerOppna, setProfilerOppna] = useState(false)
+  const [palettOppen, setPalettOppen] = useState(false)
+  const palettFil = useRef<HTMLInputElement>(null)
   const [meny, setMeny] = useState<MenyLage | null>(null)
   const [laddar, setLaddar] = useState<string | null>(null)
   const [slappOver, setSlappOver] = useState(false)
@@ -536,6 +540,26 @@ export function App() {
     })
   }
 
+  const stadaTommaRader = () => {
+    if (!tab) return
+    const n = taBortTommaRader(tab)
+    notify(
+      n === 0 ? 'Inga helt tomma rader hittades.' : `Tog bort ${raderText(n)} som var helt tomma.`,
+      n > 0 ? { atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) } } : undefined,
+    )
+  }
+
+  const stadaTommaKolumner = () => {
+    if (!tab) return
+    const n = taBortTommaKolumner(tab)
+    notify(
+      n === 0
+        ? 'Inga helt tomma kolumner hittades.'
+        : `Tog bort ${kolumnerText(n)} som var helt tomma.`,
+      n > 0 ? { atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) } } : undefined,
+    )
+  }
+
   const stada = (id: string) => {
     const nu = nuLage()
     if (!nu || !nu.sel) return
@@ -642,6 +666,19 @@ export function App() {
       const target = e.target as HTMLElement | null
       const iFalt = target !== null && /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)
       const mod = e.ctrlKey || e.metaKey
+
+      // Paletten öppnas före allt annat. Den är vägen in för den som vet vad
+      // hen vill göra men inte var knappen sitter, och då duger det inte att
+      // den kräver en öppen fil eller att man först stängt en egen vy.
+      if (mod && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPalettOppen((oppen) => !oppen)
+        return
+      }
+      // Paletten har egna tangenter: pilarna väljer i listan och Escape
+      // stänger. Rutnätets genvägar får inte gå igång bakom den.
+      if (palettOppen) return
+
       const nu = nuLage()
       if (!nu) return
       // Med en egen vy öppen är rutnätet inte det man tittar på. Ctrl+Z hade
@@ -750,7 +787,7 @@ export function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [tab, frame, markering, synligaKolumner.length, sokOppen, rev])
+  }, [tab, frame, markering, synligaKolumner.length, sokOppen, palettOppen, rev])
 
   /* ---------- Urklipp och släpp ---------- */
 
@@ -806,6 +843,16 @@ export function App() {
   // Kolumnen kan ha tagits bort medan verktyget stod öppet; då stängs det.
   const verktygKolumn = frame && verktyg ? (findColumn(frame, verktyg.colId) ?? null) : null
   const begransad = viewIsLimited(tab)
+  /*
+   * Kolumnen palettens kommandon gäller.
+   *
+   * Markeringen går före den aktiva kolumnen: står markören i Ort ska
+   * paletten erbjuda "Dölj Ort", inte den kolumn man senast klickade på i
+   * rubrikraden. Den aktiva kolumnen är reserven, för när ingenting är
+   * markerat.
+   */
+  const palettKolumn =
+    (markering ? synligaKolumner[markering.fokusKol] : undefined) ?? aktivKolumn
   // Verkstaden och kombineringen lägger sig över arbetsytan. Rutnätets egna
   // kontroller — sök, filterrad, statusrad och tabellverktygen — hör till en
   // tabell man inte längre tittar på, och skulle visa tal som inte gäller.
@@ -830,32 +877,7 @@ export function App() {
             setMeny({
               x: (e.currentTarget as HTMLElement).getBoundingClientRect().left,
               y: (e.currentTarget as HTMLElement).getBoundingClientRect().bottom + 4,
-              poster: stadMeny(stada, {
-                tommaRader: () => {
-                  if (!tab) return
-                  const n = taBortTommaRader(tab)
-                  notify(
-                    n === 0
-                      ? 'Inga helt tomma rader hittades.'
-                      : `Tog bort ${raderText(n)} som var helt tomma.`,
-                    n > 0
-                      ? { atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) } }
-                      : undefined,
-                  )
-                },
-                tommaKolumner: () => {
-                  if (!tab) return
-                  const n = taBortTommaKolumner(tab)
-                  notify(
-                    n === 0
-                      ? 'Inga helt tomma kolumner hittades.'
-                      : `Tog bort ${kolumnerText(n)} som var helt tomma.`,
-                    n > 0
-                      ? { atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) } }
-                      : undefined,
-                  )
-                },
-              }),
+              poster: stadMeny(stada, { tommaRader: stadaTommaRader, tommaKolumner: stadaTommaKolumner }),
             })
           }
         >
@@ -1177,6 +1199,70 @@ export function App() {
         />
       )}
 
+      {palettOppen && (
+        <Kommandopalett
+          kommandon={byggKommandon(
+            {
+              harFil: frame !== null,
+              kolumn: palettKolumn?.name ?? null,
+              kolumnDold: palettKolumn?.hidden ?? false,
+              harMarkering: markering !== null,
+              kanAngra: canUndo(tab),
+              kanGoraOm: canRedo(tab),
+              begransadVy: begransad,
+            },
+            {
+              oppnaFil: () => palettFil.current?.click(),
+              exportera: () => setExportOppen(true),
+              profiler: () => setProfilerOppna(true),
+              sok: () => setSokOppen(true),
+              sortera: () => oppnaTabellverktyg('sortera'),
+              filter: () => oppnaTabellverktyg('filter'),
+              dubbletter: () => oppnaTabellverktyg('dubbletter'),
+              slaIhop: () => setSlaIhopOppen(true),
+              kombinera: oppnaKombinera,
+              visaAllaRader: () => {
+                if (!tab) return
+                setSokOppen(false)
+                clearViewSpec(tab)
+              },
+              stada,
+              verktyg: (namn) => palettKolumn && oppnaVerktyg(namn, palettKolumn.id),
+              dopOm: () => palettKolumn && dopOmKolumn(palettKolumn.id),
+              duplicera: () => palettKolumn && dupliceraKolumn(palettKolumn.id),
+              vaxlaDold: () => palettKolumn && vaxlaDold(palettKolumn.id),
+              taBortKolumn: () => palettKolumn && taBortKolumn(palettKolumn.id),
+              infogaKolumn: () => infogaKolumn(),
+              filtreraKolumn: () => palettKolumn && filtreraKolumn(palettKolumn.id),
+              visaOgiltiga: () => palettKolumn && visaOgiltiga(palettKolumn.id),
+              infogaRadOvan: () =>
+                tab && markering && infogaRader(tab, markering.fokusRad, 1, false),
+              infogaRadUnder: () =>
+                tab && markering && infogaRader(tab, markering.fokusRad, 1, true),
+              dupliceraRader: () =>
+                tab && markering && dupliceraRader(tab, selectedRows(tab, markering)),
+              taBortRader: taBortMarkeradeRader,
+              tommaRader: stadaTommaRader,
+              tommaKolumner: stadaTommaKolumner,
+              angra: () => {
+                if (!tab) return
+                const step = undo(tab)
+                if (step) notify(`Ångrade: ${step.label}`)
+              },
+              goraOm: () => {
+                if (!tab) return
+                const step = redo(tab)
+                if (step) notify(`Gjorde om: ${step.label}`)
+              },
+              vaxlaTema: () => {
+                theme.value = theme.value === 'dark' ? 'light' : 'dark'
+              },
+            },
+          )}
+          onStang={() => setPalettOppen(false)}
+        />
+      )}
+
       {profilerOppna && tab && (
         <ProfilDialog tab={tab} onStang={() => setProfilerOppna(false)} />
       )}
@@ -1235,6 +1321,19 @@ export function App() {
       {meny && (
         <Meny x={meny.x} y={meny.y} poster={meny.poster} onStang={() => setMeny(null)} />
       )}
+
+      <input
+        ref={palettFil}
+        type="file"
+        accept=".csv,.txt,.tsv,.xlsx,text/csv,text/plain"
+        multiple
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const filer = Array.from((e.currentTarget as HTMLInputElement).files ?? [])
+          if (filer.length > 0) oppnaFiler(filer)
+          ;(e.currentTarget as HTMLInputElement).value = ''
+        }}
+      />
 
       {slappOver && <div class="slappoverlagg">Släpp för att öppna som ny flik</div>}
       <Toastar />

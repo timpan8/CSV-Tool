@@ -50,6 +50,7 @@ Inga externa typsnitt, inget CDN, ingen analys, ingen felrapportering, ingen inl
   Formen kan också komma ur en **mallfil**: ett dokument med bara rubriker, eventuellt med några exempelrader. Då bestämmer mallen vilka kolumner resultatet har, vad de heter och i vilken ordning de kommer. Exempelraderna följer aldrig med, men visas som ledtråd i kartan — det är hela skälet att en mall får innehålla exempeldata. Kolumner som finns i filerna men inte i mallen kastas inte i tysthet; de frågas om, precis som alla andra.
 - **Profiler** som sparar en hel arbetsgång och kör om den på nästa fil. Samma exportfil kommer varje månad, och samma tio handgrepp behöver göras om varje gång — en profil är listan över de handgreppen. Den sparas i din webbläsare och går att spara till fil om den ska följa med någon annanstans.
   Bara det som faktiskt går att upprepa kommer med: en handredigerad cell, en inklistring eller en borttagen rad pekar på rader i just den filen och står därför gråmarkerad med sitt skäl i stället för att tyst utelämnas. Kolumner matchas på namn, eftersom ett kolumn-id inte betyder något i en annan fil — och hittar ett steg inte sin kolumn säger det ifrån i stället för att välja en granne. Efter körningen står det steg för steg vad som hände och hur många celler som ändrades, och `Ctrl+Z` backar ett steg i taget.
+- **Kommandopalett** med `Ctrl+K`. Verktyget har vuxit förbi vad en verktygsrad rymmer, och kolumnmenyn kräver att du först vet vilken kolumn åtgärden hör till — paletten är vägen för den som vet *vad* hen vill göra men inte var knappen sitter. Sökningen är bokstavlig och accentokänslig, och hittar även på engelska: `undo`, `join`, `makro`. Kolumnkommandona gäller den kolumn markören står i, och står med kolumnens namn i klartext, så att du ser vad du träffar innan du trycker Enter.
 - **Ångra och gör om** på allt, med en steglista där du kan backa till vilket steg som helst.
 - **Export** till Excel (`.xlsx`) eller CSV. Excel är förvalt, eftersom det är det enda formatet som både bevarar `01234` som `01234` och skriver talkolumner som riktiga tal så att `SUMMA` fungerar. CSV-exporten har val av avgränsare, teckenkodning, BOM och radslut, med en Excel-vänlig profil (semikolon, CRLF, UTF-8 med BOM) och ett riskbaserat formelskydd som inte rör negativa tal.
 - Mörkt läge, tomt läge med exempelfil, och en varning innan sidan lämnas med osparat arbete.
@@ -58,7 +59,7 @@ En Excel-fil innehåller typade värden i stället för text, så importen måst
 
 ## På gång
 
-Kommandopalett.
+Ett enfilsbygge som går att öppna direkt från disk.
 
 ## Utveckling
 
