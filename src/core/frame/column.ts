@@ -112,3 +112,121 @@ export function flagCount(col: Column, rows: Uint32Array, bit: number): number {
   }
   return n
 }
+
+/* ---------- Ögonblicksbilder och transformer ---------- */
+
+/**
+ * En kolumns fullständiga tillstånd, kopierat.
+ *
+ * Det här är strukturdelningen i praktiken: en åtgärd som rör en kolumn
+ * kopierar bara den kolumnen, medan övriga delas vidare med referens. För
+ * 200 000 rader är kostnaden fyra byte per rad för koderna och en för
+ * flaggorna — inte en sträng per cell.
+ */
+export interface ColumnSnapshot {
+  dict: string[]
+  codes: Uint32Array
+  flags: Uint8Array
+  type: ColumnType
+  typeLocked: boolean
+}
+
+export function snapshotColumn(col: Column): ColumnSnapshot {
+  return {
+    dict: col.dict.slice(),
+    codes: col.codes.slice(),
+    flags: col.flags.slice(),
+    type: col.type,
+    typeLocked: col.typeLocked,
+  }
+}
+
+/**
+ * Återställer en kolumn från en ögonblicksbild.
+ *
+ * Kopierar ur bilden i stället för att ta över den, så att samma bild kan
+ * användas igen. Ångra → gör om → ångra måste fungera hur många gånger som
+ * helst.
+ */
+export function restoreColumn(col: Column, snap: ColumnSnapshot): void {
+  col.dict = snap.dict.slice()
+  col.dictIndex = new Map()
+  for (let i = 0; i < col.dict.length; i++) col.dictIndex.set(col.dict[i]!, i)
+  col.codes = snap.codes.slice()
+  col.flags = snap.flags.slice()
+  col.type = snap.type
+  col.typeLocked = snap.typeLocked
+}
+
+/**
+ * Bygger om ordboken genom att mappa varje unikt värde, och räknar om
+ * koderna.
+ *
+ * Transformen körs en gång per *unikt* värde, inte per rad. En kolumn med
+ * 100 000 rader och 300 orter kostar 300 anrop. Två olika värden kan bli
+ * lika efter transformen (`"Malmö "` och `"Malmö"` efter trimning), vilket
+ * hanteras genom att den nya ordboken interneras på nytt.
+ *
+ * Tomma celler lämnas alltid orörda: en städning ska aldrig fylla i något
+ * som var tomt.
+ */
+function buildMapping(col: Column, fn: (value: string) => string) {
+  const dict: string[] = ['']
+  const dictIndex = new Map<string, number>([['', 0]])
+  const remap = new Uint32Array(col.dict.length)
+  const changed = new Uint8Array(col.dict.length)
+
+  for (let d = 1; d < col.dict.length; d++) {
+    const before = col.dict[d]!
+    const after = fn(before)
+    if (after !== before) changed[d] = 1
+    let code = dictIndex.get(after)
+    if (code === undefined) {
+      code = dict.length
+      dict.push(after)
+      dictIndex.set(after, code)
+    }
+    remap[d] = code
+  }
+  return { dict, dictIndex, remap, changed }
+}
+
+/** Antal celler som skulle ändras, utan att ändra något. */
+export function countMappedChanges(col: Column, fn: (value: string) => string): number {
+  const { changed } = buildMapping(col, fn)
+  let n = 0
+  for (let r = 0; r < col.codes.length; r++) {
+    if (changed[col.codes[r]!]! === 1) n += 1
+  }
+  return n
+}
+
+/** Kör transformen och returnerar antal ändrade celler. */
+export function mapColumnValues(col: Column, fn: (value: string) => string): number {
+  const { dict, dictIndex, remap, changed } = buildMapping(col, fn)
+  let n = 0
+  const codes = col.codes
+  for (let r = 0; r < codes.length; r++) {
+    const old = codes[r]!
+    if (changed[old]! === 1) n += 1
+    codes[r] = remap[old]!
+  }
+  col.dict = dict
+  col.dictIndex = dictIndex
+  return n
+}
+
+/**
+ * Matchar de unika värdena mot ett predikat och returnerar en mask per
+ * ordbokspost.
+ *
+ * Grunden för sökning och filtrering: en jämförelse per unikt värde, sedan
+ * ett heltalssvep över raderna.
+ */
+export function matchDictionary(col: Column, predicate: (value: string) => boolean): Uint8Array {
+  const mask = new Uint8Array(col.dict.length)
+  for (let d = 0; d < col.dict.length; d++) {
+    mask[d] = predicate(col.dict[d]!) ? 1 : 0
+  }
+  return mask
+}

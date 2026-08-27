@@ -1,5 +1,12 @@
 import Papa from 'papaparse'
-import { Flag, type Column, type Frame, type ParseSettings, type Warning } from '../types.js'
+import {
+  Flag,
+  type Column,
+  type Delimiter,
+  type Frame,
+  type ParseSettings,
+  type Warning,
+} from '../types.js'
 import { createColumn, intern } from '../frame/column.js'
 import { createFrame, uniqueColumnName } from '../frame/frame.js'
 import { decodeBytes, type DecodeResult } from './decode.js'
@@ -267,4 +274,32 @@ export function parseCsvBytes(
 export function fillColumn(col: Column, value: string, rowCount: number): void {
   const code = intern(col, value)
   col.codes.fill(code, 0, rowCount)
+}
+
+/**
+ * Tolkar text från urklipp som en rutnätsyta.
+ *
+ * Excel och Kalkylark lägger TSV på urklipp, men användare klistrar också in
+ * komma- och semikolonseparerad text direkt ur ett mejl. Samma
+ * avgränsargissning som filimporten används, så beteendet är ett och samma
+ * på båda ställena.
+ *
+ * Ingen rubrikrad antas: det som klistras in i ett rutnät är celler.
+ */
+export function parseDelimitedText(text: string): { rows: string[][]; delimiter: Delimiter } {
+  const trimmed = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '')
+  if (trimmed === '') return { rows: [], delimiter: '\t' }
+
+  const sniffed = sniff(trimmed)
+  const rows: string[][] = []
+  Papa.parse<string[]>(trimmed, {
+    delimiter: sniffed.delimiter,
+    quoteChar: '"',
+    escapeChar: '"',
+    skipEmptyLines: false,
+    step: (results) => {
+      rows.push(results.data.map((f) => f ?? ''))
+    },
+  })
+  return { rows, delimiter: sniffed.delimiter }
 }

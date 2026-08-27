@@ -168,3 +168,154 @@ export function keepRows(frame: Frame, keep: Uint32Array): void {
   frame.rowCount = n
   frame.view = identityView(n)
 }
+
+/* ---------- Radoperationer ---------- */
+
+/** En bortagen rad, sparad så att den kan komma tillbaka exakt som den var. */
+export interface SavedRow {
+  /** Radens position i tabellen när den togs bort. */
+  index: number
+  values: string[]
+  flags: number[]
+  /** Radens ursprungliga nummer i källfilen, eller 0 för en tillagd rad. */
+  sourceRow: number
+}
+
+/**
+ * Bygger om alla kolumner och radmetadata från en avbildning
+ * ny position → hämta härifrån.
+ *
+ * `from[i] < 0` betyder "ny tom rad". All radmanipulation går genom den här,
+ * så att kolumner, flaggor och radnummer aldrig kan hamna ur synk.
+ */
+function rebuildRows(frame: Frame, from: Int32Array, filler?: (outIndex: number) => SavedRow | null): void {
+  const n = from.length
+  const columnValues = frame.columns.map(() => new Uint32Array(n))
+  const columnFlags = frame.columns.map(() => new Uint8Array(n))
+  const sourceRow = new Uint32Array(n)
+
+  for (let i = 0; i < n; i++) {
+    const src = from[i]!
+    if (src >= 0) {
+      for (let c = 0; c < frame.columns.length; c++) {
+        columnValues[c]![i] = frame.columns[c]!.codes[src]!
+        columnFlags[c]![i] = frame.columns[c]!.flags[src]!
+      }
+      sourceRow[i] = frame.sourceRow[src]!
+      continue
+    }
+    const saved = filler?.(i) ?? null
+    if (!saved) continue
+    for (let c = 0; c < frame.columns.length; c++) {
+      const value = saved.values[c] ?? ''
+      columnValues[c]![i] = intern(frame.columns[c]!, value)
+      columnFlags[c]![i] = saved.flags[c] ?? 0
+    }
+    sourceRow[i] = saved.sourceRow
+  }
+
+  for (let c = 0; c < frame.columns.length; c++) {
+    frame.columns[c]!.codes = columnValues[c]!
+    frame.columns[c]!.flags = columnFlags[c]!
+  }
+  frame.sourceRow = sourceRow
+  frame.rowCount = n
+  frame.view = identityView(n)
+}
+
+/** Infogar tomma rader. De får radnummer 0, vilket visas som "tillagd". */
+export function insertRows(frame: Frame, atIndex: number, count: number): void {
+  if (count <= 0) return
+  const at = Math.max(0, Math.min(frame.rowCount, atIndex))
+  const from = new Int32Array(frame.rowCount + count)
+  for (let i = 0; i < at; i++) from[i] = i
+  for (let i = 0; i < count; i++) from[at + i] = -1
+  for (let i = at; i < frame.rowCount; i++) from[i + count] = i
+  rebuildRows(frame, from, () => ({ index: 0, values: [], flags: [], sourceRow: 0 }))
+}
+
+/**
+ * Tar bort rader och returnerar dem, så att de kan sättas tillbaka.
+ *
+ * Det som sparas följer antalet borttagna rader, inte tabellens storlek. Att
+ * kopiera hela tabellen för att kunna ångra tre borttagna rader vore fel
+ * avvägning i en tabell med hundratusen rader.
+ */
+export function deleteRows(frame: Frame, rows: Iterable<number>): SavedRow[] {
+  const doomed = new Set<number>()
+  for (const r of rows) {
+    if (r >= 0 && r < frame.rowCount) doomed.add(r)
+  }
+  if (doomed.size === 0) return []
+
+  const saved: SavedRow[] = []
+  for (const index of [...doomed].sort((a, b) => a - b)) {
+    saved.push({
+      index,
+      values: frame.columns.map((c) => getCell(c, index)),
+      flags: frame.columns.map((c) => c.flags[index]!),
+      sourceRow: frame.sourceRow[index]!,
+    })
+  }
+
+  const from = new Int32Array(frame.rowCount - doomed.size)
+  let out = 0
+  for (let i = 0; i < frame.rowCount; i++) {
+    if (!doomed.has(i)) from[out++] = i
+  }
+  rebuildRows(frame, from)
+  return saved
+}
+
+/**
+ * Sätter tillbaka rader på sina ursprungliga positioner.
+ *
+ * Positionerna är de raderna hade *före* borttagningen, vilket gör att en
+ * återställning av flera rader på en gång hamnar rätt utan omräkning.
+ */
+export function restoreRows(frame: Frame, saved: readonly SavedRow[]): void {
+  if (saved.length === 0) return
+  const ordered = [...saved].sort((a, b) => a.index - b.index)
+  const n = frame.rowCount + ordered.length
+  const from = new Int32Array(n)
+  const insertAt = new Map<number, SavedRow>()
+
+  let next = 0
+  let src = 0
+  for (let i = 0; i < n; i++) {
+    if (next < ordered.length && ordered[next]!.index === i) {
+      from[i] = -1
+      insertAt.set(i, ordered[next]!)
+      next += 1
+      continue
+    }
+    from[i] = src++
+  }
+  rebuildRows(frame, from, (outIndex) => insertAt.get(outIndex) ?? null)
+}
+
+/** Dubblerar rader; kopian läggs direkt efter originalet. */
+export function duplicateRows(frame: Frame, rows: Iterable<number>): void {
+  const wanted = new Set<number>()
+  for (const r of rows) {
+    if (r >= 0 && r < frame.rowCount) wanted.add(r)
+  }
+  if (wanted.size === 0) return
+
+  const from = new Int32Array(frame.rowCount + wanted.size)
+  const isCopy = new Uint8Array(from.length)
+  let out = 0
+  for (let i = 0; i < frame.rowCount; i++) {
+    from[out++] = i
+    if (wanted.has(i)) {
+      isCopy[out] = 1
+      from[out++] = i
+    }
+  }
+  rebuildRows(frame, from)
+  // Kopian kommer inte från filen. Låter man båda behålla radnumret pekar två
+  // rader på samma rad i källan, och "rad 47" slutar vara ett entydigt svar.
+  for (let i = 0; i < frame.rowCount; i++) {
+    if (isCopy[i] === 1) frame.sourceRow[i] = 0
+  }
+}

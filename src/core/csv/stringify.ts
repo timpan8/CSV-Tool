@@ -157,6 +157,31 @@ export function exportCsv(frame: Frame, options: ExportOptions): EncodedExport {
   return encodeExport(stringifyCsv(frame, options), options)
 }
 
+/**
+ * Skriver ett godtyckligt urval av kolumner och rader som avgränsad text.
+ *
+ * Används för urklipp, där urvalet är en markering i rutnätet och inte hela
+ * ramen. Formelskydd hör inte hemma här: apostrofen skulle följa med in i
+ * Excel som ett tecken i värdet.
+ */
+export function toDelimited(
+  columns: readonly Column[],
+  rows: Uint32Array | readonly number[],
+  delimiter: string,
+  newline: '\r\n' | '\n' = '\n',
+): string {
+  const parts: string[] = []
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!
+    const fields = new Array<string>(columns.length)
+    for (let c = 0; c < columns.length; c++) {
+      fields[c] = quoteField(getCell(columns[c]!, row), delimiter, 'minimal')
+    }
+    parts.push(fields.join(delimiter))
+  }
+  return parts.join(newline)
+}
+
 /** TSV till urklipp — klistras rakt in i Excel med kolumnerna intakta. */
 export function toTsv(frame: Frame, options: Partial<ExportOptions> = {}): string {
   return stringifyCsv(frame, {
