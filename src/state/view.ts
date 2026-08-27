@@ -1,4 +1,4 @@
-import type { Frame } from '../core/types.js'
+import type { Column, Frame } from '../core/types.js'
 import { getCell, matchDictionary } from '../core/frame/column.js'
 import { findColumn } from '../core/frame/frame.js'
 import { normalizeAlways, stripDiacritics } from '../core/locale/sv.js'
@@ -94,7 +94,7 @@ export interface ViewResult {
 export function computeView(
   frame: Frame,
   spec: ViewSpec,
-  forh: Forhandsvisning | null = null,
+  forh: readonly Forhandsvisning[] = [],
   ordning: Ordning | null = null,
 ): ViewResult {
   const grund = grundvy(frame, spec, ordning)
@@ -152,16 +152,20 @@ function begransaTillForhandsvisning(
   frame: Frame,
   grund: ViewResult,
   spec: ViewSpec,
-  forh: Forhandsvisning | null,
+  forh: readonly Forhandsvisning[],
 ): ViewResult {
-  if (spec.visaBara === undefined || forh === null) return grund
-  const col = findColumn(frame, forh.colId)
-  if (!col) return grund
+  if (spec.visaBara === undefined || forh.length === 0) return grund
+  // Körs verktyget över flera kolumner räcker det att raden är ändrad i en
+  // av dem. Att kräva alla vore att gömma just den rad man letar efter.
+  const par = forh
+    .map((f) => ({ f, col: findColumn(frame, f.colId) }))
+    .filter((p): p is { f: Forhandsvisning; col: Column } => p.col !== undefined)
+  if (par.length === 0) return grund
   const bit = spec.visaBara === 'problem' ? PROBLEM : ANDRAD
   const kvar: number[] = []
   for (let i = 0; i < grund.view.length; i++) {
     const r = grund.view[i]!
-    if (((forh.status[uppslag(forh, col, r)] ?? 0) & bit) !== 0) kvar.push(r)
+    if (par.some(({ f, col }) => ((f.status[uppslag(f, col, r)] ?? 0) & bit) !== 0)) kvar.push(r)
   }
   return { ...grund, view: Uint32Array.from(kvar) }
 }

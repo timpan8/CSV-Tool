@@ -381,10 +381,15 @@ export function korSteg(tab: Tab, steg: Profilsteg): Stegresultat {
       return { steg, utfall: 'kord', andrade: 1 }
     }
     default: {
-      const col = hittaKolumn(frame, stegetsKolumner(steg)[0] ?? '')
-      const s = col ? spec(steg) : null
-      if (!col || !s) return { steg, utfall: 'ingenAndring', andrade: 0 }
-      const forh = beraknaForhandsvisning(col, s, frame)
+      // Ett steg kan gälla flera kolumner — samma inställning körd på tolv
+      // månadskolumner. Alla får sin egen förhandsvisning, men tillämpas som
+      // ett steg, precis som när verktyget kördes för hand.
+      const kolumner = stegetsKolumner(steg)
+        .map((namn) => hittaKolumn(frame, namn))
+        .filter((c): c is Column => c !== null)
+      const s = kolumner.length > 0 ? spec(steg) : null
+      if (!s) return { steg, utfall: 'ingenAndring', andrade: 0 }
+      const forh = kolumner.map((col) => beraknaForhandsvisning(col, s, frame))
       const andrade = tillampaForhandsvisning(tab, forh)
       return { steg, utfall: andrade === 0 ? 'ingenAndring' : 'kord', andrade }
     }

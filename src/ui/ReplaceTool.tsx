@@ -3,49 +3,61 @@ import { Verktygspanel } from './Verktygspanel.js'
 import { Notis } from './parts.js'
 import type { Column } from '../core/types.js'
 import { TOM_ERSATTNING, byggErsattare, type Ersattning } from '../core/ops/replace.js'
-import { beraknaForhandsvisning, type Forhandsvisning } from '../state/preview.js'
+import { beraknaForhandsvisning, sammanfatta, type Forhandsvisning } from '../state/preview.js'
 import { celler, formatCount } from '../core/locale/sv.js'
+import { kolumnrubrik } from './verktyg.js'
 
 /**
- * Sök och ersätt i en kolumn.
+ * Sök och ersätt i de markerade kolumnerna.
  *
- * Verktyget är avsiktligt begränsat till en kolumn i taget. En ersättning
- * över hela tabellen låter smidigt tills den träffar en kolumn man inte tänkt
- * på, och då är skadan gjord i tysthet. Kolumn för kolumn, med
- * förhandsvisning, är den avvägning som gör verktyget ofarligt att prova.
+ * Verktyget erbjuder aldrig ”hela tabellen”. Det låter smidigt tills det
+ * träffar en kolumn man inte tänkt på, och då är skadan gjord i tysthet.
+ * Kolumnerna är de man själv markerat, och förhandsvisningen ritas i var och
+ * en av dem — det är skillnaden mellan ett urval man gjort och ett svep man
+ * inte överblickar.
  */
 export function ReplaceTool(props: {
-  col: Column
+  kolumner: Column[]
   dataRevision: number
   visaBara: 'andrade' | 'problem' | undefined
   onVisaBara: (v: 'andrade' | 'problem' | undefined) => void
-  onForhandsvisning: (forh: Forhandsvisning | null) => void
-  onTillampa: (forh: Forhandsvisning) => void
+  onForhandsvisning: (forh: Forhandsvisning[] | null) => void
+  onTillampa: (forh: Forhandsvisning[]) => void
   onStang: () => void
 }) {
-  const { col } = props
+  const { kolumner } = props
+  /*
+   * Kolumnlistan är en ny array vid varje omritning, medan kolumnobjekten
+   * är desamma. Att beroendeställa på arrayen skulle räkna om
+   * förhandsvisningen varje gång, och effekten som skriver den till fliken
+   * skulle rita om — en slinga. Nyckeln är identiteterna, inte arrayen.
+   */
+  const nyckel = kolumner.map((c) => c.id).join(',')
   const [inst, setInst] = useState<Ersattning>(TOM_ERSATTNING)
 
   const uppdatera = (delta: Partial<Ersattning>) => setInst((i) => ({ ...i, ...delta }))
 
   const { fn, fel } = useMemo(() => byggErsattare(inst), [inst])
 
-  const forh = useMemo(
+  const forhLista = useMemo(
     () =>
       fn === null
-        ? null
-        : beraknaForhandsvisning(col, {
-            etikett: `Ersatte ”${kort(inst.sok)}” med ”${kort(inst.ersatt)}” i ”${col.name}”`,
-            kind: 'replace',
-            profil: { typ: 'ersatt', kolumn: col.name, inst },
-            fn,
-          }),
-    [col, props.dataRevision, fn],
+        ? []
+        : kolumner.map((col) =>
+            beraknaForhandsvisning(col, {
+              etikett: `Ersatte ”${kort(inst.sok)}” med ”${kort(inst.ersatt)}” i ”${col.name}”`,
+              kind: 'replace',
+              profil: { typ: 'ersatt', kolumn: col.name, inst },
+              fn,
+            }),
+          ),
+    [nyckel, props.dataRevision, fn],
   )
+  const forh = forhLista.length === 0 ? null : sammanfatta(forhLista)
 
   useEffect(() => {
-    props.onForhandsvisning(forh)
-  }, [forh])
+    props.onForhandsvisning(forhLista)
+  }, [forhLista])
 
   useEffect(() => {
     return () => props.onForhandsvisning(null)
@@ -54,7 +66,7 @@ export function ReplaceTool(props: {
   return (
     <Verktygspanel
       titel="Sök och ersätt"
-      underrubrik={col.name}
+      underrubrik={kolumnrubrik(kolumner)}
       onStang={props.onStang}
       fot={
         <>
@@ -65,9 +77,9 @@ export function ReplaceTool(props: {
             class="knapp knapp--primar"
             disabled={forh === null || forh.andrade === 0}
             title={forh !== null && forh.andrade === 0 ? 'Ingenting träffas.' : undefined}
-            onClick={() => forh && props.onTillampa(forh)}
+            onClick={() => forh && props.onTillampa(forhLista)}
           >
-            Ersätt
+            {kolumner.length > 1 ? `Ersätt i ${kolumner.length} kolumner` : 'Ersätt'}
           </button>
         </>
       }

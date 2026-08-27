@@ -7,11 +7,26 @@ async function oppnaExempel(page: Page) {
   await expect(page.locator('.statusrad')).toContainText('16 rader')
 }
 
-async function oppna(page: Page, kolumn: string, post: string) {
+/**
+ * Öppnar ett verktyg ur kolumnmenyn.
+ *
+ * Verktygen sorteras efter vad kolumnen innehåller, och de som inte passar
+ * ligger under *Fler verktyg*. Hjälparen tar båda vägarna, så att testet
+ * handlar om verktyget och inte om var i menyn det råkar hamna.
+ */
+async function oppnaUrKolumnmenyn(page: Page, kolumn: string, post: string) {
   await page.getByRole('button', { name: `Meny för kolumnen ${kolumn}` }).click()
-  await page.getByRole('menuitem', { name: post }).click()
+  // Ett föreslaget verktyg står med sitt skäl efter etiketten, så namnet
+  // matchas som delsträng och inte exakt.
+  const direkt = page.getByRole('menuitem', { name: post })
+  if ((await direkt.count()) === 0) {
+    await page.getByRole('menuitem', { name: 'Fler verktyg' }).hover()
+  }
+  await page.getByRole('menuitem', { name: post }).first().click()
   await expect(page.locator('.verktyg')).toBeVisible()
 }
+
+const oppna = oppnaUrKolumnmenyn
 
 const cell = (page: Page, text: string) => page.getByRole('gridcell', { name: text, exact: true })
 const spokceller = (page: Page) => page.locator('.rutnat__cell--spoke')
@@ -134,4 +149,45 @@ test('telefonverktyget normaliserar inklistrade nummer', async ({ page }) => {
   // Allt annat i kolumnen är inte telefonnummer och lämnas i fred.
   await expect(page.locator('.verktyg__resultat')).toContainText('1 av 16')
   await expect(page.locator('.verktyg__resultat')).toContainText('15 går inte att tolka')
+})
+
+test('datumverktyget kör över en flerkolumnsmarkering', async ({ page }) => {
+  const csv = [
+    'Namn;Start;Slut',
+    'Anna;27/08/2026;28/08/2026',
+    'Erik;01/09/2026;02/09/2026',
+    '',
+  ].join('\r\n')
+
+  await page.goto('/')
+  await page.locator('input[type=file]').first().setInputFiles({
+    name: 'perioder.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(csv, 'utf8'),
+  })
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await expect(page.locator('.statusrad')).toContainText('2 rader')
+
+  // Markera båda datumkolumnerna och öppna verktyget ur cellmenyn.
+  await page.getByRole('gridcell', { name: '27/08/2026', exact: true }).click()
+  await page.getByRole('gridcell', { name: '02/09/2026', exact: true }).click({
+    modifiers: ['Shift'],
+  })
+  await page.getByRole('gridcell', { name: '27/08/2026', exact: true }).click({
+    button: 'right',
+  })
+  await page.getByRole('menuitem', { name: /^Datum i 2 kolumner/ }).click()
+
+  // Panelen säger vilka kolumner den gäller, och förhandsvisningen ritas i båda.
+  await expect(page.locator('.verktyg__underrubrik')).toContainText('2 kolumner: Start, Slut')
+  await expect(page.locator('.rutnat__cell--forhand-andrad')).toHaveCount(4)
+
+  await page.getByRole('button', { name: 'Tillämpa på 2 kolumner' }).click()
+  await expect(page.getByRole('gridcell', { name: '2026-08-27', exact: true })).toBeVisible()
+  await expect(page.getByRole('gridcell', { name: '2026-09-02', exact: true })).toBeVisible()
+
+  // Ett enda ångra tar tillbaka båda kolumnerna.
+  await page.keyboard.press('Control+z')
+  await expect(page.getByRole('gridcell', { name: '27/08/2026', exact: true })).toBeVisible()
+  await expect(page.getByRole('gridcell', { name: '02/09/2026', exact: true })).toBeVisible()
 })

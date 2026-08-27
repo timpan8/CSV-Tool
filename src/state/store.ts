@@ -78,7 +78,11 @@ export interface Tab {
    * ritar den och `refreshView` filtrerar på den. En förhandsvisning är
    * heller aldrig en dataändring och hamnar därför aldrig i historiken.
    */
-  forhandsvisning: Forhandsvisning | null
+  /**
+   * Förhandsvisningarna som visas men ännu inte tillämpats — en per kolumn
+   * verktyget körs över. Tom lista betyder ingen.
+   */
+  forhandsvisning: Forhandsvisning[]
   /**
    * Den frusna visningsordningen, eller null när filens ordning gäller.
    *
@@ -255,8 +259,8 @@ export function sattDubbletter(tab: Tab, nyckel: Dubblettnyckel | null): void {
  * Att stänga den återställer alltid `visaBara`: annars skulle vyn bli tom och
  * oförklarlig när det som filtrerade den försvann.
  */
-export function setForhandsvisning(tab: Tab, forh: Forhandsvisning | null): void {
-  tab.forhandsvisning = forh
+export function setForhandsvisning(tab: Tab, forh: readonly Forhandsvisning[] | null): void {
+  tab.forhandsvisning = forh ? [...forh] : []
   if (forh === null && tab.viewSpec.visaBara !== undefined) {
     const { visaBara: _, ...kvar } = tab.viewSpec
     tab.viewSpec = kvar
@@ -289,7 +293,7 @@ export function nyTab(frame: Frame): Tab {
     kolumnerMedTraff: 0,
     markering: frame.rowCount > 0 ? cell(0, 0) : null,
     redigerar: null,
-    forhandsvisning: null,
+    forhandsvisning: [],
     ordning: null,
   }
 }

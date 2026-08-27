@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks'
 import { Resultat, Verktygspanel } from './Verktygspanel.js'
 import { Notis, Val } from './parts.js'
 import type { Column } from '../core/types.js'
-import { codeCounts } from '../core/frame/column.js'
+import { samladOrdbok } from '../core/frame/column.js'
 import {
   TALFORMAT,
   inventeraTal,
@@ -10,8 +10,9 @@ import {
   tolkaTal,
   type Talformat,
 } from '../core/ops/numbers.js'
-import { beraknaForhandsvisning, type Forhandsvisning } from '../state/preview.js'
+import { beraknaForhandsvisning, sammanfatta, type Forhandsvisning } from '../state/preview.js'
 import { celler, formatCount } from '../core/locale/sv.js'
+import { kolumnrubrik } from './verktyg.js'
 
 type Feltillstand = 'behall' | 'tom' | 'markera'
 
@@ -24,24 +25,36 @@ const FELTILLSTAND: { varde: Feltillstand; etikett: string; titel: string }[] = 
 type Decimalval = 'som-i-filen' | 'oforandrat' | '0' | '1' | '2'
 
 export function NumberTool(props: {
-  col: Column
+  kolumner: Column[]
   dataRevision: number
   visaBara: 'andrade' | 'problem' | undefined
   onVisaBara: (v: 'andrade' | 'problem' | undefined) => void
-  onForhandsvisning: (forh: Forhandsvisning | null) => void
-  onTillampa: (forh: Forhandsvisning) => void
+  onForhandsvisning: (forh: Forhandsvisning[] | null) => void
+  onTillampa: (forh: Forhandsvisning[]) => void
   onStang: () => void
 }) {
-  const { col } = props
+  const { kolumner } = props
+  /*
+   * Kolumnlistan är en ny array vid varje omritning, medan kolumnobjekten
+   * är desamma. Att beroendeställa på arrayen skulle räkna om
+   * förhandsvisningen varje gång, och effekten som skriver den till fliken
+   * skulle rita om — en slinga. Nyckeln är identiteterna, inte arrayen.
+   */
+  const nyckel = kolumner.map((c) => c.id).join(',')
   const [format, setFormat] = useState<Talformat>('komma')
   const [decimalval, setDecimalval] = useState<Decimalval>('som-i-filen')
   const [onError, setOnError] = useState<Feltillstand>('behall')
   const [svar, setSvar] = useState<boolean | null>(null)
 
-  const antal = useMemo(() => codeCounts(col), [col, props.dataRevision])
+  // Inventeringen räknar celler över alla valda kolumner — det är dem
+  // Tillämpa kommer att röra.
+  const { varden, vikter } = useMemo(
+    () => samladOrdbok(kolumner),
+    [nyckel, props.dataRevision],
+  )
   const grund = useMemo(
-    () => inventeraTal(col.dict, { punktArTusental: false }, antal),
-    [col, props.dataRevision, antal],
+    () => inventeraTal(varden, { punktArTusental: false }, vikter),
+    [varden, vikter],
   )
 
   const bevisSvar = grund.bevis !== null ? grund.bevisSagerTusental : null
@@ -64,28 +77,31 @@ export function NumberTool(props: {
 
   const inst = { punktArTusental, format, decimaler, onError }
 
-  const forh = useMemo(
+  const forhLista = useMemo(
     () =>
-      beraknaForhandsvisning(col, {
-        etikett: `Städade tal i ”${col.name}”`,
-        kind: 'numbers',
-        profil: { typ: 'tal', kolumn: col.name, inst },
-        fn: talTransform(inst),
-        arProblem: (v) => tolkaTal(v, inst).tal === null,
-        nyTyp: 'number',
-      }),
-    [col, props.dataRevision, punktArTusental, format, decimaler, onError],
+      kolumner.map((col) =>
+        beraknaForhandsvisning(col, {
+          etikett: `Städade tal i ”${col.name}”`,
+          kind: 'numbers',
+          profil: { typ: 'tal', kolumn: col.name, inst },
+          fn: talTransform(inst),
+          arProblem: (v) => tolkaTal(v, inst).tal === null,
+          nyTyp: 'number',
+        }),
+      ),
+    [nyckel, props.dataRevision, punktArTusental, format, decimaler, onError],
   )
+  const forh = sammanfatta(forhLista)
 
   useEffect(() => {
-    props.onForhandsvisning(forh)
-  }, [forh])
+    props.onForhandsvisning(forhLista)
+  }, [forhLista])
   useEffect(() => () => props.onForhandsvisning(null), [])
 
   return (
     <Verktygspanel
       titel="Tal"
-      underrubrik={col.name}
+      underrubrik={kolumnrubrik(kolumner)}
       onStang={props.onStang}
       fot={
         <>
@@ -102,9 +118,9 @@ export function NumberTool(props: {
                   ? 'Ingenting skulle ändras.'
                   : undefined
             }
-            onClick={() => props.onTillampa(forh)}
+            onClick={() => props.onTillampa(forhLista)}
           >
-            Tillämpa
+            {kolumner.length > 1 ? `Tillämpa på ${kolumner.length} kolumner` : 'Tillämpa'}
           </button>
         </>
       }

@@ -33,6 +33,17 @@ export const VERKTYG: Verktygspost[] = [
   { namn: 'ersatt', etikett: 'Sök och ersätt…' },
 ]
 
+/**
+ * Panelrubriken för de kolumner ett verktyg körs på.
+ *
+ * En kolumn nämns vid namn; flera räknas och radas upp, så att man ser vad
+ * ett Tillämpa faktiskt kommer att röra.
+ */
+export function kolumnrubrik(kolumner: readonly Column[]): string {
+  if (kolumner.length === 1) return kolumner[0]!.name
+  return `${kolumner.length} kolumner: ${kolumner.map((c) => c.name).join(', ')}`
+}
+
 export interface Verktygsordning {
   /** Verktyg innehållet talar för, starkast först, med sitt skäl. */
   passande: { post: Verktygspost; skal: string }[]
@@ -61,13 +72,22 @@ export function ordnaVerktyg(profil: Innehallsprofil): Verktygsordning {
 
 export interface VerktygProps {
   namn: Verktygsnamn
-  col: Column
+  /**
+   * Kolumnerna verktyget körs på, alltid minst en.
+   *
+   * Datum, tal, telefon och sök & ersätt skriver om varje kolumn i listan;
+   * tolv månadskolumner med datum är ett vanligt fall och att köra verktyget
+   * tolv gånger är precis det slit ett verktyg ska ta bort. De verktyg som
+   * *skapar* kolumner arbetar på den första — tolv nya kolumner ur en
+   * markering är sällan vad någon menade.
+   */
+  kolumner: Column[]
   frame: Frame
   dataRevision: number
   visaBara: 'andrade' | 'problem' | undefined
   onVisaBara: (v: 'andrade' | 'problem' | undefined) => void
-  onForhandsvisning: (forh: Forhandsvisning | null) => void
-  onTillampa: (forh: Forhandsvisning) => void
+  onForhandsvisning: (forh: Forhandsvisning[] | null) => void
+  onTillampa: (forh: Forhandsvisning[]) => void
   onStang: () => void
 }
 
@@ -78,21 +98,23 @@ export interface VerktygProps {
  * förhandsvisning ut — så valet är en rad och inte en förgrening genom resten
  * av koden.
  */
-export function Verktyg({ namn, frame, ...rest }: VerktygProps) {
+export function Verktyg({ namn, frame, kolumner, ...rest }: VerktygProps) {
+  // Verktyg som skapar nya kolumner arbetar på den första i markeringen.
+  const col = kolumner[0]!
   switch (namn) {
     case 'datum':
-      return <DateTool {...rest} />
+      return <DateTool {...rest} kolumner={kolumner} />
     case 'tal':
-      return <NumberTool {...rest} />
+      return <NumberTool {...rest} kolumner={kolumner} />
     case 'telefon':
-      return <PhoneTool {...rest} />
+      return <PhoneTool {...rest} kolumner={kolumner} />
     case 'epost':
-      return <EmailTool {...rest} />
+      return <EmailTool {...rest} col={col} />
     case 'dela':
-      return <SplitTool {...rest} />
+      return <SplitTool {...rest} col={col} />
     case 'slaihop':
-      return <MergeTool {...rest} frame={frame} />
+      return <MergeTool {...rest} col={col} frame={frame} />
     case 'ersatt':
-      return <ReplaceTool {...rest} />
+      return <ReplaceTool {...rest} kolumner={kolumner} />
   }
 }

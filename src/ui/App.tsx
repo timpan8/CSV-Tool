@@ -113,6 +113,15 @@ import { EXEMPELFIL, EXEMPELFIL_MALL, EXEMPELFIL_ORDER } from './exempel.js'
 
 const TYPCYKEL: ColumnType[] = ['text', 'number', 'date', 'email', 'bool']
 
+/**
+ * Verktyg som kör över hela markeringen.
+ *
+ * De skriver om kolumnerna på plats. De övriga *skapar* kolumner, och tolv
+ * nya kolumner ur en markering är sällan vad någon menade — de arbetar på
+ * den kolumn man klickade i.
+ */
+const FLERKOLUMNSVERKTYG = new Set<Verktygsnamn>(['datum', 'tal', 'telefon', 'ersatt'])
+
 /** Kortar ett värde så att en menypost inte blir bredare än skärmen. */
 function kort(value: string): string {
   return value.length > 28 ? `${value.slice(0, 27)}…` : value
@@ -153,8 +162,14 @@ export function App() {
   const [slappOver, setSlappOver] = useState(false)
   const [sokOppen, setSokOppen] = useState(false)
   const [inklistring, setInklistring] = useState<PasteState | null>(null)
-  /** Vilket städverktyg som är öppet, och på vilken kolumn. */
-  const [verktyg, setVerktyg] = useState<{ id: Verktygsnamn; colId: ColumnId } | null>(null)
+  /**
+   * Vilket städverktyg som är öppet, och på vilka kolumner.
+   *
+   * Kolumnerna fångas när verktyget öppnas och inte löpande ur markeringen:
+   * flyttar man markören medan panelen står öppen ska förhandsvisningen ligga
+   * kvar på det man valde.
+   */
+  const [verktyg, setVerktyg] = useState<{ id: Verktygsnamn; colIds: ColumnId[] } | null>(null)
   /**
    * Tabellverktyg i högerpanelen — de som inte hör till en enskild kolumn.
    * Sortering, och i nästa steg filter och dubbletter.
@@ -721,11 +736,14 @@ export function App() {
 
   /* ---------- Städverktyg ---------- */
 
-  const oppnaVerktyg = (namn: Verktygsnamn, colId: ColumnId) => {
-    setActiveColumn(colId)
+  const oppnaVerktyg = (namn: Verktygsnamn, colIds: ColumnId | ColumnId[]) => {
+    const lista = Array.isArray(colIds) ? colIds : [colIds]
+    const forsta = lista[0]
+    if (forsta === undefined) return
+    setActiveColumn(forsta)
     setTabellverktyg(null)
     setOversiktOppen(false)
-    setVerktyg({ id: namn, colId })
+    setVerktyg({ id: namn, colIds: lista })
   }
 
   const stangVerktyg = () => {
@@ -775,27 +793,37 @@ export function App() {
   /**
    * Verktygen som menyposter, det passande först.
    *
-   * Vilka som passar avgörs av innehållet — se `innehallsprofil`. De övriga
-   * göms inte, de hamnar under *Fler verktyg*.
+   * Vilka som passar avgörs av innehållet — se `innehallsprofil` — och räknas
+   * på den kolumn man klickade i. De övriga göms inte, de hamnar under *Fler
+   * verktyg*.
+   *
+   * `kolumner` är hela markeringen med den klickade först. Datum, tal,
+   * telefon och sök & ersätt kör på allihop; de verktyg som skapar nya
+   * kolumner tar den första.
    */
-  const verktygsposter = (col: Column): (MenyPost | 'avdelare')[] => {
+  const verktygsposter = (kolumner: Column[], klickad?: Column): (MenyPost | 'avdelare')[] => {
+    const col = klickad ?? kolumner[0]!
+    const ider = kolumner.map((c) => c.id)
+    const flera = kolumner.length > 1
     const ordning = ordnaVerktyg(innehallsprofil(col))
+    const post = (namn: Verktygsnamn, etikett: string, skal?: string): MenyPost => {
+      // Bara de omskrivande verktygen tar hela markeringen. De som skapar
+      // kolumner arbetar på den man klickade i — tolv nya kolumner ur en
+      // markering är sällan vad någon menade.
+      const manga = flera && FLERKOLUMNSVERKTYG.has(namn)
+      return {
+        etikett: manga
+          ? `${etikett.replace(/…$/, '')} i ${kolumnerText(kolumner.length)}…`
+          : etikett,
+        skal,
+        kor: () => oppnaVerktyg(namn, manga ? ider : [col.id]),
+      }
+    }
     return [
-      ...ordning.passande.map(
-        (p): MenyPost => ({
-          etikett: p.post.etikett,
-          skal: p.skal,
-          kor: () => oppnaVerktyg(p.post.namn, col.id),
-        }),
-      ),
+      ...ordning.passande.map((p) => post(p.post.namn, p.post.etikett, p.skal)),
       {
         etikett: 'Fler verktyg',
-        undermeny: ordning.ovriga.map(
-          (post): MenyPost => ({
-            etikett: post.etikett,
-            kor: () => oppnaVerktyg(post.namn, col.id),
-          }),
-        ),
+        undermeny: ordning.ovriga.map((v) => post(v.namn, v.etikett)),
       },
     ]
   }
@@ -831,7 +859,7 @@ export function App() {
       flyttaSist: (i) => flyttaKolumn(i, frame.columns.length - 1),
       anpassaBredd: (i) => anpassaKolumnbredd(i),
       visaOgiltiga,
-      verktyg: verktygsposter(col),
+      verktyg: verktygsposter([col]),
       filtrera: (i) => filtreraKolumn(i),
       sortera: (i, riktning) => sattSortering(tab, [{ colId: i, riktning }]),
       laggSortering: (i) => vaxlaSortering(tab, i, true),
@@ -856,6 +884,12 @@ export function App() {
     if (!col || fysisk === undefined) return []
     const varde = getCell(col, fysisk)
     const flera = nu.sel !== null && antalCeller(nu.sel) > 1
+    /*
+     * De omskrivande verktygen körs på hela markeringens kolumner, i
+     * rutnätets ordning. De kolumnskapande arbetar på den man klickade i.
+     */
+    const r = nu.sel ? rect(nu.sel) : null
+    const verktygskolumner = r ? nu.kolumner.slice(r.k1, r.k2 + 1) : [col]
 
     return [
       { etikett: 'Klipp ut', genvag: 'Ctrl+X', kor: () => void klippUtMarkering() },
@@ -885,7 +919,7 @@ export function App() {
       },
       { etikett: `Sortera på ${col.name}`, kor: () => vaxlaSortering(nu.tab, col.id, false) },
       'avdelare',
-      ...verktygsposter(col),
+      ...verktygsposter(verktygskolumner, col),
       'avdelare',
       { etikett: 'Radens åtgärder', undermeny: radmenyposter() },
     ]
@@ -1158,8 +1192,14 @@ export function App() {
 
   const aktivKolumn =
     frame && tab?.activeColumnId ? (findColumn(frame, tab.activeColumnId) ?? null) : null
-  // Kolumnen kan ha tagits bort medan verktyget stod öppet; då stängs det.
-  const verktygKolumn = frame && verktyg ? (findColumn(frame, verktyg.colId) ?? null) : null
+  // En kolumn kan ha tagits bort medan verktyget stod öppet; den faller då
+  // bort ur listan, och försvinner den sista stängs panelen.
+  const verktygKolumner =
+    frame && verktyg
+      ? verktyg.colIds
+          .map((id) => findColumn(frame, id))
+          .filter((c): c is Column => c !== undefined)
+      : []
   const begransad = viewIsLimited(tab)
   /*
    * Kolumnen palettens kommandon gäller.
@@ -1353,7 +1393,7 @@ export function App() {
       ) : frame && tab ? (
         <div
           class={`arbetsyta arbetsyta--med-inspektor${
-            verktygKolumn ? ' arbetsyta--med-verktyg' : ''
+            verktygKolumner.length > 0 ? ' arbetsyta--med-verktyg' : ''
           }`}
         >
           <ColumnPanel
@@ -1441,10 +1481,10 @@ export function App() {
               onSorteraOm={() => sorteraOm(tab)}
               onStang={() => setTabellverktyg(null)}
             />
-          ) : verktygKolumn && verktyg ? (
+          ) : verktygKolumner.length > 0 && verktyg ? (
             <Verktyg
               namn={verktyg.id}
-              col={verktygKolumn}
+              kolumner={verktygKolumner}
               frame={frame}
               dataRevision={tab.dataRevision}
               visaBara={tab.viewSpec.visaBara}
@@ -1453,10 +1493,13 @@ export function App() {
               onTillampa={(f) => {
                 const antal = tillampaForhandsvisning(tab, f)
                 stangVerktyg()
+                const forsta = f[0]
+                if (!forsta) return
+                const nya = f.reduce((n, x) => n + x.nyaKolumner.length, 0)
                 notify(
-                  f.nyaKolumner.length === 0
-                    ? `${f.etikett} — ${celler(antal)} skrevs om.`
-                    : `${f.etikett} — ny kolumn med ${celler(antal)} ifyllda.`,
+                  nya === 0
+                    ? `${forsta.etikett}${f.length > 1 ? ` i ${kolumnerText(f.length)}` : ''} — ${celler(antal)} skrevs om.`
+                    : `${forsta.etikett} — ${kolumnerText(nya)} med ${celler(antal)} ifyllda.`,
                   { atgard: { etikett: 'Ångra', kor: () => undo(tab) } },
                 )
               }}

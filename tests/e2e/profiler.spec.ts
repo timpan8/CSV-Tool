@@ -8,9 +8,27 @@ async function oppnaExempel(page: Page) {
 }
 
 /** Skriver om Registrerad till ÅÅÅÅ-MM-DD — ett steg som går att köra om. */
+/**
+ * Öppnar ett verktyg ur kolumnmenyn.
+ *
+ * Verktygen sorteras efter vad kolumnen innehåller, och de som inte passar
+ * ligger under *Fler verktyg*. Hjälparen tar båda vägarna, så att testet
+ * handlar om verktyget och inte om var i menyn det råkar hamna.
+ */
+async function oppnaUrKolumnmenyn(page: Page, kolumn: string, post: string) {
+  await page.getByRole('button', { name: `Meny för kolumnen ${kolumn}` }).click()
+  // Ett föreslaget verktyg står med sitt skäl efter etiketten, så namnet
+  // matchas som delsträng och inte exakt.
+  const direkt = page.getByRole('menuitem', { name: post })
+  if ((await direkt.count()) === 0) {
+    await page.getByRole('menuitem', { name: 'Fler verktyg' }).hover()
+  }
+  await page.getByRole('menuitem', { name: post }).first().click()
+  await expect(page.locator('.verktyg')).toBeVisible()
+}
+
 async function skrivOmDatum(page: Page) {
-  await page.getByRole('button', { name: 'Meny för kolumnen Registrerad' }).click()
-  await page.getByRole('menuitem', { name: 'Datum…' }).click()
+  await oppnaUrKolumnmenyn(page, 'Registrerad', 'Datum…')
   await page.getByRole('button', { name: 'Tillämpa' }).click()
   await expect(page.locator('.verktyg')).toHaveCount(0)
 }

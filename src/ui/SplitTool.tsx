@@ -34,8 +34,8 @@ export function SplitTool(props: {
   dataRevision: number
   visaBara: 'andrade' | 'problem' | undefined
   onVisaBara: (v: 'andrade' | 'problem' | undefined) => void
-  onForhandsvisning: (forh: Forhandsvisning | null) => void
-  onTillampa: (forh: Forhandsvisning) => void
+  onForhandsvisning: (forh: Forhandsvisning[] | null) => void
+  onTillampa: (forh: Forhandsvisning[]) => void
   onStang: () => void
 }) {
   const { col } = props
@@ -74,7 +74,7 @@ export function SplitTool(props: {
   )
 
   useEffect(() => {
-    props.onForhandsvisning(forh)
+    props.onForhandsvisning([forh])
   }, [forh])
   useEffect(() => () => props.onForhandsvisning(null), [])
 
@@ -101,7 +101,7 @@ export function SplitTool(props: {
             class="knapp knapp--primar"
             disabled={forh.andrade === 0}
             title={forh.andrade === 0 ? 'Delningen ger inga värden.' : undefined}
-            onClick={() => props.onTillampa(forh)}
+            onClick={() => props.onTillampa([forh])}
           >
             Skapa {formatCount(antal)} kolumner
           </button>

@@ -26,8 +26,8 @@ export function EmailTool(props: {
   dataRevision: number
   visaBara: 'andrade' | 'problem' | undefined
   onVisaBara: (v: 'andrade' | 'problem' | undefined) => void
-  onForhandsvisning: (forh: Forhandsvisning | null) => void
-  onTillampa: (forh: Forhandsvisning) => void
+  onForhandsvisning: (forh: Forhandsvisning[] | null) => void
+  onTillampa: (forh: Forhandsvisning[]) => void
   onStang: () => void
 }) {
   const { col } = props
@@ -85,7 +85,7 @@ export function EmailTool(props: {
   }, [col, props.dataRevision, falt, efternamnForst, namn, namn2, tva])
 
   useEffect(() => {
-    props.onForhandsvisning(forh)
+    props.onForhandsvisning([forh])
   }, [forh])
 
   useEffect(() => {
@@ -109,7 +109,7 @@ export function EmailTool(props: {
             class="knapp knapp--primar"
             disabled={forh.andrade === 0}
             title={forh.andrade === 0 ? 'Kolumnen skulle bli tom.' : undefined}
-            onClick={() => props.onTillampa(forh)}
+            onClick={() => props.onTillampa([forh])}
           >
             {tva ? 'Skapa kolumnerna' : 'Skapa kolumnen'}
           </button>

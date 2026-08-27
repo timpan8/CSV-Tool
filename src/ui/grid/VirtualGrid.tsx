@@ -5,7 +5,14 @@ import { getCell, filledCount, flagCount, matchDictionary } from '../../core/fra
 import { TYPE_BADGES, TYPE_LABELS, violatesType } from '../../core/infer.js'
 import { formatCount } from '../../core/locale/sv.js'
 import { cellenMatchar, type ViewSpec } from '../../state/view.js'
-import { forCell, spokvarde, uppslag, PROBLEM, type Forhandsvisning } from '../../state/preview.js'
+import {
+  forCell,
+  forKolumn,
+  spokvarde,
+  uppslag,
+  PROBLEM,
+  type Forhandsvisning,
+} from '../../state/preview.js'
 import type { Riktning, Sorteringsniva } from '../../core/ops/sort.js'
 import { innehaller, rect, type Selection } from '../../state/selection.js'
 import type { Dubblettgrupper } from '../../core/ops/duplicates.js'
@@ -32,8 +39,11 @@ export interface GridProps {
   revision: number
   activeColumnId: ColumnId | null
   viewSpec: ViewSpec
-  /** Omskrivning som visas men ännu inte är gjord. Ritas som före → efter. */
-  forhandsvisning: Forhandsvisning | null
+  /**
+   * Omskrivningar som visas men ännu inte är gjorda, en per kolumn verktyget
+   * körs över. Ritas som före → efter, eller som spökkolumner.
+   */
+  forhandsvisning: readonly Forhandsvisning[]
   /** Aktiva sorteringsnivåer, för pilen i rubriken. */
   sortering: readonly Sorteringsniva[]
   /** Dubblettgrupperna, för linjen mellan dem och för valet av vilken rad som stannar. */
@@ -132,10 +142,10 @@ export function VirtualGrid(props: GridProps) {
   // Förhandsvisningen av en *ny* kolumn ritas som en spökkolumn intill sin
   // källa. Den ligger inte i ramen och går inte att markera, så
   // markeringens kolumnindex räknar fortfarande bara riktiga kolumner.
-  const spokeEfter =
-    (props.forhandsvisning?.nyaKolumner.length ?? 0) > 0
-      ? columns.findIndex((c) => c.id === props.forhandsvisning!.colId)
-      : -1
+  const spoke = (col: Column): Forhandsvisning | null => {
+    const f = forKolumn(props.forhandsvisning, col.id)
+    return f && f.nyaKolumner.length > 0 ? f : null
+  }
 
   const total = frame.view.length
   const first = Math.max(0, Math.floor(scrollTop / rowHeight) - OVERSCAN)
@@ -246,7 +256,7 @@ export function VirtualGrid(props: GridProps) {
             fokus={markering?.fokusRad === i && markering.fokusKol === kol}
             redigeras={redigerar?.rad === i && redigerar.kol === kol}
             viewSpec={props.viewSpec}
-            forhandsvisning={props.forhandsvisning}
+            forhandsvisning={forKolumn(props.forhandsvisning, col.id)}
             onPointerDown={(utoka) => {
               drarMarkering.current = true
               valj(i, kol, utoka)
@@ -264,17 +274,15 @@ export function VirtualGrid(props: GridProps) {
             onCommit={(value, flytt) => props.onCommitEdit(i, kol, value, flytt)}
             onCancel={props.onCancelEdit}
           />,
-          ...(kol === spokeEfter
-            ? props.forhandsvisning!.nyaKolumner.map((_, mal) => (
-                <SpokCell
-                  key={`spoke${mal}`}
-                  kall={col}
-                  row={physical}
-                  mal={mal}
-                  forh={props.forhandsvisning!}
-                />
-              ))
-            : []),
+          ...(spoke(col)?.nyaKolumner.map((_, mal) => (
+            <SpokCell
+              key={`spoke${col.id}-${mal}`}
+              kall={col}
+              row={physical}
+              mal={mal}
+              forh={spoke(col)!}
+            />
+          )) ?? []),
         ])}
       </div>,
     )
@@ -348,19 +356,17 @@ export function VirtualGrid(props: GridProps) {
               setDropIndex(null)
             }}
           />,
-          ...(index === spokeEfter
-            ? props.forhandsvisning!.nyaKolumner.map((namn, mal) => (
-                <div
-                  key={`spoke${mal}`}
-                  class="rubrik rubrik--spoke"
-                  style={{ width: `${col.width ?? DEFAULT_WIDTH}px` }}
-                  role="columnheader"
-                >
-                  <span class="rubrik__namn">{namn}</span>
-                  <span class="rubrik__spoke">ny kolumn</span>
-                </div>
-              ))
-            : []),
+          ...(spoke(col)?.nyaKolumner.map((namn, mal) => (
+            <div
+              key={`spoke${col.id}-${mal}`}
+              class="rubrik rubrik--spoke"
+              style={{ width: `${col.width ?? DEFAULT_WIDTH}px` }}
+              role="columnheader"
+            >
+              <span class="rubrik__namn">{namn}</span>
+              <span class="rubrik__spoke">ny kolumn</span>
+            </div>
+          )) ?? []),
         ])}
       </div>
 

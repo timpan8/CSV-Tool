@@ -243,3 +243,33 @@ export function matchDictionary(col: Column, predicate: (value: string) => boole
   }
   return mask
 }
+
+/**
+ * Ordböckerna för flera kolumner efter varandra, med sina cellvikter.
+ *
+ * Ett verktyg som körs över en flerkolumnsmarkering ska inventera hela
+ * markeringen: ”15 av 16 går att läsa som datum” ska räkna alla de valda
+ * kolumnernas celler. Inventeringsfunktionerna tar redan `varden` plus
+ * `vikter`, så det räcker att lägga ordböckerna efter varandra — varje unikt
+ * värde tolkas fortfarande en gång per kolumn det förekommer i, inte en gång
+ * per rad.
+ */
+export function samladOrdbok(kolumner: readonly Column[]): {
+  varden: string[]
+  vikter: number[]
+} {
+  if (kolumner.length === 1) {
+    const col = kolumner[0]!
+    return { varden: col.dict, vikter: Array.from(codeCounts(col)) }
+  }
+  const varden: string[] = []
+  const vikter: number[] = []
+  for (const col of kolumner) {
+    const antal = codeCounts(col)
+    for (let kod = 0; kod < col.dict.length; kod++) {
+      varden.push(col.dict[kod]!)
+      vikter.push(antal[kod]!)
+    }
+  }
+  return { varden, vikter }
+}
