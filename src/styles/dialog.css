@@ -469,6 +469,13 @@
   color: var(--text-svag);
 }
 
+/* En formel läses tecken för tecken. Ett fast breddsteg gör parenteser och
+   klamrar lätta att para ihop, precis som i en kodruta. */
+.formel__falt {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+
 /* ---------- Meny ---------- */
 
 /* Ligger utanför layouten helt: menyn placerar sig själv med position: fixed,

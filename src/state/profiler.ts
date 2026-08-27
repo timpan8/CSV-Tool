@@ -7,9 +7,10 @@ import { delaVarde } from '../core/ops/columns.js'
 import { korMall, tolkaMall } from '../core/ops/columns.js'
 import { datumTransform, tolkaDatum } from '../core/ops/dates.js'
 import { epostNamndelar, epostTransform } from '../core/ops/email.js'
-import { talTransform, tolkaTal } from '../core/ops/numbers.js'
+import { skrivTal, talTransform, tolkaTal } from '../core/ops/numbers.js'
 import { telefonTransform, tolkaTelefon } from '../core/ops/phone.js'
 import { byggErsattare } from '../core/ops/replace.js'
+import { formelTransform, tolkaFormel } from '../core/ops/formel.js'
 import {
   beskrivSteg,
   stegetsKolumner,
@@ -98,7 +99,7 @@ export function tolkaProfilfil(text: string): Profil[] | null {
 }
 
 const KANDA_TYPER = new Set([
-  'stada', 'datum', 'tal', 'telefon', 'epost', 'ersatt', 'dela', 'mall',
+  'stada', 'datum', 'tal', 'telefon', 'epost', 'ersatt', 'dela', 'mall', 'formel',
   'dopOm', 'taBortKolumn', 'doljKolumn', 'sattTyp', 'tommaRader', 'tommaKolumner',
 ])
 
@@ -272,6 +273,36 @@ export function korSteg(tab: Tab, steg: Profilsteg): Stegresultat {
   }
   if (steg.typ === 'tommaKolumner') {
     return { steg, utfall: 'kord', andrade: taBortTommaKolumner(tab) }
+  }
+
+  if (steg.typ === 'formel') {
+    const tolkning = tolkaFormel(steg.uttryck, frame)
+    if (!tolkning.rot) {
+      return {
+        steg,
+        utfall: 'kolumnSaknas',
+        andrade: 0,
+        saknad: tolkning.okanda.join(', ') || undefined,
+      }
+    }
+    const forsta = frame.columns[0]
+    if (!forsta) return { steg, utfall: 'kolumnSaknas', andrade: 0 }
+    const rakna = formelTransform(tolkning.rot, (n) =>
+      skrivTal(n, steg.format, steg.decimaler),
+    )
+    const forh = beraknaForhandsvisning(
+      forsta,
+      {
+        etikett: beskrivSteg(steg),
+        kind: 'formel',
+        profil: steg,
+        rad: (f, row) => [rakna(f, row)],
+        nyaKolumner: [steg.namn],
+      },
+      frame,
+    )
+    const andrade = tillampaForhandsvisning(tab, forh)
+    return { steg, utfall: andrade === 0 ? 'ingenAndring' : 'kord', andrade }
   }
 
   if (steg.typ === 'mall') {

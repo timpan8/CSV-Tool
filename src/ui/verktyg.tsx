@@ -8,6 +8,7 @@ import { PhoneTool } from './PhoneTool.jsx'
 import { ReplaceTool } from './ReplaceTool.jsx'
 import { SplitTool } from './SplitTool.jsx'
 import { MergeTool } from './MergeTool.jsx'
+import { CalcTool } from './CalcTool.jsx'
 
 /**
  * Städverktygen.
@@ -30,6 +31,7 @@ export const VERKTYG: Verktygspost[] = [
   { namn: 'epost', etikett: 'E-post → namn…' },
   { namn: 'dela', etikett: 'Dela kolumnen…' },
   { namn: 'slaihop', etikett: 'Slå ihop kolumner…' },
+  { namn: 'rakna', etikett: 'Räkna…' },
   { namn: 'ersatt', etikett: 'Sök och ersätt…' },
 ]
 
@@ -114,6 +116,8 @@ export function Verktyg({ namn, frame, kolumner, ...rest }: VerktygProps) {
       return <SplitTool {...rest} col={col} />
     case 'slaihop':
       return <MergeTool {...rest} col={col} frame={frame} />
+    case 'rakna':
+      return <CalcTool {...rest} col={col} frame={frame} />
     case 'ersatt':
       return <ReplaceTool {...rest} kolumner={kolumner} />
   }
