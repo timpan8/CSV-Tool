@@ -305,3 +305,111 @@ input[type='radio'] {
   padding: 8px;
   border-top: 1px solid var(--linje);
 }
+
+/* ---------- Verktygspanel ---------- */
+
+.arbetsyta--med-verktyg {
+  grid-template-columns: var(--panel-bredd) 1fr var(--verktyg-bredd);
+}
+
+.verktyg {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--linje);
+  background: var(--yta-2);
+  overflow: hidden;
+}
+
+.verktyg__rubrik {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--linje);
+  background: var(--forhandsvisning-svag);
+}
+
+.verktyg__rubrik h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.verktyg__underrubrik {
+  display: block;
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--text-svag);
+}
+
+.verktyg__kropp {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.verktyg__fot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--linje);
+  background: var(--yta);
+}
+
+.verktyg__sammanfattning {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-svag);
+}
+
+.verktyg__sammanfattning strong {
+  color: var(--text);
+}
+
+.verktyg__problem {
+  color: var(--varning);
+}
+
+/* Formatinventeringen: antal, format, exempel ur den egna filen. */
+.inventering {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.inventering td {
+  padding: 3px 6px 3px 0;
+  border-bottom: 1px solid var(--linje);
+  vertical-align: top;
+}
+
+.inventering__antal {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+  width: 1%;
+}
+
+.inventering__exempel {
+  color: var(--text-svag);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.inventering--okant td {
+  color: var(--varning);
+}
+
+.inventering--okant .inventering__exempel {
+  color: color-mix(in srgb, var(--varning) 75%, var(--text-svag));
+}

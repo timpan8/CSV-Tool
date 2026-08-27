@@ -5,6 +5,7 @@ import { getCell, filledCount, flagCount, matchDictionary } from '../../core/fra
 import { TYPE_BADGES, TYPE_LABELS, violatesType } from '../../core/infer.js'
 import { formatCount } from '../../core/locale/sv.js'
 import { cellenMatchar, type ViewSpec } from '../../state/view.js'
+import { forCell, PROBLEM, type Forhandsvisning } from '../../state/preview.js'
 import { innehaller, rect, type Selection } from '../../state/selection.js'
 
 const DEFAULT_WIDTH = 168
@@ -29,6 +30,8 @@ export interface GridProps {
   revision: number
   activeColumnId: ColumnId | null
   viewSpec: ViewSpec
+  /** Omskrivning som visas men ännu inte är gjord. Ritas som före → efter. */
+  forhandsvisning: Forhandsvisning | null
   markering: Selection | null
   redigerar: { rad: number; kol: number } | null
   onSelectColumn: (id: ColumnId) => void
@@ -107,6 +110,14 @@ export function VirtualGrid(props: GridProps) {
     }
   }, [markering?.fokusRad, rowHeight])
 
+  // Förhandsvisningen av en *ny* kolumn ritas som en spökkolumn intill sin
+  // källa. Den ligger inte i ramen och går inte att markera, så
+  // markeringens kolumnindex räknar fortfarande bara riktiga kolumner.
+  const spokeEfter =
+    props.forhandsvisning?.nyKolumn != null
+      ? columns.findIndex((c) => c.id === props.forhandsvisning!.colId)
+      : -1
+
   const total = frame.view.length
   const first = Math.max(0, Math.floor(scrollTop / rowHeight) - OVERSCAN)
   const visibleCount = Math.ceil(viewportHeight / rowHeight) + OVERSCAN * 2
@@ -136,7 +147,7 @@ export function VirtualGrid(props: GridProps) {
         >
           {source === 0 ? '–' : formatCount(source)}
         </div>
-        {columns.map((col, kol) => (
+        {columns.flatMap((col, kol) => [
           <Cell
             key={col.id}
             col={col}
@@ -145,6 +156,7 @@ export function VirtualGrid(props: GridProps) {
             fokus={markering?.fokusRad === i && markering.fokusKol === kol}
             redigeras={redigerar?.rad === i && redigerar.kol === kol}
             viewSpec={props.viewSpec}
+            forhandsvisning={props.forhandsvisning}
             onPointerDown={(utoka) => {
               drarMarkering.current = true
               valj(i, kol, utoka)
@@ -157,8 +169,18 @@ export function VirtualGrid(props: GridProps) {
             onDoubleClick={() => props.onStartEdit(i, kol)}
             onCommit={(value, flytt) => props.onCommitEdit(i, kol, value, flytt)}
             onCancel={props.onCancelEdit}
-          />
-        ))}
+          />,
+          ...(kol === spokeEfter
+            ? [
+                <SpokCell
+                  key="spoke"
+                  kall={col}
+                  row={physical}
+                  forh={props.forhandsvisning!}
+                />,
+              ]
+            : []),
+        ])}
       </div>,
     )
   }
@@ -185,7 +207,7 @@ export function VirtualGrid(props: GridProps) {
         >
           #
         </div>
-        {columns.map((col, index) => (
+        {columns.flatMap((col, index) => [
           <Header
             key={col.id}
             col={col}
@@ -225,8 +247,21 @@ export function VirtualGrid(props: GridProps) {
               setDragging(null)
               setDropIndex(null)
             }}
-          />
-        ))}
+          />,
+          ...(index === spokeEfter
+            ? [
+                <div
+                  key="spoke"
+                  class="rubrik rubrik--spoke"
+                  style={{ width: `${col.width ?? DEFAULT_WIDTH}px` }}
+                  role="columnheader"
+                >
+                  <span class="rubrik__namn">{props.forhandsvisning!.nyKolumn}</span>
+                  <span class="rubrik__spoke">ny kolumn</span>
+                </div>,
+              ]
+            : []),
+        ])}
       </div>
 
       {total === 0 ? (
@@ -242,6 +277,32 @@ export function VirtualGrid(props: GridProps) {
   )
 }
 
+/**
+ * En cell i spökkolumnen.
+ *
+ * Den läser sitt värde ur källkolumnens kod och förhandsvisningens tabell, är
+ * inte markerbar och går inte att redigera. Kolumnen finns inte i ramen förrän
+ * någon klickat Tillämpa.
+ */
+function SpokCell(props: { kall: Column; row: number; forh: Forhandsvisning }) {
+  const kod = props.kall.codes[props.row]!
+  const value = props.forh.nya[kod] ?? ''
+  const problem = ((props.forh.status[kod] ?? 0) & PROBLEM) !== 0
+  return (
+    <div
+      class={`rutnat__cell rutnat__cell--forhand rutnat__cell--spoke${
+        problem ? ' rutnat__cell--forhand-problem' : ''
+      }`}
+      role="gridcell"
+      aria-readonly="true"
+      style={{ width: `${props.kall.width ?? DEFAULT_WIDTH}px` }}
+      title={value}
+    >
+      <span class="forhand__efter">{value}</span>
+    </div>
+  )
+}
+
 interface CellProps {
   col: Column
   row: number
@@ -249,6 +310,7 @@ interface CellProps {
   fokus: boolean
   redigeras: boolean
   viewSpec: ViewSpec
+  forhandsvisning: Forhandsvisning | null
   onPointerDown: (utoka: boolean) => void
   onPointerEnter: () => void
   onDoubleClick: () => void
@@ -261,8 +323,14 @@ function Cell(props: CellProps) {
   const value = getCell(col, row)
   const flags = col.flags[row]!
   const invalid = value !== '' && violatesType(value, col.type)
+  const forh = forCell(props.forhandsvisning, col, row)
 
   const classes = ['rutnat__cell']
+  if (forh) {
+    classes.push('rutnat__cell--forhand')
+    if (forh.andrad) classes.push('rutnat__cell--forhand-andrad')
+    if (forh.problem) classes.push('rutnat__cell--forhand-problem')
+  }
   if (col.type === 'number') classes.push('rutnat__cell--tal')
   if (col.type === 'date') classes.push('rutnat__cell--datum')
   if (invalid) classes.push('rutnat__cell--ogiltig')
@@ -280,9 +348,13 @@ function Cell(props: CellProps) {
       aria-selected={props.markerad}
       style={{ width: `${col.width ?? DEFAULT_WIDTH}px` }}
       title={
-        invalid
-          ? `Kunde inte tolkas som ${TYPE_LABELS[col.type].toLowerCase()}. Värdet står kvar som det är.`
-          : value
+        forh?.andrad
+          ? `${value} → ${forh.efter || '(tomt)'}`
+          : forh?.problem
+            ? `Går inte att tolka. ${value}`
+            : invalid
+              ? `Kunde inte tolkas som ${TYPE_LABELS[col.type].toLowerCase()}. Värdet står kvar som det är.`
+              : value
       }
       onPointerDown={(e) => {
         if (props.redigeras) return
@@ -293,6 +365,14 @@ function Cell(props: CellProps) {
     >
       {props.redigeras ? (
         <CellEditor start={value} onCommit={props.onCommit} onCancel={props.onCancel} />
+      ) : forh?.andrad ? (
+        <span class="forhand">
+          <span class="forhand__fore">{value}</span>
+          <span class="forhand__pil" aria-hidden="true">
+            →
+          </span>
+          <span class="forhand__efter">{forh.efter === '' ? '(tomt)' : forh.efter}</span>
+        </span>
       ) : (
         <span>{value}</span>
       )}

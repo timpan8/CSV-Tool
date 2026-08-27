@@ -2,6 +2,7 @@ import type { Column, ColumnId } from '../core/types.js'
 import {
   createColumn,
   getCell,
+  intern,
   mapColumnValues,
   restoreCell,
   restoreColumn,
@@ -10,8 +11,10 @@ import {
   type ColumnSnapshot,
 } from '../core/frame/column.js'
 import {
+  columnIndex,
   deleteRows,
   duplicateRows,
+  findColumn,
   findEmptyColumns,
   findEmptyRows,
   insertRows,
@@ -19,6 +22,7 @@ import {
   uniqueColumnName,
   type SavedRow,
 } from '../core/frame/frame.js'
+import type { Forhandsvisning } from './preview.js'
 import { rect, type Selection } from './selection.js'
 import { runStep, type Tab } from './store.js'
 import { celler, kolumner, rader } from '../core/locale/sv.js'
@@ -332,4 +336,85 @@ export function stadaKolumner(tab: Tab, valda: Column[], stadning: Stadning): nu
     },
   )
   return andrade
+}
+
+/* ---------- Omskrivning av en kolumn ---------- */
+
+/**
+ * Kör en godtycklig transform över en kolumn som ett ångringsbart steg.
+ *
+ * Det här är den gemensamma vägen in för samtliga städverktyg — datum,
+ * e-post→namn, sök & ersätt, talstädning. De skiljer sig åt i vilken funktion
+ * de skickar in och vad de kallar steget, inte i hur ändringen görs.
+ */
+export function omvandlaKolumn(
+  tab: Tab,
+  col: Column,
+  etikett: string,
+  kind: string,
+  fn: (value: string) => string,
+): number {
+  let andrade = 0
+  korOverKolumner(tab, etikett, kind, [col], () => {
+    andrade = mapColumnValues(col, fn)
+  })
+  return andrade
+}
+
+/** Tillämpar en öppen förhandsvisning. Returnerar antal ändrade celler. */
+export function tillampaForhandsvisning(tab: Tab, forh: Forhandsvisning): number {
+  const kall = findColumn(tab.frame, forh.colId)
+  if (!kall) return 0
+  if (forh.nyKolumn !== null) return skapaKolumnFran(tab, kall, forh)
+
+  let andrade = 0
+  korOverKolumner(tab, forh.etikett, forh.kind, [kall], () => {
+    andrade = mapColumnValues(kall, forh.fn)
+    // Typen ingår i ögonblicksbilden, så den följer med tillbaka vid ångra.
+    if (forh.nyTyp !== undefined && !kall.typeLocked) kall.type = forh.nyTyp
+  })
+  return andrade
+}
+
+/**
+ * Skapar den nya kolumnen som spökkolumnen visade.
+ *
+ * Kolumnen byggs direkt ur förhandsvisningens tabell: en intern-operation per
+ * *unikt* källvärde, sedan ett heltalssvep över raderna. Att i stället skriva
+ * cell för cell vore samma arbete gånger antalet rader.
+ *
+ * Ångra tar bort kolumnen igen, och gör om lägger tillbaka exakt samma
+ * kolumnobjekt — inklusive den bredd och det namn användaren hunnit ge den.
+ */
+function skapaKolumnFran(tab: Tab, kall: Column, forh: Forhandsvisning): number {
+  const index = columnIndex(tab.frame, kall.id) + 1
+  const namn = uniqueColumnName(
+    tab.frame.columns.map((c) => c.name),
+    forh.nyKolumn ?? kall.name,
+  )
+
+  const col = createColumn(namn, tab.frame.rowCount, forh.nyTyp ?? 'text')
+  const karta = new Uint32Array(kall.dict.length)
+  for (let kod = 0; kod < kall.dict.length; kod++) {
+    karta[kod] = intern(col, forh.nya[kod] ?? '')
+  }
+  let ifyllda = 0
+  for (let r = 0; r < tab.frame.rowCount; r++) {
+    const kod = karta[kall.codes[r]!]!
+    col.codes[r] = kod
+    if (kod !== 0) ifyllda += 1
+  }
+
+  runStep(tab, {
+    label: forh.etikett,
+    kind: forh.kind,
+    apply: () => {
+      tab.frame.columns.splice(index, 0, col)
+    },
+    revert: () => {
+      const i = tab.frame.columns.indexOf(col)
+      if (i !== -1) tab.frame.columns.splice(i, 1)
+    },
+  })
+  return ifyllda
 }

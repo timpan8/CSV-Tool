@@ -1,6 +1,7 @@
 import { computed, signal } from '@preact/signals'
 import type { ColumnId, Frame } from '../core/types.js'
 import { computeView, harBegransning, TOM_VY, type ViewSpec } from './view.js'
+import type { Forhandsvisning } from './preview.js'
 import { cell, klamp, type Selection } from './selection.js'
 
 let seq = 0
@@ -31,6 +32,17 @@ export interface Tab {
   history: AppliedStep[]
   /** Antal steg i `history` som är tillämpade. Ångra flyttar den bakåt. */
   cursor: number
+  /**
+   * Räknare som bara stegas när cellinnehållet faktiskt ändrats.
+   *
+   * Den globala `revision` bumpas av allt som ska ritas om, inklusive
+   * markering, sökning och förhandsvisning. Ett verktyg som räknar om sitt
+   * förslag varje gång `revision` ändras skulle mata sig självt: förslaget
+   * skrivs till fliken, fliken ritas om, förslaget räknas om. Den här
+   * räknaren svarar på den snävare frågan — har datat ändrats? — och är
+   * därför den ett verktyg ska lyssna på.
+   */
+  dataRevision: number
   activeColumnId: ColumnId | null
   /** Sant tills innehållet exporterats — visas som prick i fliken. */
   smutsig: boolean
@@ -44,6 +56,14 @@ export interface Tab {
   markering: Selection | null
   /** Cellen som redigeras just nu, i vy-koordinater. */
   redigerar: { rad: number; kol: number } | null
+  /**
+   * Den omskrivning som visas i tabellen men ännu inte är gjord.
+   *
+   * Den ligger på fliken och inte i dialogens eget läge, eftersom rutnätet
+   * ritar den och `refreshView` filtrerar på den. En förhandsvisning är
+   * heller aldrig en dataändring och hamnar därför aldrig i historiken.
+   */
+  forhandsvisning: Forhandsvisning | null
 }
 
 export const tabs = signal<Tab[]>([])
@@ -74,7 +94,7 @@ export function touch(): void {
  * falla ur en pågående sökning.
  */
 export function refreshView(tab: Tab): void {
-  const result = computeView(tab.frame, tab.viewSpec)
+  const result = computeView(tab.frame, tab.viewSpec, tab.forhandsvisning)
   tab.frame.view = result.view
   tab.kolumnerMedTraff = result.kolumnerMedTraff
   if (tab.markering) {
@@ -103,6 +123,21 @@ export function viewIsLimited(tab: Tab | null): boolean {
   return tab !== null && harBegransning(tab.viewSpec)
 }
 
+/**
+ * Visar eller stänger en förhandsvisning.
+ *
+ * Att stänga den återställer alltid `visaBara`: annars skulle vyn bli tom och
+ * oförklarlig när det som filtrerade den försvann.
+ */
+export function setForhandsvisning(tab: Tab, forh: Forhandsvisning | null): void {
+  tab.forhandsvisning = forh
+  if (forh === null && tab.viewSpec.visaBara !== undefined) {
+    const { visaBara: _, ...kvar } = tab.viewSpec
+    tab.viewSpec = kvar
+  }
+  refreshView(tab)
+}
+
 export function setSelection(tab: Tab, markering: Selection | null): void {
   tab.markering = markering
   touch()
@@ -114,12 +149,14 @@ export function openFrame(frame: Frame): Tab {
     frame,
     history: [],
     cursor: 0,
+    dataRevision: 0,
     activeColumnId: frame.columns[0]?.id ?? null,
     smutsig: false,
     viewSpec: { ...TOM_VY },
     kolumnerMedTraff: 0,
     markering: frame.rowCount > 0 ? cell(0, 0) : null,
     redigerar: null,
+    forhandsvisning: null,
   }
   tabs.value = [...tabs.value, tab]
   activeTabId.value = tab.id
@@ -153,6 +190,7 @@ export function runStep(
   step: Omit<AppliedStep, 'id'>,
 ): void {
   step.apply()
+  tab.dataRevision += 1
   const trimmed = tab.history.slice(0, tab.cursor)
   trimmed.push({ ...step, id: (seq += 1) })
   tab.history = trimmed
@@ -176,6 +214,7 @@ export function undo(tab: Tab): AppliedStep | null {
   const step = tab.history[tab.cursor - 1]!
   step.revert()
   tab.cursor -= 1
+  tab.dataRevision += 1
   refreshView(tab)
   return step
 }
@@ -185,6 +224,7 @@ export function redo(tab: Tab): AppliedStep | null {
   const step = tab.history[tab.cursor]!
   step.apply()
   tab.cursor += 1
+  tab.dataRevision += 1
   refreshView(tab)
   return step
 }
@@ -196,6 +236,7 @@ export function undoThrough(tab: Tab, stepIndex: number): void {
     if (!step) break
     step.revert()
     tab.cursor -= 1
+    tab.dataRevision += 1
   }
   refreshView(tab)
 }

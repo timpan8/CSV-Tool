@@ -281,8 +281,17 @@ export interface Inventering {
  * Poängen är att användaren inte ska behöva beskriva sitt format. Verktyget
  * listar vad det hittade, med antal och exempel, och behöver bara ett svar på
  * den enda fråga som datat inte kan besvara själv.
+ *
+ * `vikter` låter anroparen skicka in en ordbok i stället för en kolumn med
+ * rader: varje värde tolkas en gång men räknas som så många celler det
+ * representerar. Antalen som visas är då celler, vilket är vad användaren
+ * räknar i — inte unika värden.
  */
-export function inventera(varden: readonly string[], val: Tolkningsval = STANDARDVAL): Inventering {
+export function inventera(
+  varden: readonly string[],
+  val: Tolkningsval = STANDARDVAL,
+  vikter?: readonly number[],
+): Inventering {
   const rakning = new Map<Formatnyckel, { antal: number; exempel: string[] }>()
   let tolkade = 0
   let otolkade = 0
@@ -291,18 +300,20 @@ export function inventera(varden: readonly string[], val: Tolkningsval = STANDAR
   let bevisSagerDagForst = true
   let mojligaExcelSerier = 0
 
-  for (const rawValue of varden) {
-    const value = rawValue.trim()
+  for (let i = 0; i < varden.length; i++) {
+    const value = varden[i]!.trim()
     if (value === '') continue
+    const vikt = vikter ? (vikter[i] ?? 0) : 1
+    if (vikt === 0) continue
 
     const t = tolkaDatum(value, val)
     const post = rakning.get(t.format) ?? { antal: 0, exempel: [] }
-    post.antal += 1
+    post.antal += vikt
     if (post.exempel.length < 3 && !post.exempel.includes(value)) post.exempel.push(value)
     rakning.set(t.format, post)
 
-    if (t.datum) tolkade += 1
-    else otolkade += 1
+    if (t.datum) tolkade += vikt
+    else otolkade += vikt
     if (t.tvetydig) tvetydigaFinns = true
 
     // Leta bevis: ett dag/månad-värde där ett av talen är större än 12.
@@ -323,7 +334,7 @@ export function inventera(varden: readonly string[], val: Tolkningsval = STANDAR
 
     if (BARA_SIFFROR.test(value)) {
       const n = Number(value.replace(',', '.'))
-      if (n >= EXCEL_MIN && n <= EXCEL_MAX) mojligaExcelSerier += 1
+      if (n >= EXCEL_MIN && n <= EXCEL_MAX) mojligaExcelSerier += vikt
     }
   }
 

@@ -3,6 +3,7 @@ import { getCell, matchDictionary } from '../core/frame/column.js'
 import { findColumn, identityView } from '../core/frame/frame.js'
 import { violatesType } from '../core/infer.js'
 import { normalizeAlways, stripDiacritics } from '../core/locale/sv.js'
+import { ANDRAD, PROBLEM, type Forhandsvisning } from './preview.js'
 
 /**
  * Beskrivningen av vad som visas.
@@ -17,12 +18,21 @@ export interface ViewSpec {
   search?: string
   /** Visa bara rader där den här kolumnen inte går att tolka som sin typ. */
   invalidIn?: ColumnId
+  /**
+   * Begränsa till raderna en pågående förhandsvisning ändrar, eller till dem
+   * den har problem med. Gäller bara medan en förhandsvisning är öppen.
+   */
+  visaBara?: 'andrade' | 'problem'
 }
 
 export const TOM_VY: ViewSpec = {}
 
 export function harBegransning(spec: ViewSpec): boolean {
-  return (spec.search ?? '').trim() !== '' || spec.invalidIn !== undefined
+  return (
+    (spec.search ?? '').trim() !== '' ||
+    spec.invalidIn !== undefined ||
+    spec.visaBara !== undefined
+  )
 }
 
 /**
@@ -49,7 +59,40 @@ export interface ViewResult {
  * hundratusen rader och tre unika värden kostar tre strängjämförelser. Först
  * därefter går vi ett heltalssvep över raderna.
  */
-export function computeView(frame: Frame, spec: ViewSpec): ViewResult {
+export function computeView(
+  frame: Frame,
+  spec: ViewSpec,
+  forh: Forhandsvisning | null = null,
+): ViewResult {
+  return begransaTillForhandsvisning(frame, grundvy(frame, spec), spec, forh)
+}
+
+/**
+ * Filtrerar en färdig vy till de rader en förhandsvisning ändrar.
+ *
+ * Att lägga det som ett efterled i stället för en egen gren gör att det
+ * komponerar: man kan söka efter ett namn och samtidigt se bara de av
+ * träffarna som datumomskrivningen inte klarar.
+ */
+function begransaTillForhandsvisning(
+  frame: Frame,
+  grund: ViewResult,
+  spec: ViewSpec,
+  forh: Forhandsvisning | null,
+): ViewResult {
+  if (spec.visaBara === undefined || forh === null) return grund
+  const col = findColumn(frame, forh.colId)
+  if (!col) return grund
+  const bit = spec.visaBara === 'problem' ? PROBLEM : ANDRAD
+  const kvar: number[] = []
+  for (let i = 0; i < grund.view.length; i++) {
+    const r = grund.view[i]!
+    if (((forh.status[col.codes[r]!] ?? 0) & bit) !== 0) kvar.push(r)
+  }
+  return { ...grund, view: Uint32Array.from(kvar) }
+}
+
+function grundvy(frame: Frame, spec: ViewSpec): ViewResult {
   const fraga = (spec.search ?? '').trim()
 
   if (spec.invalidIn !== undefined) {

@@ -37,12 +37,14 @@ function tabOf(headers: string[], rows: string[][]): Tab {
     frame,
     history: [],
     cursor: 0,
+    dataRevision: 0,
     activeColumnId: frame.columns[0]?.id ?? null,
     smutsig: false,
     viewSpec: {},
     kolumnerMedTraff: 0,
     markering: cell(0, 0),
     redigerar: null,
+    forhandsvisning: null,
   }
 }
 

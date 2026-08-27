@@ -34,6 +34,7 @@ import {
   revision,
   runStep,
   setActiveColumn,
+  setForhandsvisning,
   setSelection,
   setViewSpec,
   tabs,
@@ -59,9 +60,11 @@ import {
   taBortRader,
   taBortTommaKolumner,
   taBortTommaRader,
+  tillampaForhandsvisning,
   type PasteRequest,
 } from '../state/edits.js'
 import { aggregera, cell, klamp, rect, type Selection } from '../state/selection.js'
+import type { Forhandsvisning } from '../state/preview.js'
 import { VirtualGrid, type Flytt } from './grid/VirtualGrid.jsx'
 import { ColumnPanel } from './ColumnPanel.jsx'
 import { Inspector } from './Inspector.jsx'
@@ -70,10 +73,16 @@ import { ImportDialog, type ImportSettings } from './ImportDialog.jsx'
 import { ExportDialog } from './ExportDialog.jsx'
 import { SearchBar } from './SearchBar.jsx'
 import { PasteDialog } from './PasteDialog.jsx'
+import { DateTool } from './DateTool.jsx'
+import { EmailTool } from './EmailTool.jsx'
+import { ReplaceTool } from './ReplaceTool.jsx'
 import { Meny, Toastar, type MenyPost } from './parts.jsx'
 import { EXEMPELFIL } from './exempel.js'
 
 const TYPCYKEL: ColumnType[] = ['text', 'number', 'date', 'email', 'bool']
+
+/** Städverktygen som bor i sidopanelen. */
+type Verktygsnamn = 'datum' | 'epost' | 'ersatt'
 
 interface MenyLage {
   x: number
@@ -94,6 +103,8 @@ export function App() {
   const [slappOver, setSlappOver] = useState(false)
   const [sokOppen, setSokOppen] = useState(false)
   const [inklistring, setInklistring] = useState<PasteState | null>(null)
+  /** Vilket städverktyg som är öppet, och på vilken kolumn. */
+  const [verktyg, setVerktyg] = useState<{ id: Verktygsnamn; colId: ColumnId } | null>(null)
 
   const tab = activeTab.value
   const frame = tab?.frame ?? null
@@ -465,6 +476,32 @@ export function App() {
     )
   }
 
+  /* ---------- Städverktyg ---------- */
+
+  const oppnaVerktyg = (namn: Verktygsnamn, colId: ColumnId) => {
+    setActiveColumn(colId)
+    setVerktyg({ id: namn, colId })
+  }
+
+  const stangVerktyg = () => {
+    const nu = nuLage()
+    if (nu) setForhandsvisning(nu.tab, null)
+    setVerktyg(null)
+  }
+
+  // Ett öppet verktyg hör till sin flik. Byter man flik städas både panelen
+  // och förhandsvisningen bort från den flik man lämnar — annars skulle den
+  // ligga kvar och ritas nästa gång man kom tillbaka, utan panel som
+  // förklarar den.
+  useEffect(() => {
+    const lamnad = activeTab.value
+    if (!lamnad) return
+    return () => {
+      setForhandsvisning(lamnad, null)
+      setVerktyg(null)
+    }
+  }, [tab?.id])
+
   /* ---------- Tangentbord ---------- */
 
   useEffect(() => {
@@ -629,6 +666,8 @@ export function App() {
 
   const aktivKolumn =
     frame && tab?.activeColumnId ? (findColumn(frame, tab.activeColumnId) ?? null) : null
+  // Kolumnen kan ha tagits bort medan verktyget stod öppet; då stängs det.
+  const verktygKolumn = frame && verktyg ? (findColumn(frame, verktyg.colId) ?? null) : null
   const begransad = viewIsLimited(tab)
 
   return (
@@ -741,7 +780,11 @@ export function App() {
       )}
 
       {frame && tab ? (
-        <div class="arbetsyta arbetsyta--med-inspektor">
+        <div
+          class={`arbetsyta arbetsyta--med-inspektor${
+            verktygKolumn ? ' arbetsyta--med-verktyg' : ''
+          }`}
+        >
           <ColumnPanel
             frame={frame}
             tab={tab}
@@ -757,6 +800,7 @@ export function App() {
             revision={rev}
             activeColumnId={tab.activeColumnId}
             viewSpec={tab.viewSpec}
+            forhandsvisning={tab.forhandsvisning}
             markering={markering}
             redigerar={tab.redigerar}
             onSelectColumn={setActiveColumn}
@@ -773,6 +817,7 @@ export function App() {
                   flyttaForst: (i) => flyttaKolumn(i, 0),
                   flyttaSist: (i) => flyttaKolumn(i, frame.columns.length - 1),
                   visaOgiltiga,
+                  verktyg: oppnaVerktyg,
                   taBort: taBortKolumn,
                   dold: findColumn(frame, id)?.hidden ?? false,
                 }),
@@ -789,16 +834,38 @@ export function App() {
               touch()
             }}
           />
-          <Inspector
-            frame={frame}
-            column={aktivKolumn}
-            revision={rev}
-            onSetType={(t) => aktivKolumn && sattTyp(aktivKolumn.id, t)}
-            onFilterInvalid={() => aktivKolumn && visaOgiltiga(aktivKolumn.id)}
-            onRename={() => aktivKolumn && dopOmKolumn(aktivKolumn.id)}
-            onDuplicate={() => aktivKolumn && dupliceraKolumn(aktivKolumn.id)}
-            onDelete={() => aktivKolumn && taBortKolumn(aktivKolumn.id)}
-          />
+          {verktygKolumn && verktyg ? (
+            <Verktyg
+              namn={verktyg.id}
+              col={verktygKolumn}
+              dataRevision={tab.dataRevision}
+              visaBara={tab.viewSpec.visaBara}
+              onVisaBara={(v) => setViewSpec(tab, { visaBara: v })}
+              onForhandsvisning={(f) => setForhandsvisning(tab, f)}
+              onTillampa={(f) => {
+                const antal = tillampaForhandsvisning(tab, f)
+                stangVerktyg()
+                notify(
+                  f.nyKolumn === null
+                    ? `${f.etikett} — ${celler(antal)} skrevs om.`
+                    : `${f.etikett} — ny kolumn med ${celler(antal)} ifyllda.`,
+                  { atgard: { etikett: 'Ångra', kor: () => undo(tab) } },
+                )
+              }}
+              onStang={stangVerktyg}
+            />
+          ) : (
+            <Inspector
+              frame={frame}
+              column={aktivKolumn}
+              revision={rev}
+              onSetType={(t) => aktivKolumn && sattTyp(aktivKolumn.id, t)}
+              onFilterInvalid={() => aktivKolumn && visaOgiltiga(aktivKolumn.id)}
+              onRename={() => aktivKolumn && dopOmKolumn(aktivKolumn.id)}
+              onDuplicate={() => aktivKolumn && dupliceraKolumn(aktivKolumn.id)}
+              onDelete={() => aktivKolumn && taBortKolumn(aktivKolumn.id)}
+            />
+          )}
         </div>
       ) : (
         <EmptyState onFiler={oppnaFiler} onExempel={oppnaExempel} />
@@ -873,6 +940,30 @@ export function App() {
   )
 }
 
+/**
+ * Väljer verktygspanel.
+ *
+ * Alla verktyg har samma gränssnitt mot appen — en kolumn in, en
+ * förhandsvisning ut — så valet är en rad och inte en förgrening genom
+ * resten av koden.
+ */
+interface VerktygProps {
+  namn: Verktygsnamn
+  col: Column
+  dataRevision: number
+  visaBara: 'andrade' | 'problem' | undefined
+  onVisaBara: (v: 'andrade' | 'problem' | undefined) => void
+  onForhandsvisning: (forh: Forhandsvisning | null) => void
+  onTillampa: (forh: Forhandsvisning) => void
+  onStang: () => void
+}
+
+function Verktyg({ namn, ...rest }: VerktygProps) {
+  if (namn === 'datum') return <DateTool {...rest} />
+  if (namn === 'epost') return <EmailTool {...rest} />
+  return <ReplaceTool {...rest} />
+}
+
 function stadMeny(
   stada: (id: string) => void,
   rader: { tommaRader: () => void; tommaKolumner: () => void },
@@ -914,6 +1005,7 @@ function kolumnMeny(
     flyttaForst: (id: ColumnId) => void
     flyttaSist: (id: ColumnId) => void
     visaOgiltiga: (id: ColumnId) => void
+    verktyg: (namn: Verktygsnamn, id: ColumnId) => void
     taBort: (id: ColumnId) => void
     dold: boolean
   },
@@ -932,6 +1024,9 @@ function kolumnMeny(
     { etikett: 'Flytta först', kor: () => handlers.flyttaForst(id) },
     { etikett: 'Flytta sist', kor: () => handlers.flyttaSist(id) },
     'avdelare',
+    { etikett: 'Datum…', kor: () => handlers.verktyg('datum', id) },
+    { etikett: 'E-post → namn…', kor: () => handlers.verktyg('epost', id) },
+    { etikett: 'Sök och ersätt…', kor: () => handlers.verktyg('ersatt', id) },
     { etikett: 'Visa rader som inte går att tolka', kor: () => handlers.visaOgiltiga(id) },
     'avdelare',
     { etikett: 'Ta bort kolumnen', fara: true, kor: () => handlers.taBort(id) },

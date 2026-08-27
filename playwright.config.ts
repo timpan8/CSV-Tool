@@ -10,6 +10,8 @@ export default defineConfig({
     launchOptions: process.env.CI ? {} : { executablePath: '/opt/pw-browsers/chromium' },
   },
   webServer: {
+    // OBS: `vite preview` serverar `dist/`, inte källkoden. Kör e2e via
+    // `npm run test:e2e`, som bygger först — annars testas förra bygget.
     // --host 127.0.0.1 är avgörande. Utan den binder Vite till namnet
     // "localhost", som på en del maskiner slås upp till ::1. Servern lyssnar
     // då bara på IPv6 medan Playwright pollar 127.0.0.1, och väntan går ut

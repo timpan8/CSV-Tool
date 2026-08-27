@@ -336,3 +336,95 @@
 .sokrad__antal--noll {
   color: var(--varning);
 }
+
+/* ---------- Förhandsvisning ---------- */
+
+/*
+ * En kolumn som förhandsvisas får en egen ton genom hela höjden, så att det
+ * aldrig går att förväxla ett förslag med data som redan är ändrad. Cellerna
+ * som inte berörs tonas ned i stället för att markeras — det är de ändrade
+ * som ska dra blicken.
+ */
+.rutnat__cell--forhand {
+  background: var(--forhandsvisning-svag);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--forhandsvisning) 18%, transparent);
+}
+
+.rutnat__cell--forhand:not(.rutnat__cell--forhand-andrad):not(.rutnat__cell--forhand-problem) {
+  color: var(--text-svag);
+}
+
+.rutnat__cell--forhand-problem {
+  background: var(--varning-svag);
+  box-shadow: inset 2px 0 0 var(--varning);
+}
+
+.forhand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.forhand__fore {
+  color: var(--text-svag);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--text-svag) 60%, transparent);
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.forhand__pil {
+  color: var(--forhandsvisning);
+  flex: none;
+}
+
+.forhand__efter {
+  color: var(--forhandsvisning);
+  font-weight: 600;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * Spökkolumnen: den nya kolumn ett verktyg föreslår. Streckad ram i stället
+ * för heldragen, eftersom den ännu inte finns i filen.
+ */
+.rutnat__cell--spoke {
+  border-left: 1px dashed color-mix(in srgb, var(--forhandsvisning) 55%, transparent);
+  box-shadow: none;
+}
+
+.rubrik--spoke {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  padding: 0 8px;
+  flex: none;
+  background: var(--forhandsvisning-svag);
+  border-left: 1px dashed color-mix(in srgb, var(--forhandsvisning) 55%, transparent);
+  border-bottom: 1px solid var(--linje);
+  overflow: hidden;
+}
+
+.rubrik--spoke .rubrik__namn {
+  color: var(--forhandsvisning);
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rubrik__spoke {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--forhandsvisning);
+  opacity: 0.75;
+}
