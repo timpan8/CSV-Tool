@@ -1,0 +1,209 @@
+import { computed, signal } from '@preact/signals'
+import type { ColumnId, Frame } from '../core/types.js'
+
+let seq = 0
+const nextId = () => `t${(seq += 1).toString(36)}`
+
+/**
+ * Ett utfört steg.
+ *
+ * Steglistan är samma sak som ångra-historiken: det användaren ser i panelen
+ * är exakt det som `Ctrl+Z` backar. Att hålla isär dem är hur historik och
+ * ångra hamnar ur synk.
+ *
+ * `revert` och `apply` är stängningar över den konkreta ändringen. När
+ * profiler byggs får varje steg dessutom en serialiserbar beskrivning, men
+ * ordningen och innebörden är redan den här.
+ */
+export interface AppliedStep {
+  id: number
+  label: string
+  kind: string
+  apply: () => void
+  revert: () => void
+}
+
+export interface Tab {
+  id: string
+  frame: Frame
+  history: AppliedStep[]
+  /** Antal steg i `history` som är tillämpade. Ångra flyttar den bakåt. */
+  cursor: number
+  activeColumnId: ColumnId | null
+  /** Sant tills innehållet exporterats — visas som prick i fliken. */
+  smutsig: boolean
+}
+
+export const tabs = signal<Tab[]>([])
+export const activeTabId = signal<string | null>(null)
+
+/**
+ * Ramar muteras på plats, så identitetsjämförelse räcker inte för att veta
+ * att något ändrats. Räknaren bumpas vid varje ändring och läses av de
+ * komponenter som visar data.
+ */
+export const revision = signal(0)
+
+export const activeTab = computed<Tab | null>(
+  () => tabs.value.find((t) => t.id === activeTabId.value) ?? null,
+)
+
+export const activeFrame = computed<Frame | null>(() => activeTab.value?.frame ?? null)
+
+export function touch(): void {
+  revision.value += 1
+}
+
+export function openFrame(frame: Frame): Tab {
+  const tab: Tab = {
+    id: nextId(),
+    frame,
+    history: [],
+    cursor: 0,
+    activeColumnId: frame.columns[0]?.id ?? null,
+    smutsig: false,
+  }
+  tabs.value = [...tabs.value, tab]
+  activeTabId.value = tab.id
+  return tab
+}
+
+export function closeTab(id: string): void {
+  const remaining = tabs.value.filter((t) => t.id !== id)
+  tabs.value = remaining
+  if (activeTabId.value === id) {
+    activeTabId.value = remaining[remaining.length - 1]?.id ?? null
+  }
+}
+
+export function setActiveColumn(id: ColumnId | null): void {
+  const tab = activeTab.value
+  if (!tab) return
+  tab.activeColumnId = id
+  touch()
+}
+
+/**
+ * Kör en ändring och lägger den i historiken.
+ *
+ * Steg efter markören kastas när en ny ändring görs — standardbeteendet för
+ * ångra/gör om, och det som gör att listan alltid speglar vad som faktiskt
+ * är tillämpat.
+ */
+export function runStep(
+  tab: Tab,
+  step: Omit<AppliedStep, 'id'>,
+): void {
+  step.apply()
+  const trimmed = tab.history.slice(0, tab.cursor)
+  trimmed.push({ ...step, id: (seq += 1) })
+  tab.history = trimmed
+  tab.cursor = trimmed.length
+  tab.smutsig = true
+  touch()
+}
+
+export function canUndo(tab: Tab | null): boolean {
+  return tab !== null && tab.cursor > 0
+}
+
+export function canRedo(tab: Tab | null): boolean {
+  return tab !== null && tab.cursor < tab.history.length
+}
+
+export function undo(tab: Tab): AppliedStep | null {
+  if (tab.cursor === 0) return null
+  const step = tab.history[tab.cursor - 1]!
+  step.revert()
+  tab.cursor -= 1
+  touch()
+  return step
+}
+
+export function redo(tab: Tab): AppliedStep | null {
+  if (tab.cursor >= tab.history.length) return null
+  const step = tab.history[tab.cursor]!
+  step.apply()
+  tab.cursor += 1
+  touch()
+  return step
+}
+
+/** Ångrar till och med ett visst steg, så att steget själv backas. */
+export function undoThrough(tab: Tab, stepIndex: number): void {
+  while (tab.cursor > stepIndex) {
+    const step = tab.history[tab.cursor - 1]
+    if (!step) break
+    step.revert()
+    tab.cursor -= 1
+  }
+  touch()
+}
+
+/* ---------- Notiser ---------- */
+
+export interface Toast {
+  id: number
+  message: string
+  ton: 'info' | 'varning' | 'fara'
+  /** Åtgärdsknapp, nästan alltid "Ångra". */
+  atgard?: { etikett: string; kor: () => void }
+}
+
+export const toasts = signal<Toast[]>([])
+
+export function notify(
+  message: string,
+  options: { ton?: Toast['ton']; atgard?: Toast['atgard']; tid?: number } = {},
+): void {
+  const toast: Toast = {
+    id: (seq += 1),
+    message,
+    ton: options.ton ?? 'info',
+    atgard: options.atgard,
+  }
+  toasts.value = [...toasts.value, toast]
+  const tid = options.tid ?? (toast.atgard ? 8000 : 4500)
+  setTimeout(() => dismiss(toast.id), tid)
+}
+
+export function dismiss(id: number): void {
+  toasts.value = toasts.value.filter((t) => t.id !== id)
+}
+
+/* ---------- Utseende ---------- */
+
+export type Theme = 'system' | 'light' | 'dark'
+export type Tathet = 'kompakt' | 'normal' | 'luftig'
+
+const THEME_KEY = 'csv-verkstan.tema'
+const TATHET_KEY = 'csv-verkstan.tathet'
+
+function readStored<T extends string>(key: string, fallback: T, allowed: readonly T[]): T {
+  try {
+    const stored = localStorage.getItem(key)
+    return stored && (allowed as readonly string[]).includes(stored) ? (stored as T) : fallback
+  } catch {
+    // Privat läge eller blockerad lagring — utseendet är inte värt att krascha på.
+    return fallback
+  }
+}
+
+export const theme = signal<Theme>(readStored(THEME_KEY, 'system', ['system', 'light', 'dark']))
+export const tathet = signal<Tathet>(
+  readStored(TATHET_KEY, 'normal', ['kompakt', 'normal', 'luftig']),
+)
+
+export function applyAppearance(): void {
+  const root = document.documentElement
+  if (theme.value === 'system') root.removeAttribute('data-theme')
+  else root.setAttribute('data-theme', theme.value)
+  if (tathet.value === 'normal') root.removeAttribute('data-tathet')
+  else root.setAttribute('data-tathet', tathet.value)
+  try {
+    localStorage.setItem(THEME_KEY, theme.value)
+    localStorage.setItem(TATHET_KEY, tathet.value)
+  } catch {
+    // Ingen lagring tillgänglig. Valet gäller för den här sessionen.
+  }
+}

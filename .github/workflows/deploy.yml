@@ -1,0 +1,63 @@
+name: Kontrollera och publicera
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  kontrollera:
+    name: Typkontroll, tester och bygge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typkontroll
+        run: npm run typecheck
+      - name: Enhetstester
+        run: npm test
+      - name: Bygg
+        run: npx vite build
+      - name: Röktest i webbläsare
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test
+      - name: Spara röktestets rapport vid fel
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-rapport
+          path: test-results/
+          retention-days: 7
+      - uses: actions/configure-pages@v5
+        if: github.ref == 'refs/heads/main'
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: dist
+
+  publicera:
+    name: Publicera till GitHub Pages
+    needs: kontrollera
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

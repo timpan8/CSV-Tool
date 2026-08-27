@@ -3,3 +3,5 @@ dist/
 .DS_Store
 *.local
 tests/fixtures/generated/
+test-results/
+playwright-report/

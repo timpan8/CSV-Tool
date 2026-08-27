@@ -92,6 +92,29 @@ describe('inferType', () => {
     expect(inferType(columnOf(['01234', '00700', '11122', '09876'])).type).toBe('text')
   })
 
+  it('låter ett enda postnummer med ledande nolla veta hela kolumnen', () => {
+    // Femton av sexton värden är sifferformade utan ledande nolla. En ren
+    // andelsberäkning skulle typa kolumnen som tal och sedan flagga just det
+    // värde som avslöjar vad kolumnen faktiskt är.
+    const postnr = ['21120', '22350', '98139', '35236', '41103', '11122', '72212',
+      '58330', '90325', '75236', '85230', '65224', '70362', '93131', '11455']
+    expect(inferType(columnOf(postnr)).type).toBe('number')
+    expect(inferType(columnOf([...postnr, '01234'])).type).toBe('text')
+  })
+
+  it('låter ett telefonnummer veta taltypen på samma sätt', () => {
+    const belopp = ['1240', '980', '12000', '412', '7450', '315', '1890']
+    expect(inferType(columnOf(belopp)).type).toBe('number')
+    expect(inferType(columnOf([...belopp, '0730123456'])).type).toBe('text')
+  })
+
+  it('låter fritext inte veta taltypen', () => {
+    // Bara sifferformade värden diskvalificerar kolumnen. "saknas" är text
+    // och ska bara räknas som ett värde som inte är ett tal.
+    const värden = Array.from({ length: 30 }, (_, i) => String(100 + i))
+    expect(inferType(columnOf([...värden, 'saknas'])).type).toBe('number')
+  })
+
   it('typar en tom kolumn som tom', () => {
     expect(inferType(columnOf(['', '', ''])).type).toBe('empty')
   })

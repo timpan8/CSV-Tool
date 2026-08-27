@@ -1,0 +1,251 @@
+.rutnat {
+  position: relative;
+  overflow: auto;
+  background: var(--yta);
+  min-height: 0;
+  /* Tal och datum ska stå i pelare, inte hoppa. */
+  font-variant-numeric: tabular-nums;
+}
+
+.rutnat__rad {
+  display: flex;
+  height: var(--radhojd);
+  border-bottom: 1px solid var(--linje);
+  width: max-content;
+  min-width: 100%;
+}
+
+.rutnat__rad:hover .rutnat__cell {
+  background: var(--yta-hover);
+}
+
+.rutnat__rad--aktiv .rutnat__cell {
+  background: var(--accent-svag);
+}
+
+.rutnat__cell {
+  flex: 0 0 auto;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid var(--linje);
+  background: var(--yta);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  position: relative;
+}
+
+.rutnat__cell > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rutnat__cell--tal,
+.rutnat__cell--datum {
+  justify-content: flex-end;
+}
+
+/* Ogiltiga celler behåller sitt råvärde. Gult betyder "titta på det här",
+   aldrig rött — rött läser som förstört eller blockerat. */
+.rutnat__cell--ogiltig {
+  box-shadow: inset 2px 0 0 var(--varning);
+}
+
+.rutnat__cell--ogiltig::after {
+  content: '!';
+  position: absolute;
+  right: 3px;
+  color: var(--varning);
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.rutnat__cell--utfylld {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 5px,
+    var(--yta-3) 5px,
+    var(--yta-3) 6px
+  );
+}
+
+.rutnat__cell--redigerad::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  border: 4px solid transparent;
+  border-top-color: var(--accent);
+  border-right-color: var(--accent);
+}
+
+.rutnat__cell--tom {
+  color: var(--text-svagast);
+}
+
+/* Radnummerkolumnen är fryst och visar radens plats i *källfilen*, även efter
+   sortering — det är vad som gör "rad 47 är trasig" till en åtgärdbar mening. */
+.rutnat__radnr {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex: 0 0 auto;
+  width: 62px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--text-svagast);
+  font-size: 12px;
+  background: var(--yta-2);
+  border-right: 1px solid var(--linje);
+  box-shadow: var(--frys-skugga);
+}
+
+.rutnat__rubrikrad {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  background: var(--yta-2);
+  border-bottom: 1px solid var(--linje-stark);
+}
+
+.rutnat__rubrikrad .rutnat__radnr {
+  z-index: 4;
+  height: var(--rubrikhojd);
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+.rubrik {
+  flex: 0 0 auto;
+  height: var(--rubrikhojd);
+  padding: 4px 8px 3px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  border-right: 1px solid var(--linje);
+  background: var(--yta-2);
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+}
+
+.rubrik:hover {
+  background: var(--yta-3);
+}
+
+.rubrik--aktiv {
+  background: var(--yta-3);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.rubrik--drar {
+  opacity: 0.4;
+}
+
+.rubrik--slappmal {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.rubrik__namn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 620;
+  overflow: hidden;
+}
+
+.rubrik__namn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rubrik__meny {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--text-svagast);
+  padding: 0 2px;
+  border-radius: 3px;
+  line-height: 1;
+  opacity: 0;
+}
+
+.rubrik:hover .rubrik__meny,
+.rubrik--aktiv .rubrik__meny {
+  opacity: 1;
+}
+
+.rubrik__meny:hover {
+  background: var(--linje);
+  color: var(--text);
+}
+
+.rubrik__under {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.typbricka {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 0;
+  background: color-mix(in srgb, var(--typfarg) 16%, transparent);
+  color: var(--typfarg);
+  cursor: pointer;
+}
+
+.typbricka:hover {
+  background: color-mix(in srgb, var(--typfarg) 28%, transparent);
+}
+
+/* Kvalitetsstapeln gör datakvaliteten synlig innan man klickar på något. */
+.kvalitet {
+  flex: 1;
+  display: flex;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--linje);
+  min-width: 20px;
+}
+
+.kvalitet__ifylld { background: var(--typfarg); opacity: 0.5; }
+.kvalitet__tom { background: var(--linje); }
+.kvalitet__ogiltig { background: var(--varning); }
+
+.rubrik__greppa {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 2;
+}
+
+.rubrik__greppa:hover {
+  background: var(--accent);
+  opacity: 0.5;
+}
+
+.rutnat__tomt {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-svag);
+}

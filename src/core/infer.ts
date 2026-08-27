@@ -49,6 +49,28 @@ export function isExcelError(value: string): boolean {
  * De ser ut som tal men är identifierare, och att typa dem som tal är hur
  * postnummer och telefonnummer förstörs.
  */
+/**
+ * Sant för värden som är sifferformade men som inte är tal: ledande nolla
+ * eller orimligt många siffror.
+ *
+ * Ett enda sådant värde räcker för att hela kolumnen ska vara en
+ * identifierarkolumn. En postnummerkolumn där bara ett av tvåhundra värden
+ * råkar börja på noll är inte "94 % tal" — den är postnummer, och att typa
+ * den som tal gör att just det värdet flaggas som fel medan det är det enda
+ * som avslöjar vad kolumnen faktiskt innehåller.
+ */
+export function looksLikeIdentifier(value: string): boolean {
+  const v = normalizeAlways(value).trim()
+  if (v === '') return false
+  // Bara siffror och sådant som förekommer i nummer: mellanslag, bindestreck,
+  // plus och parenteser. Fritext diskvalificerar inte kolumnen.
+  if (!/^[+\-()\d ]+$/.test(v)) return false
+  const digits = v.replace(/\D/g, '')
+  if (digits.length === 0) return false
+  if (digits.length > MAX_NUMERIC_DIGITS) return true
+  return LEADING_ZERO.test(v.replace(/^[+-]/, ''))
+}
+
 export function looksNumeric(value: string): boolean {
   const v = normalizeAlways(value).trim()
   if (v === '') return false
@@ -123,6 +145,7 @@ export function inferType(col: Column, sampleLimit = 2000): TypeGuess {
   let dates = 0
   let emails = 0
   let bools = 0
+  let identifiers = 0
 
   for (let i = 1; i < limit; i++) {
     const value = dict[i]!
@@ -130,6 +153,7 @@ export function inferType(col: Column, sampleLimit = 2000): TypeGuess {
     if (isExcelError(value)) continue
     filled += 1
     if (looksNumeric(value)) numeric += 1
+    else if (looksLikeIdentifier(value)) identifiers += 1
     if (looksLikeDate(value)) dates += 1
     if (looksLikeEmail(value)) emails += 1
     if (looksBoolean(value)) bools += 1
@@ -140,7 +164,8 @@ export function inferType(col: Column, sampleLimit = 2000): TypeGuess {
   const candidates: Array<[ColumnType, number]> = [
     ['email', emails / filled],
     ['date', dates / filled],
-    ['number', numeric / filled],
+    // Ett enda identifierarvärde vetar taltypen för hela kolumnen.
+    ['number', identifiers > 0 ? 0 : numeric / filled],
     ['bool', bools / filled],
   ]
   candidates.sort((a, b) => b[1] - a[1])

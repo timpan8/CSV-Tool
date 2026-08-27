@@ -1,0 +1,147 @@
+/**
+ * Designtokens.
+ *
+ * Ljust läge definieras fullständigt på :root. Mörkt läge redefinierar bara
+ * värdena — aldrig strukturen — dels efter systeminställning, dels efter ett
+ * uttryckligt val på html[data-theme]. Ingen färg får sin enda definition
+ * inuti ett mediablock, annars saknas den när valet går åt andra hållet.
+ *
+ * Färg bär betydelse, aldrig dekoration. Gult betyder "titta på det här",
+ * rött betyder "det här tar bort", violett betyder "det här är ännu inte
+ * tillämpat".
+ */
+
+:root {
+  /* Ytor */
+  --yta: #ffffff;
+  --yta-2: #f8fafc;
+  --yta-3: #f1f5f9;
+  --yta-hover: #f1f5f9;
+  --yta-aktiv: #e0eaff;
+  --linje: #e2e8f0;
+  --linje-stark: #cbd5e1;
+
+  /* Text */
+  --text: #0f172a;
+  --text-svag: #64748b;
+  --text-svagast: #94a3b8;
+  --text-invers: #ffffff;
+
+  /* Betydelsebärande */
+  --accent: #2563eb;
+  --accent-svag: #dbeafe;
+  --accent-text: #1d4ed8;
+  --forhandsvisning: #7c3aed;
+  --forhandsvisning-svag: #ede9fe;
+  --varning: #d97706;
+  --varning-svag: #fef3c7;
+  --fara: #dc2626;
+  --fara-svag: #fee2e2;
+  --lyckat: #059669;
+  --lyckat-svag: #d1fae5;
+
+  /* Kolumntyper */
+  --typ-text: #64748b;
+  --typ-tal: #4f46e5;
+  --typ-datum: #0d9488;
+  --typ-epost: #7c3aed;
+  --typ-bool: #d97706;
+
+  /* Mått */
+  --radhojd: 30px;
+  --rubrikhojd: 46px;
+  --panel-bredd: 260px;
+  --inspektor-bredd: 300px;
+  --radie: 6px;
+  --radie-liten: 4px;
+
+  /* Typsnitt: systemstacken. Inga externa typsnitt — de skulle bryta
+     connect-src 'none' och därmed hela integritetslöftet. */
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, 'Noto Sans', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+    'Liberation Mono', monospace;
+
+  --skugga: 0 1px 2px rgb(15 23 42 / 0.06), 0 2px 8px rgb(15 23 42 / 0.06);
+  --skugga-hog: 0 4px 12px rgb(15 23 42 / 0.1), 0 12px 32px rgb(15 23 42 / 0.12);
+  --frys-skugga: 4px 0 6px -4px rgb(15 23 42 / 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --yta: #0f172a;
+    --yta-2: #1e293b;
+    --yta-3: #263449;
+    --yta-hover: #1e293b;
+    --yta-aktiv: #1e3a8a;
+    --linje: #334155;
+    --linje-stark: #475569;
+
+    --text: #e2e8f0;
+    --text-svag: #94a3b8;
+    --text-svagast: #64748b;
+    --text-invers: #0f172a;
+
+    --accent: #60a5fa;
+    --accent-svag: #1e3a5f;
+    --accent-text: #93c5fd;
+    --forhandsvisning: #a78bfa;
+    --forhandsvisning-svag: #362a5c;
+    --varning: #fbbf24;
+    --varning-svag: #45330f;
+    --fara: #f87171;
+    --fara-svag: #481a1a;
+    --lyckat: #34d399;
+    --lyckat-svag: #10352a;
+
+    --typ-text: #94a3b8;
+    --typ-tal: #a5b4fc;
+    --typ-datum: #5eead4;
+    --typ-epost: #c4b5fd;
+    --typ-bool: #fcd34d;
+
+    --skugga: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px rgb(0 0 0 / 0.3);
+    --skugga-hog: 0 4px 12px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.45);
+    --frys-skugga: 4px 0 6px -4px rgb(0 0 0 / 0.5);
+  }
+}
+
+:root[data-theme='dark'] {
+  --yta: #0f172a;
+  --yta-2: #1e293b;
+  --yta-3: #263449;
+  --yta-hover: #1e293b;
+  --yta-aktiv: #1e3a8a;
+  --linje: #334155;
+  --linje-stark: #475569;
+
+  --text: #e2e8f0;
+  --text-svag: #94a3b8;
+  --text-svagast: #64748b;
+  --text-invers: #0f172a;
+
+  --accent: #60a5fa;
+  --accent-svag: #1e3a5f;
+  --accent-text: #93c5fd;
+  --forhandsvisning: #a78bfa;
+  --forhandsvisning-svag: #362a5c;
+  --varning: #fbbf24;
+  --varning-svag: #45330f;
+  --fara: #f87171;
+  --fara-svag: #481a1a;
+  --lyckat: #34d399;
+  --lyckat-svag: #10352a;
+
+  --typ-text: #94a3b8;
+  --typ-tal: #a5b4fc;
+  --typ-datum: #5eead4;
+  --typ-epost: #c4b5fd;
+  --typ-bool: #fcd34d;
+
+  --skugga: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px rgb(0 0 0 / 0.3);
+  --skugga-hog: 0 4px 12px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.45);
+  --frys-skugga: 4px 0 6px -4px rgb(0 0 0 / 0.5);
+}
+
+:root[data-tathet='kompakt'] { --radhojd: 24px; }
+:root[data-tathet='luftig'] { --radhojd: 38px; }
