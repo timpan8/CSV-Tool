@@ -10,6 +10,8 @@ export interface ParseRequest {
   file: File
   fileName: string
   overrides: ParseOverrides
+  /** Sätts för .xlsx: valt blad och hur tal skrivs om. */
+  xlsx?: { sheet?: string; decimal: ',' | '.' }
 }
 
 export interface PreviewRequest {
@@ -19,6 +21,7 @@ export interface PreviewRequest {
   overrides: ParseOverrides
   /** Antal rader att visa i importdialogen. */
   rows: number
+  xlsx?: { sheet?: string; decimal: ',' | '.' }
 }
 
 export type WorkerRequest = ParseRequest | PreviewRequest
@@ -34,6 +37,9 @@ export interface ParsePreview {
   check: EncodingCheck
   totalRowsSeen: number
   warnings: { kind: string; message: string; count?: number }[]
+  /** Bladen i arbetsboken. Tom lista för CSV. */
+  sheets?: string[]
+  valdSheet?: string
 }
 
 export type WorkerResponse =

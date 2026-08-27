@@ -105,10 +105,10 @@ export function App() {
 
   const oppnaFiler = useCallback((files: File[]) => {
     const tillatna = files.filter(
-      (f) => /\.(csv|txt|tsv)$/i.test(f.name) || f.type.startsWith('text/'),
+      (f) => /\.(csv|txt|tsv|xlsx)$/i.test(f.name) || f.type.startsWith('text/'),
     )
     if (tillatna.length === 0) {
-      notify('Bara CSV-, TXT- och TSV-filer kan öppnas än så länge.', { ton: 'varning' })
+      notify('Verktyget öppnar CSV, TXT, TSV och Excel-filer (.xlsx).', { ton: 'varning' })
       return
     }
     setKö((current) => [...current, ...tillatna])
@@ -118,13 +118,20 @@ export function App() {
     setKö((current) => current.slice(1))
     setLaddar(file.name)
     try {
-      const parsed = await dataWorker.parse(file, {
-        delimiter: settings.delimiter,
-        encoding: settings.encoding,
-        trimFields: settings.trimFields,
-        skipEmptyRows: settings.skipEmptyRows,
-        headerRow: settings.headerRow,
-      })
+      const parsed = await dataWorker.parse(
+        file,
+        {
+          delimiter: settings.delimiter,
+          encoding: settings.encoding,
+          trimFields: settings.trimFields,
+          skipEmptyRows: settings.skipEmptyRows,
+          headerRow: settings.headerRow,
+        },
+        undefined,
+        /\.xlsx$/i.test(file.name)
+          ? { sheet: settings.sheet, decimal: settings.decimal }
+          : undefined,
+      )
       openFrame(parsed)
       const varningar = parsed.meta.warnings.filter((w) => w.kind !== 'encoding-uncertain')
       notify(
@@ -909,7 +916,7 @@ function FilValjare({ onFiler }: { onFiler: (files: File[]) => void }) {
       Öppna
       <input
         type="file"
-        accept=".csv,.txt,.tsv,text/csv,text/plain"
+        accept=".csv,.txt,.tsv,.xlsx,text/csv,text/plain"
         multiple
         style={{ display: 'none' }}
         onChange={(e) => {

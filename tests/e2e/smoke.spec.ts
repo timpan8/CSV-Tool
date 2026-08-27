@@ -58,6 +58,9 @@ test('exporterar Excel-vänlig CSV med BOM och semikolon', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Exportera' }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
+  // Excel-formatet är förvalt eftersom det är det enda som skyddar ledande
+  // nollor. Här testar vi CSV-vägen och väljer den uttryckligen.
+  await page.getByRole('radio', { name: 'CSV, Excel-vänlig' }).click()
 
   const nedladdning = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Ladda ner' }).click()

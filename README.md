@@ -18,7 +18,7 @@ Inga externa typsnitt, inget CDN, ingen analys, ingen felrapportering, ingen inl
 
 ## Vad som fungerar idag
 
-- **Öppna** CSV, TXT och TSV genom att släppa filen var som helst i fönstret, eller välja den. Flera filer samtidigt, som flikar.
+- **Öppna** CSV, TXT, TSV och Excel (`.xlsx`) genom att släppa filen var som helst i fönstret, eller välja den. Flera filer samtidigt, som flikar. Arbetsböcker med flera blad låter dig välja blad.
 - **Teckenkodning och avgränsare upptäcks** — UTF-8, UTF-8 med BOM, UTF-16 och Windows-1252, samt `;` `,` tabb och `|`. Importdialogen visar gissningen i stället för att fatta den i tysthet, och säger på svenska om svenska tecken ser rätt ut.
 - **Importvarningar** för det som annars försvinner tyst: trasiga rader, dubbletta rubriker, tomma rubriker, Excels `sep=;`-rad och spökrader som bara är avgränsare.
 - **Kolumner** kan infogas, tas bort, byta namn, dupliceras, döljas och flyttas — genom att dra rubriken, dra i sidopanelen, eller via kolumnmenyn.
@@ -30,12 +30,14 @@ Inga externa typsnitt, inget CDN, ingen analys, ingen felrapportering, ingen inl
 - **Sök** med `Ctrl+F`, accentokänsligt: `oberg` hittar `Öberg`. Träffarna markeras och räknas.
 - **Städa text**: trimma blanksteg, slå ihop dubbla mellanslag, ta bort osynliga tecken, VERSALER, gemener och Stor Första Bokstav.
 - **Ångra och gör om** på allt, med en steglista där du kan backa till vilket steg som helst.
-- **Export** till CSV med val av avgränsare, teckenkodning, BOM, radslut och vilka rader och kolumner som ska med. Förvalet är Excel-vänligt: semikolon, CRLF och UTF-8 med BOM. Formelskyddet är riskbaserat och rör inte negativa tal.
+- **Export** till Excel (`.xlsx`) eller CSV. Excel är förvalt, eftersom det är det enda formatet som både bevarar `01234` som `01234` och skriver talkolumner som riktiga tal så att `SUMMA` fungerar. CSV-exporten har val av avgränsare, teckenkodning, BOM och radslut, med en Excel-vänlig profil (semikolon, CRLF, UTF-8 med BOM) och ett riskbaserat formelskydd som inte rör negativa tal.
 - Mörkt läge, tomt läge med exempelfil, och en varning innan sidan lämnas med osparat arbete.
+
+En Excel-fil innehåller typade värden i stället för text, så importen måste skriva om dem. Det sägs rakt ut i dialogen: datum blir `ÅÅÅÅ-MM-DD` (läst i UTC, så dagen aldrig förskjuts) och tal får det decimaltecken du väljer, utan tusentalsavgränsare.
 
 ## På gång
 
-Excel-filer in och ut, datum- och e-postverktyg, sök & ersätt, flernivåsortering, filterbyggare, dubbletthantering, matchning av två filer med restlistor, samt Combine, Template och profiler.
+Datum- och e-postverktyg, sök & ersätt, flernivåsortering, filterbyggare, dubbletthantering, matchning av två filer med restlistor, samt Combine, Template och profiler.
 
 ## Utveckling
 
