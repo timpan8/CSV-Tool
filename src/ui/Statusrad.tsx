@@ -100,7 +100,10 @@ export function Statusrad(props: {
       >
         Rader ▾
       </button>
-      <span class="statusrad__lokal" title="Verktyget kan inte skicka data någonstans.">
+      <span
+        class="statusrad__lokal"
+        title="Verktyget kan inte skicka data någonstans. Filerna sparas i din egen webbläsare så att de finns kvar nästa gång — sök upp ”Glöm sparade filer” i paletten för att tömma det."
+      >
         ● Allt lokalt
       </span>
     </div>

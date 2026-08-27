@@ -8,6 +8,7 @@ import { aktivaRegler, TOMT_FILTER, type Filter } from '../core/ops/filter.js'
 import type { Dubblettnyckel } from '../core/ops/duplicates.js'
 import { cell, klamp, type Selection } from './selection.js'
 import type { Profilsteg } from '../core/ops/profil.js'
+import { laddaFlikar, lagringsfel, rensaLagring, sparaFlikar } from './lagring.js'
 
 let seq = 0
 const nextId = () => `t${(seq += 1).toString(36)}`
@@ -110,6 +111,129 @@ export const activeFrame = computed<Frame | null>(() => activeTab.value?.frame ?
 
 export function touch(): void {
   revision.value += 1
+  schemalaggSpar()
+}
+
+/* ---------- Lagring mellan besök ---------- */
+
+/**
+ * Vad som senast skrevs, per flik.
+ *
+ * `data` avgör om den tunga ramen behöver skrivas om; `latt` avgör om den
+ * lilla posten med filter, markering och namn behöver det. Utan den här
+ * bokföringen skulle varje piltangent skriva om hela filen.
+ */
+const skrivet = new Map<string, { data: number; latt: string }>()
+
+let sparTimer: ReturnType<typeof setTimeout> | null = null
+/** Sant när något ändrats som ännu inte hunnit skrivas. */
+let oskrivet = false
+
+function lattSignatur(tab: Tab, i: number, aktiv: boolean): string {
+  return JSON.stringify([
+    i,
+    aktiv,
+    tab.smutsig,
+    tab.activeColumnId,
+    tab.markering,
+    tab.viewSpec,
+    tab.frame.name,
+  ])
+}
+
+/**
+ * Skriver om det behövs, tidigast en stund efter sista ändringen.
+ *
+ * Fördröjningen finns för att `touch` går på allt som ritas om — en flyttad
+ * markering lika väl som en omskriven kolumn. Att skriva vid varje sådan vore
+ * att lägga en diskskrivning i tangentbordets väg.
+ */
+function schemalaggSpar(): void {
+  oskrivet = true
+  if (sparTimer !== null) return
+  sparTimer = setTimeout(() => {
+    sparTimer = null
+    void skrivFlikar()
+  }, 1200)
+}
+
+async function skrivFlikar(): Promise<void> {
+  if (!oskrivet) return
+  oskrivet = false
+  const aktiv = activeTabId.value
+  const lista = tabs.value
+  const sparbara = lista.map((tab, i) => {
+    const tidigare = skrivet.get(tab.id)
+    return {
+      id: tab.id,
+      frame: tab.frame,
+      viewSpec: tab.viewSpec,
+      activeColumnId: tab.activeColumnId,
+      markering: tab.markering,
+      smutsig: tab.smutsig,
+      aktiv: tab.id === aktiv,
+      ramenAndrad: tidigare?.data !== tab.dataRevision,
+      latt: lattSignatur(tab, i, tab.id === aktiv),
+    }
+  })
+
+  // Jämför både vilka flikar som finns och vad de innehåller. Bara antalet
+  // räcker inte: en stängd flik och en nyöppnad ger samma antal men ska
+  // absolut skrivas.
+  const sammaFlikar =
+    sparbara.length === skrivet.size && sparbara.every((f) => skrivet.has(f.id))
+  const oforandrat =
+    sammaFlikar &&
+    sparbara.every((f) => !f.ramenAndrad && skrivet.get(f.id)?.latt === f.latt)
+  if (oforandrat) return
+
+  const gick = await sparaFlikar(sparbara)
+  if (!gick) {
+    const text = lagringsfel()
+    if (text) notify(text, { ton: 'varning' })
+    return
+  }
+  skrivet.clear()
+  for (const tab of lista) {
+    const f = sparbara.find((x) => x.id === tab.id)
+    if (f) skrivet.set(tab.id, { data: tab.dataRevision, latt: f.latt })
+  }
+}
+
+/**
+ * Läser tillbaka flikarna från förra besöket.
+ *
+ * Historiken börjar tom — se `lagring.ts` för varför den inte går att spara.
+ * Det sägs i en notis i stället för att upptäckas när `Ctrl+Z` inte gör
+ * något.
+ */
+export async function aterstallFlikar(): Promise<number> {
+  const sparade = await laddaFlikar()
+  if (sparade.length === 0) return 0
+  const nya = sparade.map((s) => {
+    const tab = nyTab(s.frame)
+    tab.id = s.id
+    tab.viewSpec = s.viewSpec
+    tab.activeColumnId = s.activeColumnId
+    tab.markering = s.markering
+    tab.smutsig = s.smutsig
+    refreshView(tab)
+    skrivet.set(tab.id, {
+      data: tab.dataRevision,
+      latt: '',
+    })
+    return { tab, aktiv: s.aktiv }
+  })
+  tabs.value = nya.map((n) => n.tab)
+  activeTabId.value = (nya.find((n) => n.aktiv) ?? nya[0])!.tab.id
+  touch()
+  return nya.length
+}
+
+/** Glömmer allt som sparats i webbläsaren. Flikarna på skärmen står kvar. */
+export async function glomSparat(): Promise<void> {
+  skrivet.clear()
+  await rensaLagring()
 }
 
 /**
@@ -302,15 +426,23 @@ export function openFrame(frame: Frame): Tab {
   const tab = nyTab(frame)
   tabs.value = [...tabs.value, tab]
   activeTabId.value = tab.id
+  // Att öppna en fil är i sig ingen ändring av innehållet och bumpar därför
+  // inte revisionen — men det är förstås något som ska sparas. Utan det här
+  // gick en fil man öppnat och sedan lämnat orörd förlorad vid omladdning.
+  schemalaggSpar()
   return tab
 }
 
 export function closeTab(id: string): void {
+  // Posten i `skrivet` lämnas kvar med flit: det är skillnaden mellan den och
+  // de flikar som finns nu som säger att något ska tas bort ur lagringen.
   const remaining = tabs.value.filter((t) => t.id !== id)
   tabs.value = remaining
   if (activeTabId.value === id) {
     activeTabId.value = remaining[remaining.length - 1]?.id ?? null
   }
+  // En stängd flik ska inte komma tillbaka nästa gång.
+  schemalaggSpar()
 }
 
 export function setActiveColumn(id: ColumnId | null): void {

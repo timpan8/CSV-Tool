@@ -36,7 +36,7 @@ test('paletten öppnas även innan en fil är öppen', async ({ page }) => {
   await page.keyboard.press('Control+k')
   await expect(palett(page)).toBeVisible()
   // Utan fil finns bara det som går att göra ändå.
-  await expect(page.locator('.palett__post')).toHaveCount(2)
+  await expect(page.locator('.palett__post')).toHaveCount(3)
   await expect(palett(page)).toContainText('Öppna fil…')
 })
 

@@ -83,6 +83,7 @@ export function plural(n: number, ental: string, flertal: string): string {
 export const celler = (n: number) => plural(n, 'cell', 'celler')
 export const rader = (n: number) => plural(n, 'rad', 'rader')
 export const kolumner = (n: number) => plural(n, 'kolumn', 'kolumner')
+export const filer = (n: number) => plural(n, 'fil', 'filer')
 export const grupper = (n: number) => plural(n, 'grupp', 'grupper')
 
 /**
