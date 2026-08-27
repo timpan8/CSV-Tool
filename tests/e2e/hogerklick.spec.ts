@@ -105,3 +105,22 @@ test('dubbelklick på kolumngreppet anpassar bredden', async ({ page }) => {
   const efter = (await rubrik.boundingBox())!.width
   expect(efter).toBeLessThan(fore)
 })
+
+test('Escape stänger menyn även när effekterna släpar efter', async ({ page }) => {
+  /*
+   * Samma fälla som paletten gick i: menyn kan stå på skärmen innan de
+   * effekter som skulle ta emot Escape hunnit köras. Appen läser därför
+   * menyns läge ur en ref som skrivs under renderingen. Bromsen läggs på
+   * efter importen, så att testet handlar om Escape och inget annat.
+   */
+  await oppnaExempel(page)
+  await page.evaluate(() => {
+    window.requestAnimationFrame = ((cb: FrameRequestCallback) =>
+      window.setTimeout(() => cb(performance.now()), 2000)) as typeof requestAnimationFrame
+  })
+
+  await cell(page, 'Malmö').first().click({ button: 'right' })
+  await expect(page.locator('.meny').first()).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.meny')).toHaveCount(0)
+})

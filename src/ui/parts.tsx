@@ -231,22 +231,25 @@ export function Meny(props: {
 }) {
   const ref = useRef<HTMLDivElement>(null)
 
+  /*
+   * Escape hanteras på två ställen, och inget av dem är här.
+   *
+   * Står fokus i menyn tar `Niva` hand om den och stoppar händelsen. Står
+   * fokus någon annanstans fångar appens fönsterhanterare den. Att lägga en
+   * tredje lyssnare här vore inte bara en dubblett — den skulle registreras
+   * i en effekt, och effekter körs efter ritningen. Menyn kan alltså stå på
+   * skärmen innan lyssnaren finns, och då når Escape ingen alls. Appen läser
+   * i stället menyns läge ur en ref som skrivs under renderingen.
+   */
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (!ref.current?.contains(e.target as Node)) props.onStang()
     }
-    // Escape fångas också av nivån när fokus står i menyn. Här ligger den
-    // kvar för fallet att fokus hunnit hamna någon annanstans.
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') props.onStang()
-    }
     // Fördröj så att klicket som öppnade menyn inte omedelbart stänger den.
     const timer = setTimeout(() => document.addEventListener('mousedown', onDown), 0)
-    window.addEventListener('keydown', onKey)
     return () => {
       clearTimeout(timer)
       document.removeEventListener('mousedown', onDown)
-      window.removeEventListener('keydown', onKey)
     }
   }, [props.onStang])
 

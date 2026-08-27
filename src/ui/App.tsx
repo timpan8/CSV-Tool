@@ -999,8 +999,9 @@ export function App() {
    * paletten syns. Samma resonemang gäller översikten och sökraden: de har
    * inte visat felet, men de bygger på samma antagande.
    */
-  const lagen = useRef({ palett: false, oversikt: false, sok: false })
+  const lagen = useRef({ palett: false, meny: false, oversikt: false, sok: false })
   lagen.current.palett = palettOppen
+  lagen.current.meny = meny !== null
   lagen.current.oversikt = oversiktOppen
   lagen.current.sok = sokOppen
 
@@ -1031,6 +1032,21 @@ export function App() {
         if (e.key === 'Escape') {
           e.preventDefault()
           setPalettOppen(false)
+        }
+        return
+      }
+
+      /*
+       * En öppen meny äger Escape. Står fokus i menyn tar den hand om
+       * tangenten själv och stoppar händelsen; hit kommer den bara när fokus
+       * hamnat någon annanstans. Utan det gick Escape vidare till rutnätet,
+       * som inte gör någonting med den, och menyn blev omöjlig att stänga
+       * med tangentbordet.
+       */
+      if (lagen.current.meny) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          setMeny(null)
         }
         return
       }
