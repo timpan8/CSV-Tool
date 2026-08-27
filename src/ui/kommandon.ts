@@ -70,6 +70,7 @@ export interface Kommandohandlare {
   angra: () => void
   goraOm: () => void
   vaxlaTema: () => void
+  glomSparat: () => void
 }
 
 export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando[] {
@@ -78,6 +79,15 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
   const kol = lage.kolumn
 
   lagg({ id: 'oppna', grupp: 'Fil', etikett: 'Öppna fil…', ord: 'open csv excel', kor: h.oppnaFil })
+  lagg({
+    id: 'glomsparat',
+    grupp: 'Fil',
+    etikett: 'Glöm sparade filer',
+    ord: 'rensa radera lagring återställ privat clear storage',
+    beskrivning:
+      'Tömmer det verktyget sparat i webbläsaren. Flikarna du har öppna står kvar.',
+    kor: h.glomSparat,
+  })
   if (lage.harFil) {
     lagg({
       id: 'exportera',

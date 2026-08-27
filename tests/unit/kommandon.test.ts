@@ -33,7 +33,9 @@ describe('byggKommandon', () => {
   it('utan öppen fil finns bara det som går att göra ändå', () => {
     const { h } = handlare()
     const lista = byggKommandon({ ...LAGE, harFil: false, kolumn: null }, h)
-    expect(lista.map((k) => k.id)).toEqual(['oppna', 'tema'])
+    // Att glömma det sparade hör hit: det går att göra även när ingen fil är
+    // öppen, och är då kanske just det man vill.
+    expect(lista.map((k) => k.id)).toEqual(['oppna', 'glomsparat', 'tema'])
   })
 
   it('kolumnkommandon dyker upp först när det finns en kolumn', () => {

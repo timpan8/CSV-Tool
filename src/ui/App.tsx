@@ -12,6 +12,7 @@ import {
 import {
   celler,
   formatCount,
+  filer as filerText,
   kolumner as kolumnerText,
   rader as raderText,
 } from '../core/locale/sv.js'
@@ -22,6 +23,7 @@ import { dataWorker } from '../worker/client.js'
 import {
   activeTab,
   activeTabId,
+  aterstallFlikar,
   applyAppearance,
   canRedo,
   canUndo,
@@ -52,6 +54,7 @@ import {
   undo,
   undoThrough,
   viewIsLimited,
+  glomSparat,
   type Tab,
 } from '../state/store.js'
 import {
@@ -1224,6 +1227,27 @@ export function App() {
     return () => window.removeEventListener('beforeunload', onUnload)
   }, [])
 
+  /*
+   * Flikarna från förra besöket läses tillbaka en gång, vid start.
+   *
+   * Notisen säger två saker och båda behövs: att filerna kom tillbaka, och
+   * att ångra-historiken inte gjorde det. Det andra är sådant man annars
+   * upptäcker genom att trycka Ctrl+Z och se att ingenting händer.
+   */
+  useEffect(() => {
+    let avbruten = false
+    void aterstallFlikar().then((antal) => {
+      if (avbruten || antal === 0) return
+      notify(
+        `${filerText(antal)} från förra besöket är tillbaka. Ångra-historiken börjar om.`,
+        { atgard: { etikett: 'Glöm sparade filer', kor: () => void glomSparat() } },
+      )
+    })
+    return () => {
+      avbruten = true
+    }
+  }, [])
+
   const aktivKolumn =
     frame && tab?.activeColumnId ? (findColumn(frame, tab.activeColumnId) ?? null) : null
   // En kolumn kan ha tagits bort medan verktyget stod öppet; den faller då
@@ -1638,6 +1662,11 @@ export function App() {
             },
             {
               oppnaFil: () => palettFil.current?.click(),
+              glomSparat: () => {
+                void glomSparat().then(() =>
+                  notify('Det sparade är borta. Flikarna du har öppna står kvar.'),
+                )
+              },
               exportera: () => setExportOppen(true),
               profiler: () => setProfilerOppna(true),
               sok: () => setSokOppen(true),
