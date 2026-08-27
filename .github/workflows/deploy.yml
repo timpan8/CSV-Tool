@@ -1,10 +1,12 @@
 name: Kontrollera och publicera
 
 on:
+  # Push bara på main. Utvecklingsgrenar täcks av pull_request, som utlöses på
+  # varje push till en gren med öppen PR. Hade båda gällt skulle varje push ge
+  # två körningar av samma commit, och den ena avbryta den andra — vilket
+  # lämnar en avbruten check på PR:en och gör att den aldrig visar rent.
   push:
-    # Kontrollerna körs på utvecklingsgrenar också, så att fel syns direkt.
-    # Publiceringen nedan är ändå låst till main.
-    branches: [main, 'claude/**']
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -13,8 +15,12 @@ permissions:
   pages: write
   id-token: write
 
+# Gruppen måste innehålla grenen. Med en konstant sträng delar alla grenar och
+# alla händelser samma grupp, och en push till vilken gren som helst avbryter
+# då en pågående körning på en annan — inklusive en halvfärdig publicering
+# från main.
 concurrency:
-  group: pages
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -59,6 +65,12 @@ jobs:
     needs: kontrollera
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # GitHub Pages tar emot en publicering i taget. Den här gruppen köar dem
+    # i stället för att avbryta, så att en påbörjad publicering alltid får
+    # göra sig klar.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

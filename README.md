@@ -59,4 +59,4 @@ Filparsning körs i en Web Worker. Datamodellen är kolumnbaserad och ordbokskod
 
 ## Publicering
 
-GitHub Actions kör typkontroll, enhetstester, bygge och röktest vid varje push, och publicerar till GitHub Pages från `main`. Bygget använder relativ bas, så det fungerar oavsett om sajten ligger under ett repo-namn, på ett eget domännamn eller öppnas direkt från disk.
+GitHub Actions kör typkontroll, enhetstester, bygge och röktest på varje pull request och på varje push till `main`, och publicerar till GitHub Pages från `main`. En utvecklingsgren får alltså sina kontroller så snart den har en öppen PR — vilket också är det som gör att varje commit bara körs en gång. Bygget använder relativ bas, så det fungerar oavsett om sajten ligger under ett repo-namn, på ett eget domännamn eller öppnas direkt från disk.
