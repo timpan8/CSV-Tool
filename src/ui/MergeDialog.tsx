@@ -10,6 +10,7 @@ import {
   type Flertraff,
   type Matchningspar,
   type Matchningstyp,
+  type Sammanslagning,
 } from '../core/ops/match.js'
 import { normalizeAlways, stripDiacritics } from '../core/locale/sv.js'
 import { formatCount, rader as raderText } from '../core/locale/sv.js'
@@ -27,6 +28,7 @@ export function MergeDialog(props: {
   andraFlikar: { id: string; frame: Frame }[]
   onStang: () => void
   onSlaIhop: (frame: Frame, text: string) => void
+  onVerkstad: (hogerTabId: string, par: Matchningspar[], val: Sammanslagning) => void
 }) {
   const [hogerId, setHogerId] = useState(props.andraFlikar[0]?.id ?? '')
   const hoger = props.andraFlikar.find((t) => t.id === hogerId)?.frame ?? null
@@ -90,6 +92,15 @@ export function MergeDialog(props: {
     )
   }
 
+  const tillVerkstaden = () => {
+    if (!hoger) return
+    props.onVerkstad(hogerId, aktivaPar.map((p) => ({ ...p })), {
+      hogerKolumner: valda,
+      flertraff,
+      prefix,
+    })
+  }
+
   if (props.andraFlikar.length === 0) {
     return (
       <Modal
@@ -109,6 +120,8 @@ export function MergeDialog(props: {
     )
   }
 
+  const rester = matchning ? matchning.vansterUtan.length + matchning.hogerUtan.length : 0
+
   const traffprocent =
     matchning && props.vanster.rowCount > 0
       ? Math.round((matchning.vansterMatchade / props.vanster.rowCount) * 100)
@@ -123,6 +136,18 @@ export function MergeDialog(props: {
         <>
           <button class="knapp" onClick={props.onStang}>
             Avbryt
+          </button>
+          <button
+            class="knapp"
+            disabled={!matchning || rester === 0}
+            title={
+              rester === 0
+                ? 'Ingen rad blev över — det finns inget att beta av.'
+                : 'Gå igenom raderna som inte matchade innan filerna slås ihop.'
+            }
+            onClick={tillVerkstaden}
+          >
+            Beta av resten…
           </button>
           <button
             class="knapp knapp--primar"
@@ -344,6 +369,15 @@ export function MergeDialog(props: {
             Resultatet blir en <strong>ny flik</strong>. Alla rader ur {props.vanster.name} följer
             med, även de utan träff — de får tomma celler i stället för att försvinna. Raderna ur{' '}
             {hoger.name} som blev över finns kvar i sin egen flik.
+            {rester > 0 && (
+              <>
+                {' '}
+                <strong>{formatCount(rester)} rader</strong> hittar ingen partner. Vill du gå
+                igenom dem först — para ihop dem för hand, matcha om på en annan kolumn eller
+                rätta värdena — så gör <em>Beta av resten…</em> det, och sammanslagningen sker
+                efteråt.
+              </>
+            )}
           </Notis>
         </>
       )}

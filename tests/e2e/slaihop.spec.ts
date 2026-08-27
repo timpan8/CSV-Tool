@@ -102,8 +102,8 @@ test('matchning på e-post ger fler träffar än på namn', async ({ page }) => 
   await par.locator('select').nth(0).selectOption({ label: 'E-post' })
   await par.locator('select').nth(1).selectOption({ label: 'mail' })
 
-  // E-postadresserna är skrivna likadant i båda filerna, så alla tio order
-  // med adress hittar sin kund.
+  // E-postadresserna är skrivna likadant i båda filerna, så de flesta order
+  // hittar sin kund — även de vars namn är felstavade.
   await expect(page.locator('.inventering')).toContainText('hittar en träff')
   await page.getByRole('button', { name: 'Slå ihop', exact: true }).click()
   await expect(page.locator('.flik')).toHaveCount(3)

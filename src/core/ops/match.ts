@@ -161,6 +161,10 @@ export interface Matchning {
   storstaTraff: number
 }
 
+/**
+ * Delad konstant, och `matcha` returnerar den direkt när inga kolumnpar valts.
+ * En anropare får därför aldrig mutera en `Matchning` den fått tillbaka.
+ */
 export const TOM_MATCHNING: Matchning = {
   par: [],
   vansterUtan: [],
@@ -175,6 +179,21 @@ export const TOM_MATCHNING: Matchning = {
 }
 
 /**
+ * Rader att begränsa matchningen till.
+ *
+ * En utelämnad sida betyder alla rader; en tom lista betyder inga. Indexen som
+ * kommer ut är fysiska även med urval, och räknarna räknar inom urvalet. Det
+ * är precis vad en ny runda på restlistan behöver, och därför slipper den både
+ * delramar och indexöversättning.
+ *
+ * Urvalet förutsätts vara i stigande ordning — restlistorna är det.
+ */
+export interface Urval {
+  vansterRader?: readonly number[]
+  hogerRader?: readonly number[]
+}
+
+/**
  * Matchar två ramar på ett eller flera kolumnpar.
  *
  * Hashjoin: högersidan indexeras en gång, sedan sveps vänstersidan. Siffrorna
@@ -182,21 +201,33 @@ export const TOM_MATCHNING: Matchning = {
  * många som har tom nyckel — är hela poängen med att räkna före körningen.
  * Ett par kolumner som ger 3 träffar av 5 000 rader är nästan alltid fel
  * kolumnpar, inte fel data.
+ *
+ * Nycklarna räknas alltid över hela ordboken, även med urval: kostnaden följer
+ * antalet unika värden och inte antalet rader, så det finns inget att spara på
+ * att räkna dem för färre rader.
  */
 export function matcha(
   vanster: Frame,
   hoger: Frame,
   par: readonly Matchningspar[],
+  urval?: Urval,
 ): Matchning {
   if (par.length === 0) return TOM_MATCHNING
 
   const vNycklar = byggNycklar(vanster, par, 'vanster')
   const hNycklar = byggNycklar(hoger, par, 'hoger')
 
+  const vRader = urval?.vansterRader
+  const hRader = urval?.hogerRader
+  const antalV = vRader ? vRader.length : vanster.rowCount
+  const antalH = hRader ? hRader.length : hoger.rowCount
+
   const index = new Map<string, number[]>()
   let tommaHoger = 0
-  for (let r = 0; r < hoger.rowCount; r++) {
-    const nyckel = hNycklar[r]!
+  for (let i = 0; i < antalH; i++) {
+    const r = hRader ? hRader[i]! : i
+    const nyckel = hNycklar[r]
+    if (nyckel === undefined) continue
     if (nyckel === '') {
       tommaHoger += 1
       continue
@@ -214,8 +245,10 @@ export function matcha(
   let vansterFlera = 0
   let storstaTraff = 0
 
-  for (let r = 0; r < vanster.rowCount; r++) {
-    const nyckel = vNycklar[r]!
+  for (let i = 0; i < antalV; i++) {
+    const r = vRader ? vRader[i]! : i
+    const nyckel = vNycklar[r]
+    if (nyckel === undefined) continue
     if (nyckel === '') {
       tommaVanster += 1
       vansterUtan.push(r)
@@ -238,7 +271,8 @@ export function matcha(
   const hogerUtan: number[] = []
   let hogerMatchade = 0
   let hogerFlera = 0
-  for (let r = 0; r < hoger.rowCount; r++) {
+  for (let i = 0; i < antalH; i++) {
+    const r = hRader ? hRader[i]! : i
     const n = hogerTraffad[r]!
     if (n === 0) hogerUtan.push(r)
     else {
@@ -257,6 +291,90 @@ export function matcha(
     hogerFlera,
     tommaVanster,
     tommaHoger,
+    storstaTraff,
+  }
+}
+
+/**
+ * Lägger handgjorda par till en matchning och räknar om de härledda talen.
+ *
+ * Verkstaden bygger sin matchning så här: grundmatchningen plus de par som
+ * betats fram för hand, i rundor och ur förslagen. Resultatet är en vanlig
+ * `Matchning` som `slaIhop` tar emot utan att veta något om verkstaden.
+ *
+ * `tommaVanster` och `tommaHoger` följer med oförändrade — de är en egenskap
+ * hos nycklarna, inte hos paren. En rad med tom nyckel kan mycket väl paras
+ * för hand, och den är fortfarande en rad som aldrig kunde matcha av sig själv.
+ */
+export function slaSamman(
+  bas: Matchning,
+  extra: readonly { v: number; h: number }[],
+  vanster: Frame,
+  hoger: Frame,
+): Matchning {
+  if (extra.length === 0) return bas
+
+  const sedda = new Set<string>()
+  const par: { v: number; h: number }[] = []
+  for (const p of bas.par) {
+    sedda.add(`${p.v}:${p.h}`)
+    par.push({ v: p.v, h: p.h })
+  }
+  for (const p of extra) {
+    const nyckel = `${p.v}:${p.h}`
+    if (sedda.has(nyckel)) continue
+    sedda.add(nyckel)
+    par.push({ v: p.v, h: p.h })
+  }
+  // Samma ordning som en hashjoin ger, så att "ta den första" betyder första
+  // träffen i den andra filens ordning även för de tillagda paren.
+  par.sort((a, b) => a.v - b.v || a.h - b.h)
+
+  const vAntal = new Uint32Array(vanster.rowCount)
+  const hAntal = new Uint32Array(hoger.rowCount)
+  for (const p of par) {
+    if (p.v < vanster.rowCount) vAntal[p.v]! += 1
+    if (p.h < hoger.rowCount) hAntal[p.h]! += 1
+  }
+
+  const vansterUtan: number[] = []
+  let vansterMatchade = 0
+  let vansterFlera = 0
+  let storstaTraff = 0
+  for (let r = 0; r < vanster.rowCount; r++) {
+    const n = vAntal[r]!
+    if (n === 0) {
+      vansterUtan.push(r)
+      continue
+    }
+    vansterMatchade += 1
+    if (n > 1) vansterFlera += 1
+    if (n > storstaTraff) storstaTraff = n
+  }
+
+  const hogerUtan: number[] = []
+  let hogerMatchade = 0
+  let hogerFlera = 0
+  for (let r = 0; r < hoger.rowCount; r++) {
+    const n = hAntal[r]!
+    if (n === 0) {
+      hogerUtan.push(r)
+      continue
+    }
+    hogerMatchade += 1
+    if (n > 1) hogerFlera += 1
+  }
+
+  return {
+    par,
+    vansterUtan,
+    hogerUtan,
+    vansterMatchade,
+    hogerMatchade,
+    vansterFlera,
+    hogerFlera,
+    tommaVanster: bas.tommaVanster,
+    tommaHoger: bas.tommaHoger,
     storstaTraff,
   }
 }

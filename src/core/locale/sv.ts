@@ -19,12 +19,6 @@ export const sortCollator = new Intl.Collator('sv-SE', {
   caseFirst: 'false',
 })
 
-/** Kollator för jämförelser där skiftläge och accenter ska ignoreras. */
-export const looseCollator = new Intl.Collator('sv-SE', {
-  numeric: true,
-  sensitivity: 'base',
-})
-
 /*
  * Rangordningen av en ordbok bor i `src/core/frame/rank.ts`, eftersom den
  * behöver kolumnens typ för att veta om `1000` ska hamna före eller efter

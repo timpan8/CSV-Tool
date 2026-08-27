@@ -7,6 +7,7 @@ import {
   byggNycklar,
   matcha,
   slaIhop,
+  slaSamman,
   type Matchningspar,
   type Matchningstyp,
 } from '../../src/core/ops/match.js'
@@ -252,5 +253,136 @@ describe('slaIhop', () => {
     const { frame } = slaIhop(VANSTER, HOGER, m, val({ hogerKolumner: [] }))
     expect(frame.columns).toHaveLength(1)
     expect(frame.rowCount).toBe(3)
+  })
+})
+
+describe('urval', () => {
+  const VANSTER = frameOf('kunder', ['Namn'], [['Anna'], ['Bo'], ['Cia']])
+  const HOGER = frameOf('order', ['Kund'], [['Anna'], ['Bo'], ['Cia']])
+  const P = [par(VANSTER, HOGER, 0, 0)]
+
+  it('matchar bara de utvalda raderna och behåller fysiska index', () => {
+    const m = matcha(VANSTER, HOGER, P, { vansterRader: [1, 2], hogerRader: [1, 2] })
+    expect(m.par).toEqual([
+      { v: 1, h: 1 },
+      { v: 2, h: 2 },
+    ])
+    // Anna finns på båda sidor men ligger utanför urvalet och syns inte alls.
+    expect(m.vansterUtan).toEqual([])
+    expect(m.hogerUtan).toEqual([])
+    expect(m.vansterMatchade).toBe(2)
+  })
+
+  it('en rad utanför högerurvalet kan inte träffas', () => {
+    const m = matcha(VANSTER, HOGER, P, { hogerRader: [2] })
+    expect(m.par).toEqual([{ v: 2, h: 2 }])
+    expect(m.vansterUtan).toEqual([0, 1])
+    expect(m.vansterMatchade).toBe(1)
+  })
+
+  it('tom urvalslista betyder inga rader, inte alla', () => {
+    const m = matcha(VANSTER, HOGER, P, { vansterRader: [] })
+    expect(m.par).toEqual([])
+    expect(m.vansterUtan).toEqual([])
+    expect(m.hogerUtan).toEqual([0, 1, 2])
+  })
+
+  it('utan urval är resultatet oförändrat', () => {
+    expect(matcha(VANSTER, HOGER, P, {})).toEqual(matcha(VANSTER, HOGER, P))
+  })
+
+  it('en runda på restlistan hittar bara nya par', () => {
+    // Namnen skiljer sig, men ortsparet binder ihop rad 1.
+    const v = frameOf('v', ['Namn', 'Ort'], [['Anna', 'Lund'], ['B. Ek', 'Kiruna']])
+    const h = frameOf('h', ['Kund', 'Stad'], [['Anna', 'Lund'], ['Bo Ek', 'Kiruna']])
+    const forsta = matcha(v, h, [par(v, h, 0, 0)])
+    expect(forsta.vansterUtan).toEqual([1])
+
+    const runda = matcha(v, h, [par(v, h, 1, 1)], {
+      vansterRader: forsta.vansterUtan,
+      hogerRader: forsta.hogerUtan,
+    })
+    expect(runda.par).toEqual([{ v: 1, h: 1 }])
+  })
+})
+
+describe('slaSamman', () => {
+  const VANSTER = frameOf('kunder', ['Namn'], [['Anna'], ['Bo'], ['Cia']])
+  const HOGER = frameOf('order', ['Kund'], [['Anna'], ['Dan']])
+  const BAS = matcha(VANSTER, HOGER, [par(VANSTER, HOGER, 0, 0)])
+
+  it('utan extra par är matchningen sig själv', () => {
+    expect(slaSamman(BAS, [], VANSTER, HOGER)).toBe(BAS)
+  })
+
+  it('lägger till paret och räknar om restlistorna', () => {
+    const m = slaSamman(BAS, [{ v: 1, h: 1 }], VANSTER, HOGER)
+    expect(m.par).toEqual([
+      { v: 0, h: 0 },
+      { v: 1, h: 1 },
+    ])
+    expect(m.vansterUtan).toEqual([2])
+    expect(m.hogerUtan).toEqual([])
+    expect(m.vansterMatchade).toBe(2)
+    expect(m.hogerMatchade).toBe(2)
+  })
+
+  it('ett par som redan finns lägger inte till något', () => {
+    const m = slaSamman(BAS, [{ v: 0, h: 0 }], VANSTER, HOGER)
+    expect(m.par).toEqual(BAS.par)
+    expect(m.vansterUtan).toEqual(BAS.vansterUtan)
+  })
+
+  it('paren ligger i samma ordning som en hashjoin ger dem', () => {
+    const h = frameOf('order', ['Kund'], [['Anna'], ['anna'], ['Dan']])
+    const bas = matcha(VANSTER, h, [par(VANSTER, h, 0, 0)])
+    const m = slaSamman(bas, [{ v: 2, h: 2 }], VANSTER, h)
+    expect(m.par).toEqual([
+      { v: 0, h: 0 },
+      { v: 0, h: 1 },
+      { v: 2, h: 2 },
+    ])
+  })
+
+  it('tomma nycklar är en egenskap hos nyckeln och räknas inte om', () => {
+    const v = frameOf('v', ['n'], [['Anna'], ['']])
+    const h = frameOf('h', ['n'], [['Anna'], ['']])
+    const bas = matcha(v, h, [par(v, h, 0, 0)])
+    expect(bas.tommaVanster).toBe(1)
+    // Raden utan namn går att para för hand — den är fortfarande en rad som
+    // aldrig kunde matcha av sig själv.
+    const m = slaSamman(bas, [{ v: 1, h: 1 }], v, h)
+    expect(m.tommaVanster).toBe(1)
+    expect(m.tommaHoger).toBe(1)
+    expect(m.vansterUtan).toEqual([])
+  })
+
+  it('varje rad är matchad eller i restlistan, aldrig båda', () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.constantFrom('a', 'b', 'c', ''), { minLength: 1, maxLength: 12 }),
+        fc.array(fc.constantFrom('a', 'B', 'd', ''), { minLength: 1, maxLength: 12 }),
+        fc.array(fc.tuple(fc.nat(11), fc.nat(11)), { maxLength: 8 }),
+        (vanster, hoger, extra) => {
+          const v = frameOf('v', ['n'], vanster.map((x) => [x]))
+          const h = frameOf('h', ['n'], hoger.map((x) => [x]))
+          const bas = matcha(v, h, [par(v, h, 0, 0)])
+          const giltiga = extra
+            .filter(([a, b]) => a < v.rowCount && b < h.rowCount)
+            .map(([a, b]) => ({ v: a, h: b }))
+          const m = slaSamman(bas, giltiga, v, h)
+
+          const vMatchade = new Set(m.par.map((p) => p.v))
+          const hMatchade = new Set(m.par.map((p) => p.h))
+          expect(m.vansterUtan.length + vMatchade.size).toBe(v.rowCount)
+          expect(m.hogerUtan.length + hMatchade.size).toBe(h.rowCount)
+          expect(m.vansterMatchade).toBe(vMatchade.size)
+          expect(m.hogerMatchade).toBe(hMatchade.size)
+          // Inga dubbletter bland paren.
+          expect(new Set(m.par.map((p) => `${p.v}:${p.h}`)).size).toBe(m.par.length)
+        },
+      ),
+      { numRuns: 200 },
+    )
   })
 })
