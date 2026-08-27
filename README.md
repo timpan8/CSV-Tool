@@ -63,9 +63,6 @@ Inga externa typsnitt, inget CDN, ingen analys, ingen felrapportering, ingen inl
 
 En Excel-fil innehåller typade värden i stället för text, så importen måste skriva om dem. Det sägs rakt ut i dialogen: datum blir `ÅÅÅÅ-MM-DD` (läst i UTC, så dagen aldrig förskjuts) och tal får det decimaltecken du väljer, utan tusentalsavgränsare.
 
-## På gång
-
-Ett enfilsbygge som går att öppna direkt från disk.
 
 ## Utveckling
 
