@@ -85,6 +85,7 @@ import { SortTool } from './SortTool.jsx'
 import { FilterTool } from './FilterTool.jsx'
 import { DuplicateTool } from './DuplicateTool.jsx'
 import { Filterrad } from './Filterrad.jsx'
+import { MergeDialog } from './MergeDialog.jsx'
 import { nyRegelId, TOMT_FILTER, type Filterregel } from '../core/ops/filter.js'
 import {
   hittaDubbletter,
@@ -94,7 +95,7 @@ import {
 import { beskrivSortering } from '../core/ops/sort.js'
 import type { Riktning } from '../core/ops/sort.js'
 import { Meny, Toastar, type MenyPost } from './parts.jsx'
-import { EXEMPELFIL } from './exempel.js'
+import { EXEMPELFIL, EXEMPELFIL_ORDER } from './exempel.js'
 
 const TYPCYKEL: ColumnType[] = ['text', 'number', 'date', 'email', 'bool']
 
@@ -113,6 +114,7 @@ interface PasteState {
 export function App() {
   const [kö, setKö] = useState<File[]>([])
   const [exportOppen, setExportOppen] = useState(false)
+  const [slaIhopOppen, setSlaIhopOppen] = useState(false)
   const [meny, setMeny] = useState<MenyLage | null>(null)
   const [laddar, setLaddar] = useState<string | null>(null)
   const [slappOver, setSlappOver] = useState(false)
@@ -181,9 +183,20 @@ export function App() {
     }
   }
 
+  const exempelfil = (text: string, namn: string) =>
+    new File([new Blob([text], { type: 'text/csv' })], namn, { type: 'text/csv' })
+
   const oppnaExempel = () => {
-    const blob = new Blob([EXEMPELFIL], { type: 'text/csv' })
-    setKö((current) => [...current, new File([blob], 'exempel-kunder.csv', { type: 'text/csv' })])
+    setKö((current) => [...current, exempelfil(EXEMPELFIL, 'exempel-kunder.csv')])
+  }
+
+  /** Båda exempelfilerna, så att sammanslagningen går att prova direkt. */
+  const oppnaExempelpar = () => {
+    setKö((current) => [
+      ...current,
+      exempelfil(EXEMPELFIL, 'exempel-kunder.csv'),
+      exempelfil(EXEMPELFIL_ORDER, 'exempel-order.csv'),
+    ])
   }
 
   /** Öppnar text från urklipp som en ny flik. */
@@ -815,6 +828,9 @@ export function App() {
         <button class="knapp" disabled={!frame} onClick={() => oppnaTabellverktyg('dubbletter')}>
           Dubbletter
         </button>
+        <button class="knapp" disabled={!frame} onClick={() => setSlaIhopOppen(true)}>
+          Slå ihop…
+        </button>
         <button class="knapp" disabled={!frame} onClick={() => setExportOppen(true)}>
           Exportera
         </button>
@@ -1032,7 +1048,11 @@ export function App() {
           )}
         </div>
       ) : (
-        <EmptyState onFiler={oppnaFiler} onExempel={oppnaExempel} />
+        <EmptyState
+          onFiler={oppnaFiler}
+          onExempel={oppnaExempel}
+          onExempelpar={oppnaExempelpar}
+        />
       )}
 
       <Statusrad
@@ -1095,6 +1115,21 @@ export function App() {
             notify(`Klistrade in ${celler(andrade)}.`, {
               atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) },
             })
+          }}
+        />
+      )}
+
+      {slaIhopOppen && tab && frame && (
+        <MergeDialog
+          vanster={frame}
+          andraFlikar={tabs.value
+            .filter((t) => t.id !== tab.id)
+            .map((t) => ({ id: t.id, frame: t.frame }))}
+          onStang={() => setSlaIhopOppen(false)}
+          onSlaIhop={(resultat, text) => {
+            setSlaIhopOppen(false)
+            openFrame(resultat)
+            notify(text)
           }}
         />
       )}

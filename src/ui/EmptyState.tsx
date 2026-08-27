@@ -3,6 +3,7 @@ import { useRef, useState } from 'preact/hooks'
 export function EmptyState(props: {
   onFiler: (files: File[]) => void
   onExempel: () => void
+  onExempelpar: () => void
 }) {
   const [over, setOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -61,12 +62,16 @@ export function EmptyState(props: {
             <button class="knapp" onClick={props.onExempel}>
               Öppna exempelfil
             </button>
+            <button class="knapp" onClick={props.onExempelpar}>
+              Öppna två filer att slå ihop
+            </button>
           </div>
         </div>
         <div>
           <h3>Det här kan du göra</h3>
           <div class="tomt__lista" style={{ color: 'var(--text-svag)', fontSize: 13 }}>
-            Öppna och städa CSV · flytta och dölja kolumner · exportera Excel-vänligt
+            Öppna och städa CSV · sortera och filtrera · hitta dubbletter · slå ihop två filer ·
+            exportera Excel-vänligt
           </div>
         </div>
       </div>

@@ -1,0 +1,426 @@
+import type { Column, ColumnId, Frame } from '../types.js'
+import { findColumn } from '../frame/frame.js'
+import { getCell } from '../frame/column.js'
+import { normalizeAlways, stripDiacritics } from '../locale/sv.js'
+import { delaEpost } from './email.js'
+
+/**
+ * Matchning av två filer.
+ *
+ * **Alla matchningstyper här är ekvivalensrelationer**, och det är inte en
+ * begränsning av bekvämlighet utan av storleksordning. En hashjoin kostar
+ * O(n + m); att i stället jämföra varje rad mot varje rad — vilket är vad
+ * "börjar med", "innehåller" och luddig matchning kräver — kostar O(n · m).
+ * Två filer med 100 000 rader vardera blir tio miljarder jämförelser, alltså
+ * inte en långsam funktion utan en som aldrig blir klar.
+ *
+ * De osymmetriska och luddiga typerna hör därför hemma i restlistan, där
+ * antalet rader är litet och varje förslag ändå ska granskas för hand.
+ *
+ * **Tomma nycklar matchar aldrig.** Två rader som båda saknar personnummer
+ * är inte samma person. Utan den regeln skulle alla ofullständiga rader falla
+ * ihop i en enda jättegrupp, vilket är den värsta sortens fel: det ser ut som
+ * att matchningen lyckats.
+ */
+
+export type Matchningstyp = 'exakt' | 'oberoende' | 'accentoberoende' | 'epostNamn' | 'siffror'
+
+export interface Matchningstypspost {
+  typ: Matchningstyp
+  etikett: string
+  beskrivning: string
+}
+
+export const MATCHNINGSTYPER: Matchningstypspost[] = [
+  {
+    typ: 'oberoende',
+    etikett: 'Vanlig',
+    beskrivning: 'Struntar i versaler och extra blanksteg. Passar de flesta textkolumner.',
+  },
+  {
+    typ: 'exakt',
+    etikett: 'Teckenexakt',
+    beskrivning: 'Varje tecken måste stämma. Använd för id-kolumner där skiftläget betyder något.',
+  },
+  {
+    typ: 'accentoberoende',
+    etikett: 'Utan å ä ö',
+    beskrivning: 'Struntar också i prickarna. Öberg matchar Oberg — men även För matchar For.',
+  },
+  {
+    typ: 'siffror',
+    etikett: 'Bara siffror',
+    beskrivning: 'Allt utom siffror skalas bort. Passar telefonnummer och organisationsnummer.',
+  },
+  {
+    typ: 'epostNamn',
+    etikett: 'E-post mot namn',
+    beskrivning:
+      'Läser förnamn och efternamn ur adressen och jämför med en namnkolumn. Prickarna stryks, eftersom adressen aldrig har dem.',
+  },
+]
+
+export interface Matchningspar {
+  vansterColId: ColumnId
+  hogerColId: ColumnId
+  typ: Matchningstyp
+}
+
+/** Nyckeldelarna sammanfogas med ett tecken som inte kan förekomma i data. */
+const AVSKILJARE = '\u0000'
+
+function normalisera(value: string, typ: Matchningstyp): string {
+  const v = normalizeAlways(value).trim()
+  if (v === '') return ''
+
+  switch (typ) {
+    case 'exakt':
+      return v
+    case 'oberoende':
+      return v.replace(/\s+/g, ' ').toLocaleLowerCase('sv')
+    case 'accentoberoende':
+      return stripDiacritics(v.replace(/\s+/g, ' ')).toLocaleLowerCase('sv')
+    case 'siffror': {
+      const siffror = v.replace(/\D/g, '')
+      return siffror
+    }
+    case 'epostNamn': {
+      // En e-postkolumn ger namnet ur adressen; en namnkolumn ger sig själv.
+      // Båda sidor stryks på prickar, eftersom adressen aldrig kan bära dem.
+      const del = delaEpost(v)
+      const bas = del && del.fornamn !== '' ? `${del.fornamn} ${del.efternamn}`.trim() : v
+      return stripDiacritics(bas.replace(/\s+/g, ' ')).toLocaleLowerCase('sv')
+    }
+  }
+}
+
+/**
+ * Nyckel per rad, räknad en gång per unikt värde och kolumn.
+ *
+ * Returnerar tom sträng för rader vars nyckel inte går att använda — alltså
+ * där någon del är tom. Anroparen ska då hoppa över raden helt.
+ */
+export function byggNycklar(
+  frame: Frame,
+  par: readonly Matchningspar[],
+  sida: 'vanster' | 'hoger',
+): string[] {
+  const kolumner = par.map((p) => ({
+    col: findColumn(frame, sida === 'vanster' ? p.vansterColId : p.hogerColId),
+    typ: p.typ,
+  }))
+
+  // En tabell per kolumn: ordbokskod → normaliserad nyckeldel.
+  const tabeller = kolumner.map(({ col, typ }) => {
+    if (!col) return null
+    const ut = new Array<string>(col.dict.length)
+    for (let kod = 0; kod < col.dict.length; kod++) ut[kod] = normalisera(col.dict[kod]!, typ)
+    return { col, ut }
+  })
+
+  const nycklar = new Array<string>(frame.rowCount)
+  for (let r = 0; r < frame.rowCount; r++) {
+    let nyckel = ''
+    let anvandbar = tabeller.length > 0
+    for (let i = 0; i < tabeller.length; i++) {
+      const t = tabeller[i]
+      if (!t) {
+        anvandbar = false
+        break
+      }
+      const del = t.ut[t.col.codes[r]!]!
+      if (del === '') {
+        anvandbar = false
+        break
+      }
+      nyckel = i === 0 ? del : nyckel + AVSKILJARE + del
+    }
+    nycklar[r] = anvandbar ? nyckel : ''
+  }
+  return nycklar
+}
+
+export interface Matchning {
+  /** Träffarna, som par av fysiska radindex. */
+  par: { v: number; h: number }[]
+  /** Vänsterrader utan träff, i filens ordning. */
+  vansterUtan: number[]
+  /** Högerrader utan träff. */
+  hogerUtan: number[]
+  /** Antal vänsterrader med minst en träff. */
+  vansterMatchade: number
+  hogerMatchade: number
+  /** Vänsterrader som matchar mer än en högerrad. Kardinaliteten. */
+  vansterFlera: number
+  /** Högerrader som träffas av mer än en vänsterrad. */
+  hogerFlera: number
+  /** Rader vars nyckel är tom och som därför aldrig kan matcha. */
+  tommaVanster: number
+  tommaHoger: number
+  /** Största antalet högerrader en enda vänsterrad matchar. */
+  storstaTraff: number
+}
+
+export const TOM_MATCHNING: Matchning = {
+  par: [],
+  vansterUtan: [],
+  hogerUtan: [],
+  vansterMatchade: 0,
+  hogerMatchade: 0,
+  vansterFlera: 0,
+  hogerFlera: 0,
+  tommaVanster: 0,
+  tommaHoger: 0,
+  storstaTraff: 0,
+}
+
+/**
+ * Matchar två ramar på ett eller flera kolumnpar.
+ *
+ * Hashjoin: högersidan indexeras en gång, sedan sveps vänstersidan. Siffrorna
+ * som faller ut — hur många som matchar, hur många som matchar flera, hur
+ * många som har tom nyckel — är hela poängen med att räkna före körningen.
+ * Ett par kolumner som ger 3 träffar av 5 000 rader är nästan alltid fel
+ * kolumnpar, inte fel data.
+ */
+export function matcha(
+  vanster: Frame,
+  hoger: Frame,
+  par: readonly Matchningspar[],
+): Matchning {
+  if (par.length === 0) return TOM_MATCHNING
+
+  const vNycklar = byggNycklar(vanster, par, 'vanster')
+  const hNycklar = byggNycklar(hoger, par, 'hoger')
+
+  const index = new Map<string, number[]>()
+  let tommaHoger = 0
+  for (let r = 0; r < hoger.rowCount; r++) {
+    const nyckel = hNycklar[r]!
+    if (nyckel === '') {
+      tommaHoger += 1
+      continue
+    }
+    const lista = index.get(nyckel)
+    if (lista) lista.push(r)
+    else index.set(nyckel, [r])
+  }
+
+  const resultat: { v: number; h: number }[] = []
+  const vansterUtan: number[] = []
+  const hogerTraffad = new Uint32Array(hoger.rowCount)
+  let tommaVanster = 0
+  let vansterMatchade = 0
+  let vansterFlera = 0
+  let storstaTraff = 0
+
+  for (let r = 0; r < vanster.rowCount; r++) {
+    const nyckel = vNycklar[r]!
+    if (nyckel === '') {
+      tommaVanster += 1
+      vansterUtan.push(r)
+      continue
+    }
+    const traffar = index.get(nyckel)
+    if (!traffar) {
+      vansterUtan.push(r)
+      continue
+    }
+    vansterMatchade += 1
+    if (traffar.length > 1) vansterFlera += 1
+    if (traffar.length > storstaTraff) storstaTraff = traffar.length
+    for (const h of traffar) {
+      resultat.push({ v: r, h })
+      hogerTraffad[h]! += 1
+    }
+  }
+
+  const hogerUtan: number[] = []
+  let hogerMatchade = 0
+  let hogerFlera = 0
+  for (let r = 0; r < hoger.rowCount; r++) {
+    const n = hogerTraffad[r]!
+    if (n === 0) hogerUtan.push(r)
+    else {
+      hogerMatchade += 1
+      if (n > 1) hogerFlera += 1
+    }
+  }
+
+  return {
+    par: resultat,
+    vansterUtan,
+    hogerUtan,
+    vansterMatchade,
+    hogerMatchade,
+    vansterFlera,
+    hogerFlera,
+    tommaVanster,
+    tommaHoger,
+    storstaTraff,
+  }
+}
+
+/** Hur en vänsterrad med flera träffar ska hanteras. */
+export type Flertraff = 'forsta' | 'duplicera' | 'lamna'
+
+export const FLERTRAFF: { varde: Flertraff; etikett: string; beskrivning: string }[] = [
+  {
+    varde: 'forsta',
+    etikett: 'Ta den första',
+    beskrivning: 'Första träffen i den andra filens ordning. Resten ignoreras.',
+  },
+  {
+    varde: 'duplicera',
+    etikett: 'En rad per träff',
+    beskrivning: 'Raden upprepas, en gång för varje träff. Filen blir längre.',
+  },
+  {
+    varde: 'lamna',
+    etikett: 'Lämna tom',
+    beskrivning: 'Osäkra rader lämnas ofyllda och hamnar i restlistan för granskning.',
+  },
+]
+
+export interface Sammanslagning {
+  /** Kolumner ur högerfilen som ska följa med, i ordning. */
+  hogerKolumner: ColumnId[]
+  flertraff: Flertraff
+  /** Prefix på de nya kolumnnamnen, t.ex. "Fil 2 – ". Tomt för inget. */
+  prefix: string
+}
+
+export interface Resultat {
+  frame: Frame
+  /** Antal rader i resultatet som fick värden ur högerfilen. */
+  fyllda: number
+  /** Antal resultatrader, som kan skilja sig från vänsterfilens vid duplicering. */
+  rader: number
+}
+
+/**
+ * Bygger den sammanslagna ramen.
+ *
+ * Vänsterfilen är stommen: alla dess rader följer med, även de utan träff.
+ * Det är den enda varianten som aldrig tappar data i tysthet — rader som
+ * inte matchade blir synliga som tomma celler i stället för att försvinna,
+ * och högerfilens omatchade rader hamnar i restlistan.
+ */
+export function slaIhop(
+  vanster: Frame,
+  hoger: Frame,
+  matchning: Matchning,
+  val: Sammanslagning,
+): Resultat {
+  const hogerKolumner = val.hogerKolumner
+    .map((id) => findColumn(hoger, id))
+    .filter((c): c is Column => c !== undefined)
+
+  // Träffarna per vänsterrad, i högerfilens ordning.
+  const traffar = new Map<number, number[]>()
+  for (const { v, h } of matchning.par) {
+    const lista = traffar.get(v)
+    if (lista) lista.push(h)
+    else traffar.set(v, [h])
+  }
+
+  // Vilka (vänsterrad, högerrad) resultatet ska bestå av. null = ingen träff.
+  const plan: { v: number; h: number | null }[] = []
+  for (let r = 0; r < vanster.rowCount; r++) {
+    const lista = traffar.get(r)
+    if (!lista || lista.length === 0) {
+      plan.push({ v: r, h: null })
+    } else if (lista.length === 1) {
+      plan.push({ v: r, h: lista[0]! })
+    } else if (val.flertraff === 'duplicera') {
+      for (const h of lista) plan.push({ v: r, h })
+    } else if (val.flertraff === 'forsta') {
+      plan.push({ v: r, h: lista[0]! })
+    } else {
+      plan.push({ v: r, h: null })
+    }
+  }
+
+  const antal = plan.length
+  const namn = new Set(vanster.columns.map((c) => c.name))
+  const kolumner: Column[] = []
+
+  // Vänsterkolumnerna kopieras rad för rad enligt planen, eftersom en rad kan
+  // förekomma flera gånger vid duplicering.
+  for (const col of vanster.columns) {
+    const ny = kopieraColumn(col, antal, (i) => plan[i]!.v)
+    kolumner.push(ny)
+  }
+
+  for (const col of hogerKolumner) {
+    const onskat = `${val.prefix}${col.name}`
+    let unikt = onskat
+    let n = 2
+    while (namn.has(unikt)) {
+      unikt = `${onskat} (${n})`
+      n += 1
+    }
+    namn.add(unikt)
+    const ny = kopieraColumn(col, antal, (i) => plan[i]!.h, unikt)
+    kolumner.push(ny)
+  }
+
+  const frame: Frame = {
+    id: `f${Math.round(antal)}-${vanster.id}-${hoger.id}`,
+    name: `${vanster.name} + ${hoger.name}`,
+    columns: kolumner,
+    rowCount: antal,
+    view: Uint32Array.from({ length: antal }, (_, i) => i),
+    // Radnumret pekar på vänsterfilen: det är den som är stommen.
+    sourceRow: Uint32Array.from(plan, (p) => vanster.sourceRow[p.v] ?? p.v + 1),
+    meta: { warnings: [] },
+  }
+
+  let fyllda = 0
+  for (const p of plan) if (p.h !== null) fyllda += 1
+
+  return { frame, fyllda, rader: antal }
+}
+
+/**
+ * Kopierar en kolumn enligt en radplan.
+ *
+ * Ordboken följer med som den är och bara koderna skrivs om, så kostnaden
+ * följer antalet rader och inte antalet tecken. En rad utan källa (`null`)
+ * blir tom.
+ */
+function kopieraColumn(
+  kalla: Column,
+  antal: number,
+  radFor: (i: number) => number | null,
+  nyttNamn?: string,
+): Column {
+  const dict = kalla.dict.slice()
+  const dictIndex = new Map(kalla.dictIndex)
+  const codes = new Uint32Array(antal)
+  const flags = new Uint8Array(antal)
+  for (let i = 0; i < antal; i++) {
+    const r = radFor(i)
+    if (r === null) continue
+    codes[i] = kalla.codes[r]!
+    flags[i] = kalla.flags[r]!
+  }
+  return {
+    id: `c${nyttNamn ?? kalla.name}-${Math.random().toString(36).slice(2, 8)}`,
+    name: nyttNamn ?? kalla.name,
+    type: kalla.type,
+    typeLocked: kalla.typeLocked,
+    hidden: false,
+    width: kalla.width,
+    dict,
+    dictIndex,
+    codes,
+    flags,
+  }
+}
+
+/** Läser en cell ur en ram, för restlistans förslag. */
+export function cellText(frame: Frame, colId: ColumnId, row: number): string {
+  const col = findColumn(frame, colId)
+  return col ? getCell(col, row) : ''
+}
