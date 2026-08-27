@@ -60,7 +60,7 @@ export function DateTool(props: {
   // gång, men siffrorna som visas är celler.
   const antal = useMemo(() => codeCounts(col), [col, props.dataRevision])
   const grundinventering = useMemo(
-    () => inventera(col.dict, { dagForst: true, excelSerie }, Array.from(antal)),
+    () => inventera(col.dict, { dagForst: true, excelSerie }, antal),
     [col, props.dataRevision, antal, excelSerie],
   )
 

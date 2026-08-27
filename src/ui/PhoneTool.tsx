@@ -46,7 +46,7 @@ export function PhoneTool(props: {
 
   const antal = useMemo(() => codeCounts(col), [col, props.dataRevision])
   const inv = useMemo(
-    () => inventeraTelefon(col.dict, inst, Array.from(antal)),
+    () => inventeraTelefon(col.dict, inst, antal),
     [col, props.dataRevision, antal, land, format],
   )
 

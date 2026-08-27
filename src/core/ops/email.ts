@@ -300,7 +300,7 @@ export interface Epostinventering {
 export function inventeraEpost(
   varden: readonly string[],
   val: Epostval = STANDARDVAL,
-  vikter?: readonly number[],
+  vikter?: ArrayLike<number>,
 ): Epostinventering {
   let adresser = 0
   let ejAdress = 0

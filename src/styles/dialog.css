@@ -462,7 +462,20 @@
   gap: 5px;
 }
 
+/* Skälet till det översta förslaget, i klartext under knapparna. */
+.insp__skal {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-svag);
+}
+
 /* ---------- Meny ---------- */
+
+/* Ligger utanför layouten helt: menyn placerar sig själv med position: fixed,
+   och en tom wrapper i flödet skulle annars påverka arbetsytans rutnät. */
+.meny__rot {
+  display: contents;
+}
 
 .meny {
   position: fixed;
@@ -488,19 +501,72 @@
   text-align: left;
 }
 
-.meny__post:hover {
+.meny__post:hover,
+.meny__post:focus-visible {
   background: var(--yta-hover);
 }
 
-.meny__post--fara:hover {
+.meny__post--fara:hover,
+.meny__post--fara:focus-visible {
   background: var(--fara-svag);
   color: var(--fara);
+}
+
+/* Avstängd post: dämpad men läsbar, och kvar i tabbordningen så att skälet
+   går att komma åt. */
+.meny__post--inaktiv {
+  color: var(--text-svagast);
+  cursor: default;
+}
+
+.meny__post--inaktiv:hover {
+  background: transparent;
+}
+
+/* Skälet är en egen rad. På samma rad skulle menyn bli dubbelt så bred som
+   den behöver vara, och bredden är det som avgör om en meny går att skumma. */
+.meny__post--medskal {
+  display: block;
+}
+
+.meny__skal {
+  display: block;
+  margin-top: 1px;
+  color: var(--text-svagast);
+  font-size: 11.5px;
 }
 
 .meny__genvag {
   margin-left: auto;
   color: var(--text-svagast);
   font-size: 11.5px;
+}
+
+.meny__pil {
+  margin-left: auto;
+  color: var(--text-svag);
+}
+
+/* ---------- Undermeny ---------- */
+
+.meny__grupp {
+  position: relative;
+}
+
+/* Undermenyn ligger relativt sin post i stället för fritt i fönstret, så att
+   den följer med när föräldern klamras mot en kant. */
+.meny--under {
+  position: absolute;
+  left: 100%;
+  top: -5px;
+  margin-left: 2px;
+}
+
+.meny--vanster {
+  left: auto;
+  right: 100%;
+  margin-left: 0;
+  margin-right: 2px;
 }
 
 .meny__avdelare {

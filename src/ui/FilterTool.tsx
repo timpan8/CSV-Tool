@@ -33,6 +33,10 @@ export function FilterTool(props: {
   filter: Filter
   startkolumn: string | null
   onFilter: (filter: Filter) => void
+  /** Tar bort de rader som visas just nu. */
+  onTaBortSynliga: () => void
+  /** Tar bort alla rader utom de som visas just nu. */
+  onBehallSynliga: () => void
   onStang: () => void
 }) {
   const { frame, filter } = props
@@ -170,7 +174,11 @@ export function FilterTool(props: {
                   <input
                     class="regel__varde"
                     value={regel.varde}
-                    placeholder="värde"
+                    placeholder={
+                      regel.operator === 'langreAn' || regel.operator === 'kortareAn'
+                        ? 'antal tecken'
+                        : 'värde'
+                    }
                     onInput={(e) => andra(regel.id, { varde: (e.currentTarget as HTMLInputElement).value })}
                   />
                 )
@@ -220,6 +228,46 @@ export function FilterTool(props: {
           ＋ Lägg till regel
         </button>
       </div>
+
+      {aktiva.length > 0 && (
+        <div class="falt">
+          <label class="kryss">
+            <input
+              type="checkbox"
+              checked={filter.inverterat === true}
+              onChange={(e) =>
+                props.onFilter({
+                  ...filter,
+                  inverterat: (e.currentTarget as HTMLInputElement).checked,
+                })
+              }
+            />
+            <span>Visa i stället de rader filtret döljer</span>
+          </label>
+          <p class="verktyg__sammanfattning">
+            Vändningen gäller filtret som helhet. Att se vad man sorterat bort är det enda
+            sättet att märka att man sorterat bort fel saker.
+          </p>
+        </div>
+      )}
+
+      {aktiva.length > 0 && (
+        <div class="falt">
+          <span class="falt__etikett">Gör urvalet permanent</span>
+          <div class="insp__knappar" style={{ marginTop: 6 }}>
+            <button class="knapp" onClick={props.onBehallSynliga}>
+              Behåll bara de {raderText(frame.view.length)} som visas
+            </button>
+            <button class="knapp knapp--fara" onClick={props.onTaBortSynliga}>
+              Ta bort de {raderText(frame.view.length)} som visas
+            </button>
+          </div>
+          <p class="verktyg__sammanfattning">
+            Båda ändrar filen och går att ångra. Filtret rensas efteråt, eftersom det inte
+            längre har något att dölja.
+          </p>
+        </div>
+      )}
 
       {filter.regler.length > aktiva.length && (
         <Notis ton="info">

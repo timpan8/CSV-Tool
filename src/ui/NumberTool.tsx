@@ -40,7 +40,7 @@ export function NumberTool(props: {
 
   const antal = useMemo(() => codeCounts(col), [col, props.dataRevision])
   const grund = useMemo(
-    () => inventeraTal(col.dict, { punktArTusental: false }, Array.from(antal)),
+    () => inventeraTal(col.dict, { punktArTusental: false }, antal),
     [col, props.dataRevision, antal],
   )
 

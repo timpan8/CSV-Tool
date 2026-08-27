@@ -3,7 +3,8 @@ import type { Column, ColumnType, Frame } from '../core/types.js'
 import { filledCount, valueCounts } from '../core/frame/column.js'
 import { TYPE_LABELS, violatesType } from '../core/infer.js'
 import { formatCount } from '../core/locale/sv.js'
-import { VERKTYG, type Verktygsnamn } from './verktyg.jsx'
+import { innehallsprofil } from '../core/frame/innehall.js'
+import { ordnaVerktyg, type Verktygsnamn } from './verktyg.jsx'
 
 const TYPER: ColumnType[] = ['text', 'number', 'date', 'email', 'bool']
 
@@ -69,8 +70,18 @@ export function Inspector(props: {
     () => (column ? berakna(column, frame) : null),
     [column, frame, props.revision],
   )
+  /*
+   * Vilka verktyg som föreslås kommer ur innehållet, inte ur typen.
+   * `foreslasFor` fanns här förut och kunde inte uttrycka det viktigaste
+   * fallet: en telefonkolumn, som inte har någon egen kolumntyp alls.
+   */
+  const ordning = useMemo(
+    () => (column ? ordnaVerktyg(innehallsprofil(column)) : null),
+    [column, props.revision],
+  )
+  const forstaSkalet = ordning?.passande[0]?.skal ?? null
 
-  if (!column || !stat) {
+  if (!column || !stat || !ordning) {
     return (
       <div class="panel panel--hoger">
         <div class="panel__rubrik">Kolumn</div>
@@ -174,16 +185,25 @@ export function Inspector(props: {
         <div class="insp__grupp">
           <span class="falt__etikett">Städa kolumnen</span>
           <div class="insp__knappar" style={{ marginTop: 6 }}>
-            {VERKTYG.map((v) => (
+            {ordning.passande.map(({ post, skal }) => (
               <button
-                key={v.namn}
-                class={`knapp${v.foreslasFor.includes(column.type) ? ' knapp--primar' : ''}`}
-                onClick={() => props.onVerktyg(v.namn)}
+                key={post.namn}
+                class="knapp knapp--primar"
+                title={skal}
+                onClick={() => props.onVerktyg(post.namn)}
               >
-                {v.etikett}
+                {post.etikett}
+              </button>
+            ))}
+            {ordning.ovriga.map((post) => (
+              <button key={post.namn} class="knapp" onClick={() => props.onVerktyg(post.namn)}>
+                {post.etikett}
               </button>
             ))}
           </div>
+          {forstaSkalet && (
+            <p class="insp__skal">{forstaSkalet}</p>
+          )}
         </div>
 
         <div class="insp__grupp" style={{ borderBottom: 0 }}>

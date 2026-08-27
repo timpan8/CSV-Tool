@@ -51,7 +51,7 @@ export function SplitTool(props: {
 
   const koder = useMemo(() => codeCounts(col), [col, props.dataRevision])
   const inv = useMemo(
-    () => inventeraDelning(col.dict, inst, Array.from(koder)),
+    () => inventeraDelning(col.dict, inst, koder),
     [col, props.dataRevision, koder, satt, avgransare, position, antal],
   )
 

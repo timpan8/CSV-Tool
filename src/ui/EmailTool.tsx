@@ -38,7 +38,7 @@ export function EmailTool(props: {
 
   const antal = useMemo(() => codeCounts(col), [col, props.dataRevision])
   const inv = useMemo(
-    () => inventeraEpost(col.dict, { efternamnForst }, Array.from(antal)),
+    () => inventeraEpost(col.dict, { efternamnForst }, antal),
     [col, props.dataRevision, antal, efternamnForst],
   )
 

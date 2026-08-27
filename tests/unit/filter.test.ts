@@ -304,3 +304,94 @@ describe('regelmask', () => {
     expect(tillampaFilter(ORTER, TOMT_FILTER, utgang).rader).toBe(utgang)
   })
 })
+
+describe('längdoperatorerna', () => {
+  const ORD = frameOf(['Ord'], [['Malmö'], ['Lund'], [''], ['Kiruna'], ['Ö']])
+  const kol = ORD.columns[0]!.id
+
+  it('är längre än räknar tecken', () => {
+    const { rader } = kor(ORD, [regel(kol, 'langreAn', '4')])
+    expect([...rader].map((r) => ORD.columns[0]!.dict[ORD.columns[0]!.codes[r]!])).toEqual([
+      'Malmö',
+      'Kiruna',
+    ])
+  })
+
+  it('är kortare än räknar tecken', () => {
+    const { rader } = kor(ORD, [regel(kol, 'kortareAn', '5')])
+    expect([...rader].map((r) => ORD.columns[0]!.dict[ORD.columns[0]!.codes[r]!])).toEqual([
+      'Lund',
+      'Ö',
+    ])
+  })
+
+  it('släpper aldrig igenom tomma celler', () => {
+    // En tom cell är okänd, inte kort. Samma hållning som storleksjämförelser.
+    const { rader } = kor(ORD, [regel(kol, 'kortareAn', '99')])
+    expect(rader.length).toBe(4)
+  })
+
+  it('rapporterar ett fel när gränsen inte är ett tal', () => {
+    const { fel } = kor(ORD, [regel(kol, 'langreAn', 'fem')])
+    expect(fel[0]?.text).toContain('antal tecken')
+  })
+
+  it('räknar tecken och inte kodenheter', () => {
+    // Å med kombinerande ring normaliseras till ett tecken av normalizeAlways.
+    const f = frameOf(['Ord'], [['Å']])
+    const { rader } = kor(f, [regel(f.columns[0]!.id, 'langreAn', '1')])
+    expect(rader.length).toBe(0)
+  })
+
+  it('beskriver regeln med enheten utsatt', () => {
+    expect(beskrivRegel(ORD, regel(kol, 'langreAn', '4'))).toBe('Ord är längre än 4 tecken')
+  })
+})
+
+describe('vänt filter', () => {
+  const kol = ORTER.columns[0]!.id
+
+  it('ger komplementet till det som annars visas', () => {
+    const regler = [regel(kol, 'ar', 'Malmö')]
+    const pa = tillampaFilter(ORTER, { regler, koppling: 'alla' }, identityView(ORTER.rowCount))
+    const vant = tillampaFilter(
+      ORTER,
+      { regler, koppling: 'alla', inverterat: true },
+      identityView(ORTER.rowCount),
+    )
+    expect(pa.rader.length + vant.rader.length).toBe(ORTER.rowCount)
+    const bada = new Set([...pa.rader, ...vant.rader])
+    expect(bada.size).toBe(ORTER.rowCount)
+  })
+
+  it('tar med tomma rader, som annars aldrig matchar', () => {
+    const vant = tillampaFilter(
+      ORTER,
+      { regler: [regel(kol, 'ar', 'Malmö')], koppling: 'alla', inverterat: true },
+      identityView(ORTER.rowCount),
+    )
+    const varden = [...vant.rader].map((r) => ORTER.columns[0]!.dict[ORTER.columns[0]!.codes[r]!])
+    expect(varden).toContain('')
+  })
+
+  it('visar allt när det inte finns någon aktiv regel att vända', () => {
+    const vant = tillampaFilter(
+      ORTER,
+      { regler: [], koppling: 'alla', inverterat: true },
+      identityView(ORTER.rowCount),
+    )
+    expect(vant.rader.length).toBe(ORTER.rowCount)
+  })
+
+  it('vänder resultatet som helhet, inte varje regel för sig', () => {
+    // Malmö *och* längre än 5 tecken träffar bara "Malmö stad". Vändningen
+    // ska då ge fem rader, inte de rader som varken är Malmö eller långa.
+    const regler = [regel(kol, 'innehaller', 'Malmö'), regel(kol, 'langreAn', '5')]
+    const vant = tillampaFilter(
+      ORTER,
+      { regler, koppling: 'alla', inverterat: true },
+      identityView(ORTER.rowCount),
+    )
+    expect(vant.rader.length).toBe(ORTER.rowCount - 1)
+  })
+})

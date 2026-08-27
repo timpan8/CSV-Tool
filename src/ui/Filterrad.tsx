@@ -26,8 +26,17 @@ export function Filterrad(props: {
   return (
     <div class="filterrad">
       <span class="filterrad__etikett">
-        {props.filter.koppling === 'alla' ? 'Alla:' : 'Någon:'}
+        {props.filter.inverterat === true
+          ? 'Dolda:'
+          : props.filter.koppling === 'alla'
+            ? 'Alla:'
+            : 'Någon:'}
       </span>
+      {props.filter.inverterat === true && (
+        <span class="chip chip--vand" title="Filtret är vänt: du ser raderna det annars döljer.">
+          vänt
+        </span>
+      )}
       {props.filter.regler.map((regel) => {
         const finns = findColumn(props.frame, regel.colId) !== undefined
         return (
