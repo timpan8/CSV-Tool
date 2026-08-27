@@ -107,8 +107,13 @@ function nyckelkolumner(frame: Frame, nyckel: Dubblettnyckel): Column[] {
  *
  * Normaliseringen körs en gång per unikt värde, precis som allt annat i
  * kodbasen. Id 0 betyder tom.
+ *
+ * Exporterad för `gruppera.ts`, som ställer samma fråga — vilka rader hör
+ * ihop? — och måste svara likadant. Två kopior av den här funktionen skulle
+ * glida isär första gången normaliseringen ändras, och skillnaden skulle
+ * synas som att dubblettvyn och summeringen inte är eniga om vad en grupp är.
  */
-function gruppIder(col: Column, normalisera: (v: string) => string): Uint32Array {
+export function gruppIder(col: Column, normalisera: (v: string) => string): Uint32Array {
   const ut = new Uint32Array(col.dict.length)
   const sedda = new Map<string, number>()
   let nasta = 1

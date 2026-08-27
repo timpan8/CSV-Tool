@@ -6,7 +6,7 @@ function handlare(): { h: Kommandohandlare; korda: string[] } {
   const korda: string[] = []
   const namn = [
     'oppnaFil', 'exportera', 'profiler', 'sok', 'sortera', 'filter', 'dubbletter',
-    'slaIhop', 'kombinera', 'visaAllaRader', 'dopOm', 'duplicera', 'vaxlaDold',
+    'slaIhop', 'kombinera', 'sammanfatta', 'visaAllaRader', 'dopOm', 'duplicera', 'vaxlaDold',
     'taBortKolumn', 'infogaKolumn', 'filtreraKolumn', 'visaOgiltiga', 'infogaRadOvan',
     'infogaRadUnder', 'dupliceraRader', 'taBortRader', 'tommaRader', 'tommaKolumner',
     'angra', 'goraOm', 'vaxlaTema',

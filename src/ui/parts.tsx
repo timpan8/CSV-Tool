@@ -88,6 +88,8 @@ function Niva(props: {
   style?: Record<string, string>
   /** Sant för en undermeny: placeras intill sin förälder i stället för fritt. */
   under?: boolean
+  /** Extra klass på nivåns rot, för rotmenyns höjdtak. */
+  extraKlass?: string
   /** Flytta fokus hit när nivån öppnas. */
   autofokus?: boolean
   /** Stäng den här nivån och lämna fokus till föräldern. */
@@ -97,25 +99,41 @@ function Niva(props: {
   const [oppen, setOppen] = useState<number | null>(null)
   const [oppnadMedTangent, setOppnadMedTangent] = useState(false)
   const [atVanster, setAtVanster] = useState(false)
+  const [lyft, setLyft] = useState(0)
 
   useEffect(() => {
     if (props.autofokus !== false) knapparna(ref.current!)[0]?.focus()
   }, [])
 
-  // En undermeny nära högerkanten fälls ut åt vänster i stället. Mätningen
-  // sker efter monteringen, eftersom bredden beror på postens text.
+  /*
+   * En undermeny nära högerkanten fälls ut åt vänster, och en som når nedanför
+   * fönsterkanten lyfts upp precis så mycket som behövs.
+   *
+   * Undermenyn börjar vid sin post, så ju längre ned i föräldern posten
+   * ligger, desto större chans att undermenyn hamnar utanför. Lyftet är
+   * begränsat till hur långt det finns plats uppåt — hellre en undermeny som
+   * ligger kvar delvis utanför än en som skjuts upp förbi överkanten.
+   *
+   * Mätningen sker efter monteringen, eftersom både bredd och höjd beror på
+   * posternas text.
+   */
   useLayoutEffect(() => {
     if (!props.under) return
     const el = ref.current
     if (!el) return
-    setAtVanster(el.getBoundingClientRect().right > window.innerWidth - 8)
+    const lada = el.getBoundingClientRect()
+    setAtVanster(lada.right > window.innerWidth - 8)
+    const utanfor = lada.bottom - (window.innerHeight - 8)
+    if (utanfor > 0) setLyft(Math.min(utanfor, Math.max(0, lada.top - 8)))
   }, [props.under])
 
   return (
     <div
-      class={`meny${props.under ? ' meny--under' : ''}${atVanster ? ' meny--vanster' : ''}`}
+      class={`meny${props.under ? ' meny--under' : ''}${atVanster ? ' meny--vanster' : ''}${
+        props.extraKlass ? ` ${props.extraKlass}` : ''
+      }`}
       ref={ref}
-      style={props.style}
+      style={lyft > 0 ? { ...props.style, top: `${-5 - lyft}px` } : props.style}
       role="menu"
       onKeyDown={(e) => {
         // Menyns tangenter är menyns. Utan stoppet flyttar rutnätet
@@ -253,16 +271,48 @@ export function Meny(props: {
     }
   }, [props.onStang])
 
-  // Håll menyn innanför fönstret även när den öppnas nära kanten.
-  const left = Math.min(props.x, window.innerWidth - 248)
-  const top = Math.min(props.y, window.innerHeight - 40 - props.poster.length * 30)
+  /*
+   * Menyn hålls innanför fönstret genom att den *mäts*, inte gissas.
+   *
+   * Tidigare räknades höjden som ”antal poster gånger 30 pixlar”. Den siffran
+   * höll bara så länge varje post var en rad text; sedan posterna fick sitt
+   * skäl på andra raden stämde den inte längre, och en meny som växte med en
+   * post till kunde lägga sina sista val utanför skärmen — synliga i DOM:en,
+   * omöjliga att klicka på. Det är den sortens fel som inte syns förrän
+   * menyn råkar bli en post längre.
+   *
+   * `useLayoutEffect` körs efter att DOM:en skrivits men före ritningen, så
+   * rättelsen hinner in utan att menyn syns hoppa. `.meny` har dessutom ett
+   * tak för höjden och egen rullning, för en meny som är högre än fönstret
+   * går inte att flytta in — den måste gå att rulla i.
+   */
+  const [plats, setPlats] = useState({ left: props.x, top: props.y, rullar: false })
+
+  useLayoutEffect(() => {
+    const el = ref.current?.querySelector<HTMLElement>('.meny')
+    if (!el) return
+    /*
+     * `scrollHeight` och inte `getBoundingClientRect` för beslutet att rulla:
+     * så fort taket satts är den mätta höjden lika med taket, och ett beslut
+     * som läser den skulle slå av sig självt varje varv.
+     */
+    const tak = window.innerHeight - 16
+    const rullar = el.scrollHeight > tak
+    const { width, height } = el.getBoundingClientRect()
+    setPlats({
+      left: Math.max(8, Math.min(props.x, window.innerWidth - width - 8)),
+      top: rullar ? 8 : Math.max(8, Math.min(props.y, window.innerHeight - height - 8)),
+      rullar,
+    })
+  }, [props.x, props.y, props.poster.length])
 
   return (
     <div ref={ref} class="meny__rot">
       <Niva
         poster={props.poster}
         onStang={props.onStang}
-        style={{ left: `${Math.max(8, left)}px`, top: `${Math.max(8, top)}px` }}
+        extraKlass={plats.rullar ? 'meny--rullar' : undefined}
+        style={{ left: `${plats.left}px`, top: `${plats.top}px` }}
       />
     </div>
   )

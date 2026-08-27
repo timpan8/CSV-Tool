@@ -124,3 +124,64 @@ test('Escape stänger menyn även när effekterna släpar efter', async ({ page 
   await page.keyboard.press('Escape')
   await expect(page.locator('.meny')).toHaveCount(0)
 })
+
+test('en meny nära nederkanten hamnar innanför fönstret', async ({ page }) => {
+  /*
+   * Menyns höjd räknades tidigare som ”antal poster gånger 30 pixlar”. Den
+   * siffran slutade stämma när posterna fick sitt skäl på andra raden, och en
+   * meny som växte med en post kunde då lägga sina sista val nedanför
+   * fönsterkanten — synliga i DOM:en, omöjliga att klicka på. Menyn mäts
+   * numera i stället för att gissas.
+   */
+  await oppnaExempel(page)
+  const rader = page.locator('.rutnat__rad')
+  await rader.nth((await rader.count()) - 1).locator('.rutnat__cell').nth(5).click({ button: 'right' })
+
+  const meny = page.locator('.meny').first()
+  const lada = (await meny.boundingBox())!
+  const hojd = page.viewportSize()!.height
+  expect(lada.y).toBeGreaterThanOrEqual(0)
+  expect(lada.y + lada.height).toBeLessThanOrEqual(hojd)
+
+  // Och den sista posten ligger innanför kanten, inte bara menyns ram.
+  const sista = meny.getByRole('menuitem').last()
+  const sistaLada = (await sista.boundingBox())!
+  expect(sistaLada.y + sistaLada.height).toBeLessThanOrEqual(hojd)
+})
+
+test('en undermeny som når nedanför fönsterkanten lyfts upp', async ({ page }) => {
+  // Undermenyn börjar vid sin post, så ligger posten långt ned i en hög meny
+  // hamnar undermenyns sista val utanför skärmen om ingen flyttar den.
+  await oppnaExempel(page)
+  await page.getByRole('button', { name: 'Meny för kolumnen Belopp' }).click()
+  await page.getByRole('menuitem', { name: 'Fler verktyg' }).hover()
+
+  const under = page.locator('.meny--under')
+  await expect(under).toBeVisible()
+  const lada = (await under.boundingBox())!
+  const hojd = page.viewportSize()!.height
+  expect(lada.y).toBeGreaterThanOrEqual(0)
+  expect(lada.y + lada.height).toBeLessThanOrEqual(hojd)
+
+  await under.getByRole('menuitem', { name: 'Sök och ersätt…' }).click()
+  await expect(page.locator('.verktyg')).toBeVisible()
+})
+
+test('en meny högre än fönstret går att rulla i i stället för att kapas', async ({ page }) => {
+  // Taket sätts bara när menyn faktiskt inte får plats — annars skulle
+  // undermenyerna klippas av rullningen utan att någon bett om det.
+  await page.setViewportSize({ width: 1100, height: 420 })
+  await oppnaExempel(page)
+  await page.getByRole('button', { name: 'Meny för kolumnen Ort' }).click()
+
+  const meny = page.locator('.meny').first()
+  await expect(meny).toHaveClass(/meny--rullar/)
+  const lada = (await meny.boundingBox())!
+  expect(lada.y).toBeGreaterThanOrEqual(0)
+  expect(lada.y + lada.height).toBeLessThanOrEqual(420)
+
+  const sista = meny.getByRole('menuitem', { name: 'Ta bort kolumnen' })
+  await sista.scrollIntoViewIfNeeded()
+  await sista.click()
+  await expect(page.locator('.statusrad')).toContainText('7 kolumner')
+})
