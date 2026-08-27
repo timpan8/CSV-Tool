@@ -1,6 +1,7 @@
 import type { ColumnId, Frame } from '../core/types.js'
 import { findColumn, identityView } from '../core/frame/frame.js'
-import { sorteraRader, type Sorteringsniva } from '../core/ops/sort.js'
+import { sorteraNiva, sorteraRader, type Sorteringsniva } from '../core/ops/sort.js'
+import { hittaDubbletter, type Dubblettgrupper, type Dubblettnyckel } from '../core/ops/duplicates.js'
 
 /**
  * Den frusna visningsordningen.
@@ -23,6 +24,16 @@ export interface Ordning {
   /** Fysiska radindex, en permutation av samtliga rader. */
   rader: Uint32Array
   nivaer: Sorteringsniva[]
+  /**
+   * Dubblettgrupperna, när dubblettvyn räknade ordningen.
+   *
+   * Dubbletter är en *ordning* och inte ett filter: medlemskapet och
+   * gruppordningen faller ur samma beräkning, och räknar man om det ena men
+   * inte det andra visas en ensam rad utan sin partner. Därför fryses de
+   * tillsammans med sorteringen.
+   */
+  grupper: Dubblettgrupper | null
+  dubbletter: Dubblettnyckel | null
   /**
    * Radantalet när ordningen räknades.
    *
@@ -83,18 +94,61 @@ export interface Ordningslage {
 export function beraknaOrdning(
   frame: Frame,
   nivaer: readonly Sorteringsniva[],
+  dubbletter: Dubblettnyckel | null,
   dataRevision: number,
 ): Ordning | null {
-  if (nivaer.length === 0) return null
+  if (nivaer.length === 0 && dubbletter === null) return null
   const kopia = nivaer.map((n) => ({ ...n }))
+  let rader = sorteraRader(frame, kopia)
+  let grupper: Dubblettgrupper | null = null
+
+  if (dubbletter !== null) {
+    grupper = hittaDubbletter(frame, dubbletter)
+    // Gruppnumret läggs som det *sista* svepet, alltså det mest signifikanta.
+    // Grupperna hamnar då intill varandra medan användarens egna nivåer
+    // fortfarande ordnar raderna inom gruppen — gratis, i samma pass.
+    const utan = grupper.antalGrupper + 1
+    const hink = new Uint32Array(frame.rowCount)
+    for (let r = 0; r < frame.rowCount; r++) {
+      const g = grupper.grupp[r]!
+      hink[r] = g === 0 ? utan : g - 1
+    }
+    rader = sorteraNiva(rader, hink, utan)
+  }
+
+  const kolumner = [
+    ...kopia.map((n) => n.colId),
+    ...(dubbletter ? nyckelkolumnerFor(frame, dubbletter) : []),
+  ]
+
   return {
-    rader: sorteraRader(frame, kopia),
+    rader,
     nivaer: kopia,
+    grupper,
+    dubbletter: dubbletter === null ? null : { ...dubbletter, strunta: { ...dubbletter.strunta } },
     radantal: frame.rowCount,
     dataRevision,
-    signatur: nyckelsignatur(frame, kopia.map((n) => n.colId)),
+    signatur: nyckelsignatur(frame, kolumner),
     inaktuell: false,
   }
+}
+
+/** Kolumnerna en dubblettnyckel faktiskt beror på, för signaturen. */
+function nyckelkolumnerFor(frame: Frame, nyckel: Dubblettnyckel): ColumnId[] {
+  if (nyckel.kolumner.length > 0) return nyckel.kolumner
+  return frame.columns.filter((c) => !c.hidden).map((c) => c.id)
+}
+
+function likaDubbletter(a: Dubblettnyckel | null, b: Dubblettnyckel | null): boolean {
+  if (a === null || b === null) return a === b
+  return (
+    a.tommaRaknas === b.tommaRaknas &&
+    a.strunta.skiftlage === b.strunta.skiftlage &&
+    a.strunta.blanksteg === b.strunta.blanksteg &&
+    a.strunta.diakriter === b.strunta.diakriter &&
+    a.kolumner.length === b.kolumner.length &&
+    a.kolumner.every((id, i) => id === b.kolumner[i])
+  )
 }
 
 function likaNivaer(a: readonly Sorteringsniva[], b: readonly Sorteringsniva[]): boolean {
@@ -112,11 +166,12 @@ function likaNivaer(a: readonly Sorteringsniva[], b: readonly Sorteringsniva[]):
 export function synkaOrdning(
   lage: Ordningslage,
   nivaer: readonly Sorteringsniva[],
+  dubbletter: Dubblettnyckel | null = null,
   tvinga = false,
 ): boolean {
   const { frame, ordning } = lage
 
-  if (nivaer.length === 0) {
+  if (nivaer.length === 0 && dubbletter === null) {
     if (ordning === null) return false
     lage.ordning = null
     return true
@@ -126,17 +181,21 @@ export function synkaOrdning(
     tvinga ||
     ordning === null ||
     !likaNivaer(ordning.nivaer, nivaer) ||
+    !likaDubbletter(ordning.dubbletter, dubbletter) ||
     ordning.radantal !== frame.rowCount
 
   if (maste) {
-    lage.ordning = beraknaOrdning(frame, nivaer, lage.dataRevision)
+    lage.ordning = beraknaOrdning(frame, nivaer, dubbletter, lage.dataRevision)
     return true
   }
 
   // Grinden är inte en optimering utan en förutsättning: utan den skulle
   // varje tangenttryck i sökrutan kosta en hash över hela tabellen.
   if (ordning.dataRevision !== lage.dataRevision) {
-    const signatur = nyckelsignatur(frame, ordning.nivaer.map((n) => n.colId))
+    const signatur = nyckelsignatur(frame, [
+      ...ordning.nivaer.map((n) => n.colId),
+      ...(ordning.dubbletter ? nyckelkolumnerFor(frame, ordning.dubbletter) : []),
+    ])
     ordning.dataRevision = lage.dataRevision
     // Ändrade användaren en helt annan kolumn är ordningen fortfarande giltig,
     // och då ska ingen banderoll dyka upp och påstå motsatsen.

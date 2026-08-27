@@ -474,3 +474,91 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- Filterbanderoll ---------- */
+
+.filterrad {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--linje);
+  background: var(--yta-2);
+}
+
+.filterrad__etikett {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-svagast);
+}
+
+.filterrad__antal {
+  color: var(--text-svag);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent-svag);
+  font-size: 12px;
+  overflow: hidden;
+}
+
+/*
+ * En avslagen regel bleknar men försvinner inte. Skillnaden mellan att pröva
+ * sig fram och att börja om är att regeln ligger kvar.
+ */
+.chip--av {
+  border-color: var(--linje-stark);
+  background: var(--yta-3);
+  opacity: 0.65;
+}
+
+.chip--av .chip__text {
+  text-decoration: line-through;
+}
+
+/* En regel vars kolumn tagits bort filtrerar inte — och ska inte se ut som om den gör det. */
+.chip--trasig {
+  border-color: var(--fara);
+  background: var(--fara-svag);
+}
+
+.chip__text {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 2px 4px 2px 9px;
+  cursor: pointer;
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip__stang {
+  border: 0;
+  background: transparent;
+  color: var(--text-svag);
+  cursor: pointer;
+  padding: 2px 7px 2px 3px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.chip__stang:hover {
+  color: var(--fara);
+}
+
+/* Linje mellan dubblettgrupper, så att grupperna går att skilja åt. */
+.rutnat__rad--gruppslut .rutnat__cell,
+.rutnat__rad--gruppslut .rutnat__radnr {
+  border-bottom: 2px solid var(--linje-stark);
+}

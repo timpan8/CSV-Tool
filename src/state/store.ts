@@ -1,9 +1,11 @@
 import { computed, signal } from '@preact/signals'
 import type { ColumnId, Frame } from '../core/types.js'
-import { computeView, harBegransning, TOM_VY, type ViewSpec } from './view.js'
+import { computeView, harBegransning, TOM_VY, utanBegransning, type ViewSpec } from './view.js'
 import type { Forhandsvisning } from './preview.js'
 import { synkaOrdning, type Ordning } from './ordning.js'
 import type { Sorteringsniva } from '../core/ops/sort.js'
+import { aktivaRegler, TOMT_FILTER, type Filter } from '../core/ops/filter.js'
+import type { Dubblettnyckel } from '../core/ops/duplicates.js'
 import { cell, klamp, type Selection } from './selection.js'
 
 let seq = 0
@@ -103,7 +105,7 @@ export function touch(): void {
  * falla ur en pågående sökning.
  */
 export function refreshView(tab: Tab): void {
-  synkaOrdning(tab, tab.viewSpec.sortering ?? [])
+  synkaOrdning(tab, tab.viewSpec.sortering ?? [], tab.viewSpec.dubbletter ?? null)
   const result = computeView(tab.frame, tab.viewSpec, tab.forhandsvisning, tab.ordning)
   tab.frame.view = result.view
   tab.kolumnerMedTraff = result.kolumnerMedTraff
@@ -123,14 +125,21 @@ export function setViewSpec(tab: Tab, delta: Partial<ViewSpec>): void {
   refreshView(tab)
 }
 
+/**
+ * Nollställer allt som *döljer* rader.
+ *
+ * Sorteringen behålls med flit: den gömmer ingenting, så en knapp som heter
+ * "Visa alla rader" ska inte kasta den. Dubblettvyn däremot måste med — en
+ * gruppordning utan gruppfilter är obegriplig att titta på.
+ */
 export function clearViewSpec(tab: Tab): void {
-  tab.viewSpec = { ...TOM_VY }
+  tab.viewSpec = utanBegransning(tab.viewSpec)
   tab.redigerar = null
   refreshView(tab)
 }
 
 export function viewIsLimited(tab: Tab | null): boolean {
-  return tab !== null && harBegransning(tab.viewSpec)
+  return tab !== null && harBegransning(tab.viewSpec, tab.frame)
 }
 
 /* ---------- Sortering ---------- */
@@ -198,12 +207,35 @@ export function vaxlaSortering(tab: Tab, colId: ColumnId, lagg = false): void {
 /** Räknar om den frusna ordningen på nytt data. */
 export function sorteraOm(tab: Tab): void {
   medOmforankring(tab, () => {
-    synkaOrdning(tab, tab.viewSpec.sortering ?? [], true)
+    synkaOrdning(tab, tab.viewSpec.sortering ?? [], tab.viewSpec.dubbletter ?? null, true)
   })
 }
 
 export function rensaSortering(tab: Tab): void {
   sattSortering(tab, [])
+}
+
+/* ---------- Filter och dubbletter ---------- */
+
+/**
+ * Filtret räknas om löpande, till skillnad från sorteringen.
+ *
+ * Att filtrera fram trasiga rader, rätta dem och se dem försvinna är ett bra
+ * arbetsflöde — och det är redan hur `runStep` beter sig.
+ */
+export function sattFilter(tab: Tab, filter: Filter): void {
+  setViewSpec(tab, { filter: filter.regler.length > 0 ? filter : undefined })
+}
+
+export function harFilter(tab: Tab | null): boolean {
+  return tab !== null && aktivaRegler(tab.frame, tab.viewSpec.filter ?? TOMT_FILTER).length > 0
+}
+
+/** Dubblettvyn byter ordning, så markeringen ska följa med sin rad. */
+export function sattDubbletter(tab: Tab, nyckel: Dubblettnyckel | null): void {
+  medOmforankring(tab, () => {
+    tab.viewSpec = { ...tab.viewSpec, dubbletter: nyckel ?? undefined }
+  })
 }
 
 /**

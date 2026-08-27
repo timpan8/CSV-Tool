@@ -39,6 +39,8 @@ Inga externa typsnitt, inget CDN, ingen analys, ingen felrapportering, ingen inl
   - **Sök och ersätt** — bokstavligt eller reguljärt uttryck, med felet visat medan du skriver. Bokstavlig sökning är bokstavlig: `1.5` matchar inte `125`.
 - **Flernivåsortering** med svensk kollation, så att `Öberg` hamnar efter `Zetterlund` och `Kund 2` före `Kund 10`. Klicka på pilen i en rubrik, skift-klicka för att lägga till en nivå till. Talkolumner sorteras numeriskt och datumkolumner som datum oavsett hur de är skrivna; tomma celler hamnar alltid sist, i båda riktningarna — en tom cell är inte det minsta värdet, den saknas.
   **Ordningen fryses.** Rättar du en cell efter att ha sorterat ligger raden kvar under markören, och statusraden erbjuder *Sortera om*. Att raden hoppar iväg just när du rättat den är annars det som gör en sorterad lista omöjlig att arbeta sig igenom. Verktyget säger bara till när ändringen faktiskt rör en kolumn du sorterat på.
+- **Filter** som en regellista: varje regel kan slås av utan att tas bort, och du väljer om alla regler måste stämma eller om någon räcker. Reglerna står som chips ovanför tabellen, för ett filter man glömt bort är ett filter som får en att dra fel slutsats om sitt data. Operatorerna följer kolumnens typ — storleksjämförelser och `mellan` bara på tal och datum — och räknas på ordboken, så en kolumn med 300 orter kostar 300 jämförelser oavsett om tabellen har tusen rader eller en miljon. En tom cell matchar bara `är tom`: den är inte ”inte Malmö”, den är okänd. Ett trasigt reguljärt uttryck visas som ett fel medan du skriver, och en regel vars kolumn du tagit bort ritas trasig och vaknar till liv igen med `Ctrl+Z`.
+- **Dubbletter** på hela raden eller på de kolumner du väljer — det senare är nästan alltid det du vill, eftersom två poster om samma person brukar skilja sig på ett löpnummer eller ett datum. Du kan välja att strunta i skiftläge, extra blanksteg och å/ä/ö vid jämförelsen. Verktyget visar hur många grupper som hittades och hur många rader en rensning skulle ta bort *innan* du kör den, och grupperna visas samlade med en linje mellan sig. Borttagningen behåller den första eller den sista raden **i filens ordning**, inte i den du råkar titta på, och går att ångra.
 - **Ångra och gör om** på allt, med en steglista där du kan backa till vilket steg som helst.
 - **Export** till Excel (`.xlsx`) eller CSV. Excel är förvalt, eftersom det är det enda formatet som både bevarar `01234` som `01234` och skriver talkolumner som riktiga tal så att `SUMMA` fungerar. CSV-exporten har val av avgränsare, teckenkodning, BOM och radslut, med en Excel-vänlig profil (semikolon, CRLF, UTF-8 med BOM) och ett riskbaserat formelskydd som inte rör negativa tal.
 - Mörkt läge, tomt läge med exempelfil, och en varning innan sidan lämnas med osparat arbete.
@@ -47,7 +49,7 @@ En Excel-fil innehåller typade värden i stället för text, så importen måst
 
 ## På gång
 
-Filterbyggare, dubbletthantering, matchning av två filer med restlistor, samt Combine, Template och profiler.
+Matchning av två filer med restlistor, samt Combine, Template och profiler.
 
 ## Utveckling
 

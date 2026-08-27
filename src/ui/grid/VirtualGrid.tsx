@@ -35,6 +35,8 @@ export interface GridProps {
   forhandsvisning: Forhandsvisning | null
   /** Aktiva sorteringsnivåer, för pilen i rubriken. */
   sortering: readonly Sorteringsniva[]
+  /** Dubblettgrupp per fysisk rad, för linjen mellan grupperna. */
+  grupper: Uint32Array | null
   markering: Selection | null
   redigerar: { rad: number; kol: number } | null
   onSelectColumn: (id: ColumnId) => void
@@ -139,9 +141,19 @@ export function VirtualGrid(props: GridProps) {
     const physical = frame.view[i]!
     const radMarkerad = markerat !== null && i >= markerat.r1 && i <= markerat.r2
     const source = frame.sourceRow[physical] ?? 0
+    // Sista raden i en dubblettgrupp får en linje under sig, så att grupperna
+    // går att skilja åt utan att färgas — en bakgrundsfärg skulle krocka med
+    // markeringen.
+    const nasta = frame.view[i + 1]
+    const gruppslut =
+      props.grupper !== null &&
+      props.grupper[physical] !== 0 &&
+      (nasta === undefined || props.grupper[nasta] !== props.grupper[physical])
     rows.push(
       <div
-        class={`rutnat__rad${radMarkerad ? ' rutnat__rad--markerad' : ''}`}
+        class={`rutnat__rad${radMarkerad ? ' rutnat__rad--markerad' : ''}${
+          gruppslut ? ' rutnat__rad--gruppslut' : ''
+        }`}
         key={physical}
         role="row"
         style={{ height: `${rowHeight}px` }}

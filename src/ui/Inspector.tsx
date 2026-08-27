@@ -61,6 +61,8 @@ export function Inspector(props: {
   onDuplicate: () => void
   onDelete: () => void
   onVerktyg: (namn: Verktygsnamn) => void
+  /** Klick på ett av de vanligaste värdena filtrerar fram just det. */
+  onFiltreraVarde: (varde: string) => void
 }) {
   const { column, frame } = props
   const stat = useMemo(
@@ -151,16 +153,19 @@ export function Inspector(props: {
             <span class="falt__etikett">Vanligaste värden</span>
             <div class="insp__topp" style={{ marginTop: 6 }}>
               {stat.topp.map((post) => (
-                <div class="insp__toppost" key={post.varde}>
-                  <span class="insp__vardetext" title={post.varde}>
-                    {post.varde}
-                  </span>
+                <button
+                  class="insp__toppost"
+                  key={post.varde}
+                  title={`Filtrera fram ${post.varde}`}
+                  onClick={() => props.onFiltreraVarde(post.varde)}
+                >
+                  <span class="insp__vardetext">{post.varde}</span>
                   <span class="insp__antal">{formatCount(post.antal)}</span>
                   <div
                     class="insp__stapel"
                     style={{ width: `${(post.antal / maxAntal) * 100}%` }}
                   />
-                </div>
+                </button>
               ))}
             </div>
           </div>

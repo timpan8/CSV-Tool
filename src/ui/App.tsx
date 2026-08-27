@@ -31,8 +31,11 @@ import {
   redo,
   revision,
   runStep,
+  harFilter,
   harSortering,
   rensaSortering,
+  sattDubbletter,
+  sattFilter,
   sattSortering,
   setActiveColumn,
   setForhandsvisning,
@@ -79,6 +82,15 @@ import { PasteDialog } from './PasteDialog.jsx'
 import { VERKTYG, Verktyg, type Verktygsnamn } from './verktyg.jsx'
 import { Statusrad } from './Statusrad.jsx'
 import { SortTool } from './SortTool.jsx'
+import { FilterTool } from './FilterTool.jsx'
+import { DuplicateTool } from './DuplicateTool.jsx'
+import { Filterrad } from './Filterrad.jsx'
+import { nyRegelId, TOMT_FILTER, type Filterregel } from '../core/ops/filter.js'
+import {
+  hittaDubbletter,
+  overflodigaRader,
+  type Dubblettnyckel,
+} from '../core/ops/duplicates.js'
 import { beskrivSortering } from '../core/ops/sort.js'
 import type { Riktning } from '../core/ops/sort.js'
 import { Meny, Toastar, type MenyPost } from './parts.jsx'
@@ -112,7 +124,9 @@ export function App() {
    * Tabellverktyg i högerpanelen — de som inte hör till en enskild kolumn.
    * Sortering, och i nästa steg filter och dubbletter.
    */
-  const [tabellverktyg, setTabellverktyg] = useState<'sortera' | null>(null)
+  const [tabellverktyg, setTabellverktyg] = useState<'sortera' | 'filter' | 'dubbletter' | null>(
+    null,
+  )
 
   const tab = activeTab.value
   const frame = tab?.frame ?? null
@@ -344,7 +358,13 @@ export function App() {
 
   const visaOgiltiga = (id: ColumnId) => {
     if (!tab || !frame) return
-    setViewSpec(tab, { invalidIn: id, search: undefined })
+    // "Visa raderna som inte går att tolka" är en filterregel som alla andra
+    // sedan etapp 4 — men den *ersätter* filtret i stället för att lägga sig
+    // ovanpå, så att knappen betyder samma sak som den alltid gjort.
+    sattFilter(tab, {
+      koppling: 'alla',
+      regler: [{ id: nyRegelId(), colId: id, operator: 'ogiltig', varde: '' }],
+    })
     const col = findColumn(frame, id)
     notify(
       `Visar ${formatCount(frame.view.length)} rader där ”${col?.name ?? ''}” inte går att tolka.`,
@@ -500,11 +520,52 @@ export function App() {
 
   // Högerpanelen rymmer ett verktyg i taget: att öppna sorteringen stänger
   // ett öppet kolumnverktyg, och därmed också dess förhandsvisning.
-  const oppnaSortering = () => {
+  const oppnaTabellverktyg = (namn: 'sortera' | 'filter' | 'dubbletter') => {
     const nu = nuLage()
     if (nu) setForhandsvisning(nu.tab, null)
     setVerktyg(null)
-    setTabellverktyg('sortera')
+    setTabellverktyg(namn)
+  }
+
+  /**
+   * Tar bort de överflödiga raderna i varje dubblettgrupp.
+   *
+   * Vyn stängs efteråt: en dubblettvy utan dubbletter kvar ser trasig ut,
+   * som om verktyget tappat bort sig.
+   */
+  /**
+   * Lägger till en regel på en kolumn och öppnar filterpanelen.
+   *
+   * Regeln läggs till i stället för att ersätta filtret — man bygger vidare
+   * på det man redan har. `visaOgiltiga` är undantaget, se där.
+   */
+  const filtreraKolumn = (id: ColumnId, delta: Partial<Filterregel> = {}) => {
+    const nu = nuLage()
+    if (!nu) return
+    const nuvarande = nu.tab.viewSpec.filter ?? TOMT_FILTER
+    sattFilter(nu.tab, {
+      ...nuvarande,
+      regler: [
+        ...nuvarande.regler,
+        { id: nyRegelId(), colId: id, operator: 'ar', varde: '', ...delta },
+      ],
+    })
+    setActiveColumn(id)
+    oppnaTabellverktyg('filter')
+  }
+
+  const taBortDubbletter = (nyckel: Dubblettnyckel, behall: 'forsta' | 'sista') => {
+    const nu = nuLage()
+    if (!nu || !frame) return
+    const grupper = hittaDubbletter(frame, nyckel)
+    const bort = overflodigaRader(grupper, behall)
+    if (bort.length === 0) return
+    taBortRader(nu.tab, bort)
+    sattDubbletter(nu.tab, null)
+    setTabellverktyg(null)
+    notify(`Tog bort ${raderText(bort.length)} som var dubbletter.`, {
+      atgard: { etikett: 'Ångra', kor: () => undo(nu.tab) },
+    })
   }
 
   // Ett öppet verktyg hör till sin flik. Byter man flik städas både panelen
@@ -740,9 +801,19 @@ export function App() {
         <button
           class={`knapp${harSortering(tab) ? ' knapp--primar' : ''}`}
           disabled={!frame}
-          onClick={oppnaSortering}
+          onClick={() => oppnaTabellverktyg('sortera')}
         >
           Sortera{harSortering(tab) ? ` (${tab!.viewSpec.sortering!.length})` : ''}
+        </button>
+        <button
+          class={`knapp${harFilter(tab) ? ' knapp--primar' : ''}`}
+          disabled={!frame}
+          onClick={() => oppnaTabellverktyg('filter')}
+        >
+          Filter{harFilter(tab) ? ` (${tab!.viewSpec.filter!.regler.length})` : ''}
+        </button>
+        <button class="knapp" disabled={!frame} onClick={() => oppnaTabellverktyg('dubbletter')}>
+          Dubbletter
         </button>
         <button class="knapp" disabled={!frame} onClick={() => setExportOppen(true)}>
           Exportera
@@ -790,12 +861,37 @@ export function App() {
           traffar={frame.view.length}
           totalt={frame.rowCount}
           kolumnerMedTraff={tab.kolumnerMedTraff}
-          onSok={(fraga) => setViewSpec(tab, { search: fraga, invalidIn: undefined })}
+          onSok={(fraga) => setViewSpec(tab, { search: fraga })}
           onStang={() => {
             setSokOppen(false)
             clearViewSpec(tab)
           }}
           onNasta={() => flyttaMarkering(1, 0, false, false)}
+        />
+      )}
+
+      {tab && frame && (
+        <Filterrad
+          frame={frame}
+          filter={tab.viewSpec.filter ?? TOMT_FILTER}
+          traffar={frame.view.length}
+          totalt={frame.rowCount}
+          onOppna={() => oppnaTabellverktyg('filter')}
+          onVaxla={(id) =>
+            sattFilter(tab, {
+              ...(tab.viewSpec.filter ?? TOMT_FILTER),
+              regler: (tab.viewSpec.filter?.regler ?? []).map((r) =>
+                r.id === id ? { ...r, av: r.av !== true } : r,
+              ),
+            })
+          }
+          onTaBort={(id) =>
+            sattFilter(tab, {
+              ...(tab.viewSpec.filter ?? TOMT_FILTER),
+              regler: (tab.viewSpec.filter?.regler ?? []).filter((r) => r.id !== id),
+            })
+          }
+          onRensa={() => sattFilter(tab, TOMT_FILTER)}
         />
       )}
 
@@ -828,6 +924,7 @@ export function App() {
             viewSpec={tab.viewSpec}
             forhandsvisning={tab.forhandsvisning}
             sortering={tab.viewSpec.sortering ?? []}
+            grupper={tab.viewSpec.dubbletter ? (tab.ordning?.grupper?.grupp ?? null) : null}
             markering={markering}
             redigerar={tab.redigerar}
             onSelectColumn={setActiveColumn}
@@ -845,6 +942,7 @@ export function App() {
                   flyttaSist: (i) => flyttaKolumn(i, frame.columns.length - 1),
                   visaOgiltiga,
                   verktyg: oppnaVerktyg,
+                  filtrera: (i) => filtreraKolumn(i),
                   sortera: (i, riktning) =>
                     sattSortering(tab, [{ colId: i, riktning }]),
                   laggSortering: (i) => vaxlaSortering(tab, i, true),
@@ -867,7 +965,25 @@ export function App() {
               touch()
             }}
           />
-          {tabellverktyg === 'sortera' ? (
+          {tabellverktyg === 'filter' ? (
+            <FilterTool
+              frame={frame}
+              revision={rev}
+              filter={tab.viewSpec.filter ?? TOMT_FILTER}
+              startkolumn={tab.activeColumnId}
+              onFilter={(f) => sattFilter(tab, f)}
+              onStang={() => setTabellverktyg(null)}
+            />
+          ) : tabellverktyg === 'dubbletter' ? (
+            <DuplicateTool
+              frame={frame}
+              revision={rev}
+              nyckel={tab.viewSpec.dubbletter ?? null}
+              onNyckel={(n) => sattDubbletter(tab, n)}
+              onTaBort={taBortDubbletter}
+              onStang={() => setTabellverktyg(null)}
+            />
+          ) : tabellverktyg === 'sortera' ? (
             <SortTool
               frame={frame}
               nivaer={tab.viewSpec.sortering ?? []}
@@ -907,6 +1023,10 @@ export function App() {
               onRename={() => aktivKolumn && dopOmKolumn(aktivKolumn.id)}
               onDuplicate={() => aktivKolumn && dupliceraKolumn(aktivKolumn.id)}
               onDelete={() => aktivKolumn && taBortKolumn(aktivKolumn.id)}
+              onFiltreraVarde={(varde) =>
+                aktivKolumn &&
+                filtreraKolumn(aktivKolumn.id, { operator: 'iLista', varden: [varde] })
+              }
               onVerktyg={(namn) => aktivKolumn && oppnaVerktyg(namn, aktivKolumn.id)}
             />
           )}
@@ -1031,6 +1151,7 @@ function kolumnMeny(
     flyttaSist: (id: ColumnId) => void
     visaOgiltiga: (id: ColumnId) => void
     verktyg: (namn: Verktygsnamn, id: ColumnId) => void
+    filtrera: (id: ColumnId) => void
     sortera: (id: ColumnId, riktning: Riktning) => void
     laggSortering: (id: ColumnId) => void
     sortriktning: Riktning | null
@@ -1064,6 +1185,7 @@ function kolumnMeny(
     },
     { etikett: 'Lägg till som sorteringsnivå', kor: () => handlers.laggSortering(id) },
     'avdelare',
+    { etikett: 'Filtrera på kolumnen…', kor: () => handlers.filtrera(id) },
     ...VERKTYG.map((v): MenyPost => ({
       etikett: v.etikett,
       kor: () => handlers.verktyg(v.namn, id),

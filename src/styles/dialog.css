@@ -416,13 +416,26 @@
   gap: 3px;
 }
 
+/* Ett värde i listan är en genväg till ett filter på just det värdet. */
 .insp__toppost {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px;
   align-items: center;
   font-size: 12.5px;
-  padding: 1px 0;
+  padding: 1px 3px;
+  width: 100%;
+  border: 0;
+  border-radius: var(--radie-liten);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.insp__toppost:hover {
+  background: var(--yta-hover);
 }
 
 .insp__stapel {
@@ -612,4 +625,92 @@
 
 .nivarad .val__knapp {
   padding: 2px 8px;
+}
+
+/* ---------- Filterregler ---------- */
+
+.regel {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 6px;
+  border: 1px solid var(--linje);
+  border-radius: var(--radie-liten);
+  background: var(--yta);
+}
+
+.regel--av {
+  opacity: 0.6;
+}
+
+.regel--trasig {
+  border-color: var(--fara);
+}
+
+.regel__pa {
+  flex: none;
+}
+
+.regel__varde {
+  flex: 1 1 80px;
+  min-width: 60px;
+}
+
+.regel__lista {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.regel__fel {
+  flex: 1 0 100%;
+  font-size: 12px;
+  color: var(--fara);
+}
+
+.vardelista {
+  flex: 1 0 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--linje);
+}
+
+.vardelista__poster {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.vardelista__post {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 3px;
+  border-radius: var(--radie-liten);
+}
+
+.vardelista__post:hover {
+  background: var(--yta-hover);
+}
+
+.vardelista__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kollista--kryss {
+  gap: 1px;
+  padding: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--linje);
+  border-radius: var(--radie-liten);
 }
