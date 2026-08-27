@@ -7,7 +7,8 @@ async function oppnaKombinera(page: Page) {
   await page.getByRole('button', { name: 'Öppna filen' }).click()
   await page.getByRole('button', { name: 'Öppna filen' }).click()
   await expect(page.locator('.flik')).toHaveCount(2)
-  await page.getByRole('button', { name: 'Kombinera…' }).click()
+  await page.getByRole('button', { name: 'Flera filer ▾' }).click()
+  await page.getByRole('menuitem', { name: 'Kombinera…' }).click()
   await expect(page.locator('.kombinera')).toBeVisible()
 }
 
@@ -150,4 +151,37 @@ test('mallens form fylls med data ur båda filerna', async ({ page }) => {
   await expect(page.locator('.rubrik[title="Land"]')).toBeVisible()
   await expect(page.locator('.rubrik[title="Belopp"]')).toHaveCount(0)
   await expect(page.getByRole('gridcell', { name: 'Petra Sund', exact: true })).toBeVisible()
+})
+
+async function oppnaTvaFiler(page: Page) {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Öppna två filer att slå ihop' }).click()
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await expect(page.locator('.flik')).toHaveCount(2)
+}
+
+test('mallvägen har en egen ingång i verktygsraden', async ({ page }) => {
+  await oppnaTvaFiler(page)
+  await page.getByRole('button', { name: 'Flera filer ▾' }).click()
+
+  // De tre sätten står under varandra med en rad som säger vad som händer.
+  const meny = page.locator('.meny').first()
+  await expect(meny).toContainText('sida vid sida')
+  await expect(meny).toContainText('på varandra')
+  await expect(meny).toContainText('bara rubriker')
+
+  await meny.getByRole('menuitem', { name: 'Fyll en mall med data…' }).click()
+  await expect(page.locator('.kombinera')).toBeVisible()
+  // Målformen är det man kom för, så den tar fokus.
+  await expect(page.getByLabel('Målform')).toBeFocused()
+})
+
+test('målformen står överst, före listan med filer', async ({ page }) => {
+  await oppnaKombinera(page)
+
+  const panel = page.locator('.kombinera .panel').first()
+  const malform = await panel.getByLabel('Målform').boundingBox()
+  const forstaFilen = await panel.locator('.kollista .kryss').first().boundingBox()
+  expect(malform!.y).toBeLessThan(forstaFilen!.y)
 })

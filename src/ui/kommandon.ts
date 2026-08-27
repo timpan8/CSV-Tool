@@ -49,6 +49,7 @@ export interface Kommandohandlare {
   dubbletter: () => void
   slaIhop: () => void
   kombinera: () => void
+  mall: () => void
   oversikt: () => void
   visaAllaRader: () => void
   stada: (id: string) => void
@@ -110,6 +111,7 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
       grupp: 'Tabell',
       etikett: 'Slå ihop med en annan fil…',
       ord: 'matcha merge join koppla',
+      beskrivning: 'Rader som hör ihop läggs sida vid sida, matchat på en nyckel.',
       kor: h.slaIhop,
     })
     lagg({
@@ -124,8 +126,18 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
       id: 'kombinera',
       grupp: 'Tabell',
       etikett: 'Kombinera filer…',
-      ord: 'stapla lägg på varandra append mall',
+      ord: 'stapla lägg på varandra append',
+      beskrivning: 'Filerna läggs på varandra, kolumner som betyder samma sak i samma spalt.',
       kor: h.kombinera,
+    })
+    lagg({
+      id: 'mall',
+      grupp: 'Tabell',
+      etikett: 'Fyll en mall med data…',
+      ord: 'mall rubriker form template mapping',
+      beskrivning:
+        'En fil med bara rubriker bestämmer formen, data hämtas ur de filer du väljer.',
+      kor: h.mall,
     })
     if (lage.begransadVy) {
       lagg({

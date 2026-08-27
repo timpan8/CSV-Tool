@@ -127,6 +127,16 @@ input[type='radio'] {
   background: var(--yta);
 }
 
+/* Grupperar knapparna efter vad de gör. En rad med nio jämnstora knappar
+   läses inte — den skummas, och då hjälper det att ögat får hållpunkter. */
+.verktygsrad__avdelare {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 20px;
+  margin: 0 2px;
+  background: var(--linje-stark);
+}
+
 .verktygsrad__namn {
   display: flex;
   align-items: center;
