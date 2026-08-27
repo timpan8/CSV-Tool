@@ -105,11 +105,13 @@ test('Escape stänger paletten även när effekterna släpar efter', async ({ pa
    * rutnätet, som inte gör någonting med den. Felet syntes bara i CI, på en
    * långsammare maskin med två arbetare; här framkallas samma läge med flit.
    */
-  await page.addInitScript(() => {
+  await oppnaExempel(page)
+  // Bromsen läggs på först här. Görs den vid sidladdningen kryper hela
+  // importen, och testet faller på något helt annat än det det handlar om.
+  await page.evaluate(() => {
     window.requestAnimationFrame = ((cb: FrameRequestCallback) =>
       window.setTimeout(() => cb(performance.now()), 2000)) as typeof requestAnimationFrame
   })
-  await oppnaExempel(page)
 
   await page.keyboard.press('Control+k')
   await expect(palett(page)).toBeVisible()
