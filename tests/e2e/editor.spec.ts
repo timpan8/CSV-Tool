@@ -114,24 +114,62 @@ test('tar bort en rad och tar tillbaka den med sitt radnummer', async ({ page })
 
 test('klistrar in TSV i markeringen', async ({ page }) => {
   await oppnaExempel(page)
-  await cell(page, 'Lund').first().click()
+
+  const mal = cell(page, 'Lund').first()
+  await mal.click()
+  // Vänta in att markeringen faktiskt sitter på cellen. Utan det kan
+  // inklistringen hinna före och skriva på förra markeringen.
+  await expect(mal).toHaveClass(/rutnat__cell--fokus/)
 
   // Simulera en inklistring från Excel: två rader, en kolumn.
   await page.evaluate(() => {
     const data = new DataTransfer()
-    data.setData('text/plain', 'Uppsala\nVisby')
+    data.setData('text/plain', 'Enköping\nVisby')
     window.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true }))
   })
 
   await expect(page.locator('.toast').last()).toContainText('Klistrade in 2 celler')
-  await expect(cell(page, 'Uppsala').first()).toBeVisible()
+  // Båda värdena skrevs, och just i Ort-kolumnen: Lund och Kiruna är borta.
+  await expect(cell(page, 'Enköping')).toBeVisible()
   await expect(cell(page, 'Visby')).toBeVisible()
+  await expect(cell(page, 'Lund')).toHaveCount(0)
+  await expect(cell(page, 'Kiruna')).toHaveCount(0)
+})
+
+test('klistrar in på rätt plats även när klicket och inklistringen sker i samma bildruta', async ({
+  page,
+}) => {
+  await oppnaExempel(page)
+
+  // Återskapar kapplöpningen som fällde CI: markera och klistra in i ett och
+  // samma synkrona block, så att ingen omrendering hinner emellan. Läser
+  // hanteraren markeringen ur renderingens closure ser den den gamla
+  // markeringen och skriver på fel plats.
+  await page.evaluate(() => {
+    const celler = [...document.querySelectorAll('.rutnat__cell')]
+    const mal = celler.find((c) => c.textContent?.trim() === 'Kiruna')
+    if (!mal) throw new Error('hittade inte målcellen')
+    mal.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+
+    const data = new DataTransfer()
+    data.setData('text/plain', 'Visby')
+    window.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true }))
+  })
+
+  await expect(page.locator('.toast').last()).toContainText('Klistrade in 1 cell')
+  await expect(cell(page, 'Visby')).toBeVisible()
+  await expect(cell(page, 'Kiruna')).toHaveCount(0)
+  // Standardmarkeringen är cell (0,0) i Kundnr. Hamnade värdet där har
+  // hanteraren läst en inaktuell markering.
+  await expect(cell(page, '10021')).toBeVisible()
 })
 
 test('frågar innan en inklistring som inte får plats', async ({ page }) => {
   await oppnaExempel(page)
-  // Sista raden i Ort-kolumnen: bara en rad kvar nedanför.
-  await cell(page, 'Skellefteå').click()
+  // Sista raden i Ort-kolumnen: ingen rad kvar nedanför.
+  const sista = cell(page, 'Skellefteå')
+  await sista.click()
+  await expect(sista).toHaveClass(/rutnat__cell--fokus/)
 
   await page.evaluate(() => {
     const data = new DataTransfer()

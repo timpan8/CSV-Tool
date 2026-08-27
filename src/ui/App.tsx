@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'preact/hooks'
-import type { ColumnId, ColumnType, Frame } from '../core/types.js'
+import type { Column, ColumnId, ColumnType, Frame } from '../core/types.js'
 import {
   columnIndex,
   duplicateColumn,
@@ -338,9 +338,28 @@ export function App() {
   const markering = tab?.markering ?? null
   const synligaKolumner = tab ? selectableColumns(tab) : []
 
+  /**
+   * Läser flik och markering ur tillståndet i stället för ur renderingens
+   * closure.
+   *
+   * Tangentbords- och urklippshanterare registreras i en effekt, och den
+   * effekten körs *efter* renderingen. Klickar man på en cell och klistrar in
+   * innan effekten hunnit registreras om, ser hanteraren fortfarande den
+   * gamla markeringen och skriver på fel plats. Det var precis vad som hände
+   * i CI, där maskinen klickar och klistrar in inom samma bildruta.
+   */
+  const nuLage = (): { tab: Tab; frame: Frame; kolumner: Column[]; sel: Selection | null } | null => {
+    const t = activeTab.value
+    if (!t) return null
+    return { tab: t, frame: t.frame, kolumner: selectableColumns(t), sel: t.markering }
+  }
+
   const flyttaMarkering = (dRad: number, dKol: number, utoka: boolean, tillKant: boolean) => {
-    if (!tab || !frame || frame.view.length === 0 || synligaKolumner.length === 0) return
-    const nuvarande = markering ?? cell(0, 0)
+    const nu = nuLage()
+    if (!nu) return
+    const { tab, frame, kolumner: synligaKolumner } = nu
+    if (frame.view.length === 0 || synligaKolumner.length === 0) return
+    const nuvarande = nu.sel ?? cell(0, 0)
     const sistaRad = frame.view.length - 1
     const sistaKol = synligaKolumner.length - 1
     const rad = tillKant
@@ -364,8 +383,9 @@ export function App() {
   }
 
   const startaRedigering = (rad?: number, kol?: number) => {
-    if (!tab || !markering) return
-    tab.redigerar = { rad: rad ?? markering.fokusRad, kol: kol ?? markering.fokusKol }
+    const nu = nuLage()
+    if (!nu || !nu.sel) return
+    nu.tab.redigerar = { rad: rad ?? nu.sel.fokusRad, kol: kol ?? nu.sel.fokusKol }
     touch()
   }
 
@@ -379,10 +399,11 @@ export function App() {
   }
 
   const kopieraMarkering = async () => {
-    if (!tab || !markering) return
-    const r = rect(markering)
-    const kolumner = synligaKolumner.slice(r.k1, r.k2 + 1)
-    const rader = selectedRows(tab, markering)
+    const nu = nuLage()
+    if (!nu || !nu.sel) return
+    const r = rect(nu.sel)
+    const kolumner = nu.kolumner.slice(r.k1, r.k2 + 1)
+    const rader = selectedRows(nu.tab, nu.sel)
     try {
       await navigator.clipboard.writeText(toDelimited(kolumner, rader, '\t'))
       notify(
@@ -394,38 +415,43 @@ export function App() {
   }
 
   const forbereKlistraIn = (text: string) => {
-    if (!tab || !markering) return
+    const nu = nuLage()
+    if (!nu || !nu.sel) return
+    const { tab, sel } = nu
     const { rows } = parseDelimitedText(text)
     if (rows.length === 0) return
-    const plan = planeraInklistring(tab, markering, rows)
+    const plan = planeraInklistring(tab, sel, rows)
     if (plan.extraRader === 0 && plan.extraKolumner === 0) {
-      const andrade = klistraIn(tab, markering, plan, false)
+      const andrade = klistraIn(tab, sel, plan, false)
       notify(`Klistrade in ${celler(andrade)}.`, {
-        atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) },
+        atgard: { etikett: 'Ångra', kor: () => undo(tab) },
       })
       return
     }
-    setInklistring({ plan, sel: markering })
+    setInklistring({ plan, sel })
   }
 
   /* ---------- Rader ---------- */
 
   const taBortMarkeradeRader = () => {
-    if (!tab || !markering) return
-    const rader = selectedRows(tab, markering)
+    const nu = nuLage()
+    if (!nu || !nu.sel) return
+    const rader = selectedRows(nu.tab, nu.sel)
     if (rader.length === 0) return
-    taBortRader(tab, rader)
+    taBortRader(nu.tab, rader)
     notify(`Tog bort ${raderText(rader.length)}.`, {
-      atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) },
+      atgard: { etikett: 'Ångra', kor: () => undo(nu.tab) },
     })
   }
 
   const stada = (id: string) => {
-    if (!tab || !markering) return
+    const nu = nuLage()
+    if (!nu || !nu.sel) return
+    const { tab } = nu
     const stadning = STADNINGAR.find((s) => s.id === id)
     if (!stadning) return
-    const r = rect(markering)
-    const kolumner = synligaKolumner.slice(r.k1, r.k2 + 1)
+    const r = rect(nu.sel)
+    const kolumner = nu.kolumner.slice(r.k1, r.k2 + 1)
     const andrade = stadaKolumner(tab, kolumner, stadning)
     if (andrade === 0) {
       notify(`${stadning.etikett}: inget att ändra i markeringen.`)
@@ -435,7 +461,7 @@ export function App() {
       `${stadning.etikett} — ${celler(andrade)} ändrades i ${
         kolumner.length === 1 ? `”${kolumner[0]!.name}”` : kolumnerText(kolumner.length)
       }.`,
-      { atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) } },
+      { atgard: { etikett: 'Ångra', kor: () => undo(tab) } },
     )
   }
 
@@ -446,7 +472,9 @@ export function App() {
       const target = e.target as HTMLElement | null
       const iFalt = target !== null && /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)
       const mod = e.ctrlKey || e.metaKey
-      if (!tab || !frame) return
+      const nu = nuLage()
+      if (!nu) return
+      const { tab, frame, kolumner: synligaKolumner, sel: markering } = nu
 
       if (mod) {
         const tangent = e.key.toLowerCase()
