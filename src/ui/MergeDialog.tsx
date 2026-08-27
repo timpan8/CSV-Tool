@@ -2,6 +2,7 @@ import { useMemo, useState } from 'preact/hooks'
 import { Modal, Notis, Val } from './parts.js'
 import type { ColumnId, Frame } from '../core/types.js'
 import { visibleColumns } from '../core/frame/frame.js'
+import { rubriknyckel, synonymgrupp } from '../core/ops/rubriker.js'
 import {
   FLERTRAFF,
   MATCHNINGSTYPER,
@@ -12,7 +13,6 @@ import {
   type Matchningstyp,
   type Sammanslagning,
 } from '../core/ops/match.js'
-import { normalizeAlways, stripDiacritics } from '../core/locale/sv.js'
 import { formatCount, rader as raderText } from '../core/locale/sv.js'
 
 /**
@@ -383,36 +383,6 @@ export function MergeDialog(props: {
       )}
     </Modal>
   )
-}
-
-/** Namn utan skiftläge, prickar och skiljetecken — för att jämföra rubriker. */
-function rubriknyckel(namn: string): string {
-  return stripDiacritics(normalizeAlways(namn))
-    .toLocaleLowerCase('sv')
-    .replace(/[^a-z0-9]/g, '')
-}
-
-/**
- * Ord som betyder samma sak i en svensk och en engelsk rubrikrad.
- *
- * Listan är kort med flit. Ett förslag som är fel kostar ingenting — det syns
- * i listan och går att ändra — men en lång gissningslista skulle få
- * användaren att sluta läsa den.
- */
-const SYNONYMER: string[][] = [
-  ['namn', 'name', 'fullname', 'kund', 'customer'],
-  ['epost', 'email', 'mail', 'emailaddress', 'epostadress'],
-  ['telefon', 'phone', 'tel', 'mobil', 'mobile'],
-  ['ort', 'city', 'stad', 'postort'],
-  ['postnr', 'postnummer', 'zip', 'zipcode', 'postalcode'],
-  ['kundnr', 'kundnummer', 'customerid', 'customernumber', 'id'],
-  ['land', 'country'],
-  ['adress', 'address', 'gatuadress', 'street'],
-  ['foretag', 'company', 'organisation', 'org'],
-]
-
-function synonymgrupp(nyckel: string): number {
-  return SYNONYMER.findIndex((grupp) => grupp.includes(nyckel))
 }
 
 /**

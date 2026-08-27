@@ -88,6 +88,8 @@ import { Filterrad } from './Filterrad.jsx'
 import { MergeDialog } from './MergeDialog.jsx'
 import { Verkstad } from './Verkstad.jsx'
 import { oppnaVerkstad, stangVerkstad, verkstad } from '../state/matchning.js'
+import { Kombinera } from './Kombinera.jsx'
+import { kombineraOppen, mallTabId, oppnaKombinera, vantarPaMall } from '../state/kombinera.js'
 import { nyRegelId, TOMT_FILTER, type Filterregel } from '../core/ops/filter.js'
 import {
   hittaDubbletter,
@@ -97,7 +99,7 @@ import {
 import { beskrivSortering } from '../core/ops/sort.js'
 import type { Riktning } from '../core/ops/sort.js'
 import { Meny, Toastar, type MenyPost } from './parts.jsx'
-import { EXEMPELFIL, EXEMPELFIL_ORDER } from './exempel.js'
+import { EXEMPELFIL, EXEMPELFIL_MALL, EXEMPELFIL_ORDER } from './exempel.js'
 
 const TYPCYKEL: ColumnType[] = ['text', 'number', 'date', 'email', 'bool']
 
@@ -169,7 +171,14 @@ export function App() {
           ? { sheet: settings.sheet, decimal: settings.decimal }
           : undefined,
       )
-      openFrame(parsed)
+      const flik = openFrame(parsed)
+      // Filen öppnades från kombineringsvyns "Öppna mallfil…". Den gick samma
+      // väg som alla andra filer, genom importdialogen — en mall som lästs med
+      // fel avgränsare blir annars en enda kolumn som heter hela rubrikraden.
+      if (vantarPaMall.value) {
+        mallTabId.value = flik.id
+        vantarPaMall.value = false
+      }
       const varningar = parsed.meta.warnings.filter((w) => w.kind !== 'encoding-uncertain')
       notify(
         `${file.name} öppnad — ${formatCount(parsed.rowCount)} rader, ${formatCount(parsed.columns.length)} kolumner.` +
@@ -179,6 +188,7 @@ export function App() {
         { ton: varningar.length > 0 ? 'varning' : 'info' },
       )
     } catch (error) {
+      vantarPaMall.value = false
       notify(`Kunde inte öppna ${file.name}: ${(error as Error).message}`, { ton: 'fara' })
     } finally {
       setLaddar(null)
@@ -199,6 +209,12 @@ export function App() {
       exempelfil(EXEMPELFIL, 'exempel-kunder.csv'),
       exempelfil(EXEMPELFIL_ORDER, 'exempel-order.csv'),
     ])
+  }
+
+  /** Exempelmallen, så att mallvägen går att prova utan egen fil. */
+  const oppnaExempelmall = () => {
+    vantarPaMall.value = true
+    setKö((current) => [...current, exempelfil(EXEMPELFIL_MALL, 'exempel-mall.csv')])
   }
 
   /** Öppnar text från urklipp som en ny flik. */
@@ -606,10 +622,10 @@ export function App() {
       const mod = e.ctrlKey || e.metaKey
       const nu = nuLage()
       if (!nu) return
-      // Med verkstaden öppen är rutnätet inte det man tittar på. Ctrl+Z hade
+      // Med en egen vy öppen är rutnätet inte det man tittar på. Ctrl+Z hade
       // annars ångrat i den aktiva fliken medan rättningen gjordes i den
       // andra, och piltangenterna hade flyttat en markering ingen ser.
-      if (verkstad.value) return
+      if (verkstad.value || kombineraOppen.value) return
       const { tab, frame, kolumner: synligaKolumner, sel: markering } = nu
 
       if (mod) {
@@ -768,10 +784,12 @@ export function App() {
   // Kolumnen kan ha tagits bort medan verktyget stod öppet; då stängs det.
   const verktygKolumn = frame && verktyg ? (findColumn(frame, verktyg.colId) ?? null) : null
   const begransad = viewIsLimited(tab)
-  // Verkstaden lägger sig över arbetsytan. Rutnätets egna kontroller — sök,
-  // filterrad, statusrad och tabellverktygen — hör till en tabell man inte
-  // längre tittar på, och skulle visa tal som inte gäller.
+  // Verkstaden och kombineringen lägger sig över arbetsytan. Rutnätets egna
+  // kontroller — sök, filterrad, statusrad och tabellverktygen — hör till en
+  // tabell man inte längre tittar på, och skulle visa tal som inte gäller.
   const iVerkstaden = verkstad.value !== null
+  const iKombinera = kombineraOppen.value
+  const egenVy = iVerkstaden || iKombinera
 
   return (
     <div class="app">
@@ -785,7 +803,7 @@ export function App() {
         <FilValjare onFiler={oppnaFiler} />
         <button
           class="knapp"
-          disabled={!frame || iVerkstaden}
+          disabled={!frame || egenVy}
           onClick={(e) =>
             setMeny({
               x: (e.currentTarget as HTMLElement).getBoundingClientRect().left,
@@ -823,25 +841,33 @@ export function App() {
         </button>
         <button
           class={`knapp${harSortering(tab) ? ' knapp--primar' : ''}`}
-          disabled={!frame || iVerkstaden}
+          disabled={!frame || egenVy}
           onClick={() => oppnaTabellverktyg('sortera')}
         >
           Sortera{harSortering(tab) ? ` (${tab!.viewSpec.sortering!.length})` : ''}
         </button>
         <button
           class={`knapp${harFilter(tab) ? ' knapp--primar' : ''}`}
-          disabled={!frame || iVerkstaden}
+          disabled={!frame || egenVy}
           onClick={() => oppnaTabellverktyg('filter')}
         >
           Filter{harFilter(tab) ? ` (${tab!.viewSpec.filter!.regler.length})` : ''}
         </button>
-        <button class="knapp" disabled={!frame || iVerkstaden} onClick={() => oppnaTabellverktyg('dubbletter')}>
+        <button class="knapp" disabled={!frame || egenVy} onClick={() => oppnaTabellverktyg('dubbletter')}>
           Dubbletter
         </button>
-        <button class="knapp" disabled={!frame || iVerkstaden} onClick={() => setSlaIhopOppen(true)}>
+        <button class="knapp" disabled={!frame || egenVy} onClick={() => setSlaIhopOppen(true)}>
           Slå ihop…
         </button>
-        <button class="knapp" disabled={!frame || iVerkstaden} onClick={() => setExportOppen(true)}>
+        <button
+          class="knapp"
+          disabled={!frame || egenVy}
+          title="Lägg flera filer på varandra, med kolumner som betyder samma sak i samma spalt."
+          onClick={oppnaKombinera}
+        >
+          Kombinera…
+        </button>
+        <button class="knapp" disabled={!frame || egenVy} onClick={() => setExportOppen(true)}>
           Exportera
         </button>
         <div class="vaxel">
@@ -881,7 +907,7 @@ export function App() {
         </div>
       )}
 
-      {sokOppen && tab && frame && !iVerkstaden && (
+      {sokOppen && tab && frame && !egenVy && (
         <SearchBar
           varde={tab.viewSpec.search ?? ''}
           traffar={frame.view.length}
@@ -896,7 +922,7 @@ export function App() {
         />
       )}
 
-      {tab && frame && !iVerkstaden && (
+      {tab && frame && !egenVy && (
         <Filterrad
           frame={frame}
           filter={tab.viewSpec.filter ?? TOMT_FILTER}
@@ -927,7 +953,16 @@ export function App() {
         </div>
       )}
 
-      {iVerkstaden ? (
+      {iKombinera ? (
+        <Kombinera
+          onKlar={(resultat, text) => {
+            openFrame(resultat)
+            notify(text)
+          }}
+          onFiler={oppnaFiler}
+          onExempelmall={oppnaExempelmall}
+        />
+      ) : iVerkstaden ? (
         <Verkstad
           onSlaIhop={(resultat, text) => {
             openFrame(resultat)
@@ -1073,7 +1108,7 @@ export function App() {
         />
       )}
 
-      {!iVerkstaden && (
+      {!egenVy && (
       <Statusrad
         tab={tab}
         begransad={begransad}
@@ -1104,7 +1139,10 @@ export function App() {
       {kö.length > 0 && (
         <ImportDialog
           file={kö[0]!}
-          onAvbryt={() => setKö((current) => current.slice(1))}
+          onAvbryt={() => {
+            vantarPaMall.value = false
+            setKö((current) => current.slice(1))
+          }}
           onOppna={(settings) => void laddaFil(kö[0]!, settings)}
         />
       )}
