@@ -13,6 +13,8 @@ export function ColumnPanel(props: {
   onMove: (id: ColumnId, toIndex: number) => void
   onInsert: () => void
   onUndoThrough: (index: number) => void
+  /** Öppnar kolumnöversikten — samma lista, men med tal och förslag. */
+  onOversikt: () => void
 }) {
   const [sok, setSok] = useState('')
   const [drar, setDrar] = useState<ColumnId | null>(null)
@@ -32,6 +34,13 @@ export function ColumnPanel(props: {
           {formatCount(alla.length)}
           {dolda > 0 && ` · ${formatCount(dolda)} dolda`}
         </span>
+        <button
+          class="panel__rubrik__knapp"
+          title="Kolumnöversikt: ifyllnad, unika värden, problem och förslag för alla kolumner"
+          onClick={props.onOversikt}
+        >
+          Översikt
+        </button>
       </div>
 
       <div style={{ padding: '0 8px 8px' }}>

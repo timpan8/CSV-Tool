@@ -1,12 +1,11 @@
 import type { Column } from '../types.js'
 import { codeCounts } from './column.js'
 import { violatesType } from '../infer.js'
-import { formatCount } from '../locale/sv.js'
+import { formatCount, normalizeAlways } from '../locale/sv.js'
 import { STANDARDVAL as EPOSTVAL, inventeraEpost } from '../ops/email.js'
 import { STANDARDVAL as TELEFONVAL, inventeraTelefon } from '../ops/phone.js'
 import { STANDARDVAL as DATUMVAL, inventera as inventeraDatum } from '../ops/dates.js'
-import { STANDARDVAL as TALVAL, inventeraTal } from '../ops/numbers.js'
-import { STANDARDDELNING, inventeraDelning } from '../ops/columns.js'
+import { STANDARDVAL as TALVAL, tolkaTal } from '../ops/numbers.js'
 
 /**
  * Vad en kolumn ser ut att innehålla.
@@ -164,20 +163,74 @@ function rakna(col: Column, vikter: Uint32Array, ifyllda: number): Verktygsforsl
       : `${av(datum.tolkade)} går att läsa som datum`,
   )
 
-  const tal = inventeraTal(col.dict, TALVAL, vikter)
+  const { traffar: taltraffar, enheter } = raknaTal(col, vikter)
   lagg(
     'tal',
-    tal.tal,
-    tal.enheter.length > 0
-      ? `${av(tal.tal)} går att läsa som tal, med ${tal.enheter.map((e) => e.enhet).join(', ')}`
-      : `${av(tal.tal)} går att läsa som tal`,
+    taltraffar,
+    enheter.length > 0
+      ? `${av(taltraffar)} går att läsa som tal, med ${enheter.join(', ')}`
+      : `${av(taltraffar)} går att läsa som tal`,
   )
 
-  // Delningen frågar med standardinställningen, alltså vid första mellanslag:
-  // ”Anna Karlsson” går att dela, ”anna@nordbygg.se” gör det inte.
-  const delning = inventeraDelning(col.dict, STANDARDDELNING, vikter)
-  const delbara = ifyllda - delning.utanAvgransare
-  lagg('dela', delbara, `${av(delbara)} går att dela vid ett mellanslag`)
+  const delbara = raknaDelbara(col, vikter)
+  lagg('dela', delbara, `${av(delbara)} går att dela i två ord`)
 
   return ut
+}
+
+/**
+ * Ett värde räknas som tal bara när det innehåller **ett** tal.
+ *
+ * `tolkaTal` är med flit tillåtande: den skalar bort allt som inte är siffror
+ * så att `1 240,50 kr` och `(1 234)` blir tal. Det är rätt inne i verktyget,
+ * där man har valt det, men som signal duger det inte — `2026-08-27 12:55`
+ * blir då talet 202608271255 med enheten `--:`, och datumkolumnen skulle få
+ * talverktyget som sitt bästa förslag.
+ *
+ * Regeln är därför: siffrorna ska ligga i en enda grupp. Tecken som inte kan
+ * ingå i ett tal delar upp värdet, och två grupper betyder att värdet är
+ * sammansatt av något annat än ett tal.
+ */
+function raknaTal(col: Column, vikter: Uint32Array): { traffar: number; enheter: string[] } {
+  let traffar = 0
+  const enheter = new Map<string, number>()
+  for (let d = 1; d < col.dict.length; d++) {
+    const vikt = vikter[d]!
+    if (vikt === 0) continue
+    const varde = normalizeAlways(col.dict[d]!)
+    let grupper = 0
+    for (const del of varde.split(/[^\d.,' ]+/)) {
+      if (/\d/.test(del)) grupper += 1
+    }
+    if (grupper !== 1) continue
+    const t = tolkaTal(varde, TALVAL)
+    if (t.tal === null) continue
+    traffar += vikt
+    if (t.enhet !== '') enheter.set(t.enhet, (enheter.get(t.enhet) ?? 0) + vikt)
+  }
+  const lista = [...enheter.entries()].sort((a, b) => b[1] - a[1]).map(([e]) => e)
+  return { traffar, enheter: lista.slice(0, 3) }
+}
+
+/**
+ * Ett värde räknas som delbart bara när **båda delarna innehåller bokstäver**.
+ *
+ * Delning är en textoperation. Utan bokstavskravet skulle `1 240,50` se
+ * delbart ut vid tusentalsmellanslaget, och hela beloppskolumnen få *Dela
+ * kolumnen* som förslag — ett förslag som bara kan förstöra värdena.
+ */
+const BOKSTAV = /\p{L}/u
+
+function raknaDelbara(col: Column, vikter: Uint32Array): number {
+  let traffar = 0
+  for (let d = 1; d < col.dict.length; d++) {
+    const vikt = vikter[d]!
+    if (vikt === 0) continue
+    const varde = normalizeAlways(col.dict[d]!).trim()
+    const i = varde.indexOf(' ')
+    if (i <= 0 || i === varde.length - 1) continue
+    if (!BOKSTAV.test(varde.slice(0, i)) || !BOKSTAV.test(varde.slice(i + 1))) continue
+    traffar += vikt
+  }
+  return traffar
 }

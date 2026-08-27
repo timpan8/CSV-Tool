@@ -54,7 +54,8 @@ test('tar bort dubbletterna och går att ångra', async ({ page }) => {
     await nyckelkryss(page, namn).uncheck()
   }
 
-  await page.getByRole('button', { name: 'Behåll den första i filen' }).click()
+  await page.getByRole('radio', { name: 'Den första i filen' }).click()
+  await page.getByRole('button', { name: /^Ta bort 1 rad/ }).click()
 
   await expect(page.locator('.statusrad')).toContainText('15 rader')
   // Panelen stängs, eftersom en dubblettvy utan dubbletter ser trasig ut.
@@ -76,7 +77,8 @@ test('behåll den sista sparar den andra raden i stället', async ({ page }) => 
     await nyckelkryss(page, namn).uncheck()
   }
 
-  await page.getByRole('button', { name: 'Behåll den sista i filen' }).click()
+  await page.getByRole('radio', { name: 'Den sista i filen' }).click()
+  await page.getByRole('button', { name: /^Ta bort 1 rad/ }).click()
   await expect(page.getByRole('gridcell', { name: '10035', exact: true })).toBeVisible()
   await expect(page.getByRole('gridcell', { name: '10021', exact: true })).toHaveCount(0)
 })
@@ -99,4 +101,45 @@ test('normaliseringen avgör vad som räknas som lika', async ({ page }) => {
   await expect(page.locator('.verktyg__underrubrik')).toHaveText('1 grupp · 2 rader')
   await page.getByRole('checkbox', { name: 'VERSALER' }).uncheck()
   await expect(page.locator('.verktyg')).toContainText('Inga dubbletter med den här nyckeln')
+})
+
+test('helt identiska grupper skiljs från dem som bara är lika i nyckeln', async ({ page }) => {
+  await oppnaExempel(page)
+  await oppnaDubbletter(page)
+  for (const namn of ['Kundnr', 'Registrerad', 'Postnr', 'Ort', 'Belopp', 'Status']) {
+    await nyckelkryss(page, namn).uncheck()
+  }
+
+  // Anna-raderna är lika i Namn och E-post men har olika kundnummer, alltså
+  // inte identiska i varje kolumn.
+  const rad = page.locator('.inventering tr').filter({ hasText: 'skiljer sig utanför nyckeln' })
+  await expect(rad).toBeVisible()
+  await expect(rad.locator('.inventering__antal')).toHaveText('1')
+})
+
+test('välj själv vilken rad som stannar', async ({ page }) => {
+  await oppnaExempel(page)
+  await oppnaDubbletter(page)
+  for (const namn of ['Kundnr', 'Registrerad', 'Postnr', 'Ort', 'Belopp', 'Status']) {
+    await nyckelkryss(page, namn).uncheck()
+  }
+
+  // Valet slår på dubblettvyn av sig självt — utan grupper syns finns inget
+  // att peka på.
+  await page.getByRole('radio', { name: 'Den jag väljer' }).click()
+  await expect(page.locator('.statusrad')).toContainText('2 av 16 rader')
+
+  const ringar = page.locator('.radnr__behall')
+  await expect(ringar).toHaveCount(2)
+  await expect(ringar.first()).toHaveAttribute('aria-pressed', 'true')
+
+  await ringar.nth(1).click()
+  await expect(ringar.nth(1)).toHaveAttribute('aria-pressed', 'true')
+  await expect(ringar.first()).toHaveAttribute('aria-pressed', 'false')
+
+  await page.getByRole('button', { name: /^Ta bort 1 rad/ }).click()
+  await expect(page.locator('.statusrad')).toContainText('15 rader')
+  // Den valda raden är den andra, alltså kundnummer 10035.
+  await expect(page.getByRole('gridcell', { name: '10035', exact: true })).toBeVisible()
+  await expect(page.getByRole('gridcell', { name: '10021', exact: true })).toHaveCount(0)
 })

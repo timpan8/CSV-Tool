@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef } from 'preact/hooks'
+import { useCallback, useEffect, useMemo, useState, useRef } from 'preact/hooks'
 import type { Column, ColumnId, ColumnType, Frame } from '../core/types.js'
 import {
   columnIndex,
@@ -90,6 +90,7 @@ import { DuplicateTool } from './DuplicateTool.jsx'
 import { Filterrad } from './Filterrad.jsx'
 import { MergeDialog } from './MergeDialog.jsx'
 import { Verkstad } from './Verkstad.jsx'
+import { Oversikt } from './Oversikt.jsx'
 import { oppnaVerkstad, stangVerkstad, verkstad } from '../state/matchning.js'
 import type { Profilsteg } from '../core/ops/profil.js'
 import { Kombinera } from './Kombinera.jsx'
@@ -101,6 +102,7 @@ import { nyRegelId, TOMT_FILTER, type Filterregel } from '../core/ops/filter.js'
 import {
   hittaDubbletter,
   overflodigaRader,
+  type Behall,
   type Dubblettnyckel,
 } from '../core/ops/duplicates.js'
 import { beskrivSortering } from '../core/ops/sort.js'
@@ -133,6 +135,17 @@ export function App() {
   const [slaIhopOppen, setSlaIhopOppen] = useState(false)
   const [profilerOppna, setProfilerOppna] = useState(false)
   const [palettOppen, setPalettOppen] = useState(false)
+  const [oversiktOppen, setOversiktOppen] = useState(false)
+  /**
+   * Vilken rad i varje dubblettgrupp som stannar.
+   *
+   * Valet bor här och inte i dubblettpanelen, eftersom det är rutnätet som
+   * ritar och tar emot det — panelen beskriver bara vad som räknas som lika.
+   * `egnaBehallna` går på gruppnummer, som gäller så länge grupperingen är
+   * densamma; en ny nyckel nollställer den.
+   */
+  const [behall, setBehall] = useState<Behall>('forsta')
+  const [egnaBehallna, setEgnaBehallna] = useState<Map<number, number>>(new Map())
   const palettFil = useRef<HTMLInputElement>(null)
   const [meny, setMeny] = useState<MenyLage | null>(null)
   const [laddar, setLaddar] = useState<string | null>(null)
@@ -456,6 +469,28 @@ export function App() {
   const markering = tab?.markering ?? null
   const synligaKolumner = tab ? selectableColumns(tab) : []
 
+  /** Grupperingen rutnätet ritar, eller null när dubblettvyn är av. */
+  const dubblettgrupper = tab?.viewSpec.dubbletter ? (tab.ordning?.grupper ?? null) : null
+
+  /**
+   * Raderna som stannar, en per grupp.
+   *
+   * Förvalet är den första raden i filen, alltså precis vad *Behåll den
+   * första* gör. Att rita förvalet i stället för tomma ringar gör att man ser
+   * vad som händer om man inte rör någonting.
+   */
+  const behallnaRader = useMemo(() => {
+    if (!dubblettgrupper || behall !== 'valda') return null
+    const forsta = new Map<number, number>()
+    for (let r = 0; r < dubblettgrupper.grupp.length; r++) {
+      const g = dubblettgrupper.grupp[r]!
+      if (g !== 0 && !forsta.has(g)) forsta.set(g, r)
+    }
+    const ut = new Set<number>()
+    for (const [g, r] of forsta) ut.add(egnaBehallna.get(g) ?? r)
+    return ut
+  }, [dubblettgrupper, egnaBehallna, behall, rev])
+
   /**
    * Läser flik och markering ur tillståndet i stället för ur renderingens
    * closure.
@@ -673,6 +708,7 @@ export function App() {
   const oppnaVerktyg = (namn: Verktygsnamn, colId: ColumnId) => {
     setActiveColumn(colId)
     setTabellverktyg(null)
+    setOversiktOppen(false)
     setVerktyg({ id: namn, colId })
   }
 
@@ -869,14 +905,15 @@ export function App() {
     )
   }
 
-  const taBortDubbletter = (nyckel: Dubblettnyckel, behall: 'forsta' | 'sista') => {
+  const taBortDubbletter = (nyckel: Dubblettnyckel, hur: Behall) => {
     const nu = nuLage()
     if (!nu || !frame) return
     const grupper = hittaDubbletter(frame, nyckel)
-    const bort = overflodigaRader(grupper, behall)
+    const bort = overflodigaRader(grupper, hur === 'valda' ? 'forsta' : hur, egnaBehallna)
     if (bort.length === 0) return
     taBortRader(nu.tab, bort)
     sattDubbletter(nu.tab, null)
+    setEgnaBehallna(new Map())
     setTabellverktyg(null)
     notify(`Tog bort ${raderText(bort.length)} som var dubbletter.`, {
       atgard: { etikett: 'Ångra', kor: () => undo(nu.tab) },
@@ -935,7 +972,7 @@ export function App() {
       // Med en egen vy öppen är rutnätet inte det man tittar på. Ctrl+Z hade
       // annars ångrat i den aktiva fliken medan rättningen gjordes i den
       // andra, och piltangenterna hade flyttat en markering ingen ser.
-      if (verkstad.value || kombineraOppen.value) return
+      if (verkstad.value || kombineraOppen.value || oversiktOppen) return
       const { tab, frame, kolumner: synligaKolumner, sel: markering } = nu
 
       if (mod) {
@@ -1052,7 +1089,7 @@ export function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [tab, frame, markering, synligaKolumner.length, sokOppen, palettOppen, rev])
+  }, [tab, frame, markering, synligaKolumner.length, sokOppen, palettOppen, oversiktOppen, rev])
 
   /* ---------- Urklipp och släpp ---------- */
 
@@ -1123,7 +1160,7 @@ export function App() {
   // tabell man inte längre tittar på, och skulle visa tal som inte gäller.
   const iVerkstaden = verkstad.value !== null
   const iKombinera = kombineraOppen.value
-  const egenVy = iVerkstaden || iKombinera
+  const egenVy = iVerkstaden || iKombinera || oversiktOppen
 
   return (
     <div class="app">
@@ -1279,6 +1316,16 @@ export function App() {
           onFiler={oppnaFiler}
           onExempelmall={oppnaExempelmall}
         />
+      ) : oversiktOppen && frame && tab ? (
+        <Oversikt
+          frame={frame}
+          revision={rev}
+          onValjKolumn={setActiveColumn}
+          onSetType={sattTyp}
+          onVisaOgiltiga={visaOgiltiga}
+          onVerktyg={oppnaVerktyg}
+          onStang={() => setOversiktOppen(false)}
+        />
       ) : iVerkstaden ? (
         <Verkstad
           onSlaIhop={(resultat, text) => {
@@ -1302,6 +1349,7 @@ export function App() {
             onMove={flyttaKolumn}
             onInsert={() => infogaKolumn()}
             onUndoThrough={(i) => undoThrough(tab, i)}
+            onOversikt={() => setOversiktOppen(true)}
           />
           <VirtualGrid
             frame={frame}
@@ -1310,7 +1358,17 @@ export function App() {
             viewSpec={tab.viewSpec}
             forhandsvisning={tab.forhandsvisning}
             sortering={tab.viewSpec.sortering ?? []}
-            grupper={tab.viewSpec.dubbletter ? (tab.ordning?.grupper?.grupp ?? null) : null}
+            grupper={dubblettgrupper}
+            behallnaRader={behallnaRader}
+            onBehall={
+              behall === 'valda' && dubblettgrupper
+                ? (fysisk) => {
+                    const g = dubblettgrupper.grupp[fysisk] ?? 0
+                    if (g === 0) return
+                    setEgnaBehallna((nu) => new Map(nu).set(g, fysisk))
+                  }
+                : null
+            }
             markering={markering}
             redigerar={tab.redigerar}
             onSelectColumn={setActiveColumn}
@@ -1348,7 +1406,13 @@ export function App() {
               frame={frame}
               revision={rev}
               nyckel={tab.viewSpec.dubbletter ?? null}
-              onNyckel={(n) => sattDubbletter(tab, n)}
+              onNyckel={(n) => {
+                setEgnaBehallna(new Map())
+                sattDubbletter(tab, n)
+              }}
+              behall={behall}
+              onBehall={setBehall}
+              egnaVal={egnaBehallna.size}
               onTaBort={taBortDubbletter}
               onStang={() => setTabellverktyg(null)}
             />
@@ -1458,6 +1522,7 @@ export function App() {
               dubbletter: () => oppnaTabellverktyg('dubbletter'),
               slaIhop: () => setSlaIhopOppen(true),
               kombinera: oppnaKombinera,
+              oversikt: () => setOversiktOppen(true),
               visaAllaRader: () => {
                 if (!tab) return
                 setSokOppen(false)

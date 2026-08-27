@@ -124,3 +124,36 @@ describe('cachen', () => {
     expect(innehallsprofil(col).ogiltiga).toBe(1)
   })
 })
+
+describe('signalerna är strängare än verktygen själva', () => {
+  it('tar inte ett datum för ett tal', () => {
+    // tolkaTal skalar bort allt som inte är siffror och läser gärna
+    // 2026-08-27 12:55 som 202608271255. Som signal duger det inte.
+    const col = kolumn('Registrerad', [
+      '2026-08-27 12:55',
+      '2026-08-26',
+      '27/08/2026',
+      'den 27 augusti 2026',
+    ])
+    const forslag = namnen(col)
+    expect(forslag[0]).toBe('datum')
+    expect(forslag).not.toContain('tal')
+  })
+
+  it('läser ändå ett belopp med enhet som tal', () => {
+    const col = kolumn('Belopp', ['1 240,50 kr', '980,00 kr', '(1 234)', '12 %'])
+    const tal = innehallsprofil(col).forslag.find((f) => f.verktyg === 'tal')
+    expect(tal).toBeDefined()
+    expect(tal!.skal).toContain('kr')
+  })
+
+  it('föreslår inte delning av belopp med tusentalsmellanslag', () => {
+    const col = kolumn('Belopp', ['1 240,50', '12 000,00', '7 450,00'])
+    expect(namnen(col)).not.toContain('dela')
+  })
+
+  it('föreslår delning bara när båda delarna har bokstäver', () => {
+    expect(namnen(kolumn('Namn', ['Anna Karlsson', 'Erik Öberg']))).toContain('dela')
+    expect(namnen(kolumn('Kod', ['A1 2', 'B3 4']))).not.toContain('dela')
+  })
+})

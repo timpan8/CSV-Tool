@@ -6,6 +6,7 @@ import { visibleColumns } from '../core/frame/frame.js'
 import {
   TOM_DUBBLETTNYCKEL,
   hittaDubbletter,
+  type Behall,
   type Dubblettnyckel,
 } from '../core/ops/duplicates.js'
 import { formatCount, grupper as grupperText, rader as raderText } from '../core/locale/sv.js'
@@ -24,7 +25,12 @@ export function DuplicateTool(props: {
   /** Nyckeln som dubblettvyn är påslagen med, eller null när den är av. */
   nyckel: Dubblettnyckel | null
   onNyckel: (nyckel: Dubblettnyckel | null) => void
-  onTaBort: (nyckel: Dubblettnyckel, behall: 'forsta' | 'sista') => void
+  /** Vilken rad i varje grupp som stannar. Bor i appen, eftersom rutnätet ritar valet. */
+  behall: Behall
+  onBehall: (behall: Behall) => void
+  /** Antal grupper där användaren pekat ut en annan rad än förvalet. */
+  egnaVal: number
+  onTaBort: (nyckel: Dubblettnyckel, behall: Behall) => void
   onStang: () => void
 }) {
   const { frame } = props
@@ -79,7 +85,7 @@ export function DuplicateTool(props: {
           <button
             class="knapp knapp--fara"
             disabled={grupper.antalOverflodiga === 0}
-            onClick={() => props.onTaBort(nyckel, 'forsta')}
+            onClick={() => props.onTaBort(nyckel, props.behall)}
           >
             Ta bort {raderText(grupper.antalOverflodiga)}
           </button>
@@ -165,6 +171,26 @@ export function DuplicateTool(props: {
               <td>rader ingår</td>
               <td class="inventering__exempel" />
             </tr>
+            <tr>
+              <td class="inventering__antal">{formatCount(grupper.antalHeltLika)}</td>
+              <td>
+                av grupperna är identiska i <em>varje</em> kolumn — de kan tas bort utan att du
+                tittar
+              </td>
+              <td class="inventering__exempel" />
+            </tr>
+            {grupper.antalGrupper > grupper.antalHeltLika && (
+              <tr class="inventering--okant">
+                <td class="inventering__antal">
+                  {formatCount(grupper.antalGrupper - grupper.antalHeltLika)}
+                </td>
+                <td>
+                  skiljer sig utanför nyckeln — den ena raden kan bära uppgifter den andra
+                  saknar
+                </td>
+                <td class="inventering__exempel" />
+              </tr>
+            )}
             <tr class={grupper.antalOverflodiga > 0 ? 'inventering--okant' : ''}>
               <td class="inventering__antal">{formatCount(grupper.antalOverflodiga)}</td>
               <td>skulle tas bort</td>
@@ -209,27 +235,38 @@ export function DuplicateTool(props: {
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Vid borttagning</span>
-        <div class="faltrad">
-          <button
-            class="knapp"
-            disabled={grupper.antalOverflodiga === 0}
-            onClick={() => props.onTaBort(nyckel, 'forsta')}
-          >
-            Behåll den första i filen
-          </button>
-          <button
-            class="knapp"
-            disabled={grupper.antalOverflodiga === 0}
-            onClick={() => props.onTaBort(nyckel, 'sista')}
-          >
-            Behåll den sista i filen
-          </button>
-        </div>
-        <p class="verktyg__sammanfattning">
-          Första och sista räknas i filens ordning, inte i den du tittar på nu — annars skulle
-          valet betyda olika saker beroende på hur du sorterat. Borttagningen går att ångra.
-        </p>
+        <span class="falt__etikett">Vid borttagning, behåll</span>
+        <Val
+          varden={[
+            { varde: 'forsta' as const, etikett: 'Den första i filen' },
+            { varde: 'sista' as const, etikett: 'Den sista i filen' },
+            {
+              varde: 'valda' as const,
+              etikett: 'Den jag väljer',
+              titel: 'Peka ut raden som ska stanna med ringen vid radnumret.',
+            },
+          ]}
+          valt={props.behall}
+          onValj={(v) => {
+            props.onBehall(v)
+            // Att välja rad kräver att grupperna syns. Att slå på vyn åt
+            // användaren är billigare än att förklara varför inget händer.
+            if (v === 'valda' && !visas) props.onNyckel(nyckel)
+          }}
+        />
+        {props.behall === 'valda' ? (
+          <p class="verktyg__sammanfattning">
+            Klicka på ringen vid radnumret för den rad som ska stanna i varje grupp.
+            {props.egnaVal > 0
+              ? ` ${formatCount(props.egnaVal)} av ${formatCount(grupper.antalGrupper)} grupper har ett eget val; resten behåller den första.`
+              : ' Utan eget val stannar den första i filen.'}
+          </p>
+        ) : (
+          <p class="verktyg__sammanfattning">
+            Första och sista räknas i filens ordning, inte i den du tittar på nu — annars skulle
+            valet betyda olika saker beroende på hur du sorterat. Borttagningen går att ångra.
+          </p>
+        )}
       </div>
     </Verktygspanel>
   )

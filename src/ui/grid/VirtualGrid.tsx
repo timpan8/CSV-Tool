@@ -8,6 +8,7 @@ import { cellenMatchar, type ViewSpec } from '../../state/view.js'
 import { forCell, spokvarde, uppslag, PROBLEM, type Forhandsvisning } from '../../state/preview.js'
 import type { Riktning, Sorteringsniva } from '../../core/ops/sort.js'
 import { innehaller, rect, type Selection } from '../../state/selection.js'
+import type { Dubblettgrupper } from '../../core/ops/duplicates.js'
 
 const DEFAULT_WIDTH = 168
 const MIN_WIDTH = 56
@@ -35,8 +36,12 @@ export interface GridProps {
   forhandsvisning: Forhandsvisning | null
   /** Aktiva sorteringsnivåer, för pilen i rubriken. */
   sortering: readonly Sorteringsniva[]
-  /** Dubblettgrupp per fysisk rad, för linjen mellan grupperna. */
-  grupper: Uint32Array | null
+  /** Dubblettgrupperna, för linjen mellan dem och för valet av vilken rad som stannar. */
+  grupper: Dubblettgrupper | null
+  /** Fysiska rader som är utpekade att stanna, eller null när valet är av. */
+  behallnaRader: ReadonlySet<number> | null
+  /** Pekar ut raden som ska stanna i sin grupp. */
+  onBehall: ((fysisk: number) => void) | null
   markering: Selection | null
   redigerar: { rad: number; kol: number } | null
   onSelectColumn: (id: ColumnId) => void
@@ -172,10 +177,13 @@ export function VirtualGrid(props: GridProps) {
     // går att skilja åt utan att färgas — en bakgrundsfärg skulle krocka med
     // markeringen.
     const nasta = frame.view[i + 1]
+    const gruppnr = props.grupper?.grupp[physical] ?? 0
     const gruppslut =
       props.grupper !== null &&
-      props.grupper[physical] !== 0 &&
-      (nasta === undefined || props.grupper[nasta] !== props.grupper[physical])
+      gruppnr !== 0 &&
+      (nasta === undefined || props.grupper.grupp[nasta] !== gruppnr)
+    const heltLika = gruppnr !== 0 && props.grupper?.heltLika[gruppnr] === 1
+    const behallen = props.behallnaRader?.has(physical) === true
     rows.push(
       <div
         class={`rutnat__rad${radMarkerad ? ' rutnat__rad--markerad' : ''}${
@@ -191,6 +199,7 @@ export function VirtualGrid(props: GridProps) {
           }`}
           title={
             (source === 0 ? 'Tillagd rad — fanns inte i filen' : `Rad ${source} i filen`) +
+            (heltLika ? '. Identisk med de andra i sin dubblettgrupp.' : '') +
             '. Klicka för att markera raden.'
           }
           onPointerDown={(e) => {
@@ -203,6 +212,29 @@ export function VirtualGrid(props: GridProps) {
             props.onOpenRowMenu(e.clientX, e.clientY)
           }}
         >
+          {props.onBehall !== null && gruppnr !== 0 && (
+            <button
+              class={`radnr__behall${behallen ? ' radnr__behall--vald' : ''}`}
+              aria-pressed={behallen}
+              title={
+                behallen
+                  ? 'Den här raden stannar när dubbletterna tas bort.'
+                  : 'Låt den här raden stanna i stället.'
+              }
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                props.onBehall!(physical)
+              }}
+            >
+              {behallen ? '●' : '○'}
+            </button>
+          )}
+          {gruppnr !== 0 && heltLika && props.onBehall === null && (
+            <span class="radnr__identisk" title="Raden är identisk med de andra i sin grupp i varje kolumn.">
+              =
+            </span>
+          )}
           {source === 0 ? '–' : formatCount(source)}
         </div>
         {columns.flatMap((col, kol) => [

@@ -349,3 +349,172 @@
   display: flex;
   gap: 6px;
 }
+
+/**
+ * Kolumnöversikten.
+ *
+ * Egen vy över arbetsytan, som verkstaden och kombineringen: frågan den
+ * svarar på — vad är det här för fil? — gäller alla kolumner samtidigt, och
+ * en panel som visar en i taget kan inte svara på den.
+ */
+
+.oversikt {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--yta);
+}
+
+.oversikt__topp {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--linje);
+  background: var(--yta-2);
+}
+
+.oversikt__topp h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.oversikt__underrubrik {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-svag);
+}
+
+.oversikt__kropp {
+  min-height: 0;
+  overflow: auto;
+  padding: 0 14px 14px;
+}
+
+.oversikt__tabell {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.oversikt__tabell thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 10px;
+  background: var(--yta);
+  border-bottom: 1px solid var(--linje-stark);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-svag);
+}
+
+.oversikt__tabell tbody th,
+.oversikt__tabell tbody td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--linje);
+  vertical-align: middle;
+  text-align: left;
+  font-weight: 400;
+}
+
+.oversikt__tal {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.oversikt__namn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  text-align: left;
+}
+
+.oversikt__namn:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.oversikt__dold {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--yta-3);
+  color: var(--text-svagast);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.oversikt__rad--dold {
+  opacity: 0.6;
+}
+
+/* Andelen som stapel bredvid talet: procenten säger hur mycket, stapeln gör
+   det jämförbart mellan raderna utan att man läser åtta tal. */
+.oversikt__stapel {
+  display: block;
+  height: 3px;
+  margin-top: 3px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0 var(--andel),
+    var(--linje) var(--andel) 100%
+  );
+}
+
+.oversikt__noll {
+  color: var(--text-svagast);
+}
+
+.oversikt__problem {
+  color: var(--varning);
+  font-weight: 600;
+}
+
+.oversikt__forslag {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.oversikt__verktyg {
+  display: block;
+  text-align: left;
+  line-height: 1.25;
+}
+
+.oversikt__skal {
+  display: block;
+  color: var(--text-svagast);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.oversikt__fot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--linje);
+  background: var(--yta-2);
+}
+
+.oversikt__fot__text {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-svag);
+}

@@ -1,56 +1,12 @@
 import { useMemo } from 'preact/hooks'
 import type { Column, ColumnType, Frame } from '../core/types.js'
-import { filledCount, valueCounts } from '../core/frame/column.js'
-import { TYPE_LABELS, violatesType } from '../core/infer.js'
+import { kolumnstatistik } from '../core/frame/statistik.js'
+import { TYPE_LABELS } from '../core/infer.js'
 import { formatCount } from '../core/locale/sv.js'
 import { innehallsprofil } from '../core/frame/innehall.js'
 import { ordnaVerktyg, type Verktygsnamn } from './verktyg.jsx'
 
 const TYPER: ColumnType[] = ['text', 'number', 'date', 'email', 'bool']
-
-interface Statistik {
-  totalt: number
-  ifyllda: number
-  tomma: number
-  ogiltiga: number
-  unika: number
-  topp: { varde: string; antal: number }[]
-}
-
-/**
- * All statistik räknas ur ordboken.
- *
- * Antal unika värden, vanligaste värden och andelen ogiltiga är en enda
- * räknarslinga över raderna plus ett svep över de unika värdena — inte en
- * strängjämförelse per cell.
- */
-function berakna(col: Column, frame: Frame): Statistik {
-  const counts = valueCounts(col, frame.view)
-  const totalt = frame.view.length
-  const ifyllda = filledCount(col, frame.view)
-
-  let unika = 0
-  let ogiltiga = 0
-  const poster: { varde: string; antal: number }[] = []
-  for (let d = 1; d < col.dict.length; d++) {
-    const antal = counts[d]!
-    if (antal === 0) continue
-    unika += 1
-    const varde = col.dict[d]!
-    if (violatesType(varde, col.type)) ogiltiga += antal
-    poster.push({ varde, antal })
-  }
-  poster.sort((a, b) => b.antal - a.antal)
-
-  return {
-    totalt,
-    ifyllda,
-    tomma: totalt - ifyllda,
-    ogiltiga,
-    unika,
-    topp: poster.slice(0, 8),
-  }
-}
 
 export function Inspector(props: {
   frame: Frame
@@ -67,7 +23,7 @@ export function Inspector(props: {
 }) {
   const { column, frame } = props
   const stat = useMemo(
-    () => (column ? berakna(column, frame) : null),
+    () => (column ? kolumnstatistik(column, frame) : null),
     [column, frame, props.revision],
   )
   /*
