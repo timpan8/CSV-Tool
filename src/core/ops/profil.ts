@@ -31,11 +31,20 @@ import type { Malformat } from './dates.js'
 
 export type Profilsteg =
   | { typ: 'stada'; kolumner: string[]; stadning: string }
-  | { typ: 'datum'; kolumn: string; inst: Datuminstallning }
-  | { typ: 'tal'; kolumn: string; inst: Talinstallning }
-  | { typ: 'telefon'; kolumn: string; inst: Telefoninstallning }
-  | { typ: 'epost'; kolumn: string; falt: Epostfalt; val: Epostval; namn: string }
-  | { typ: 'ersatt'; kolumn: string; inst: Ersattning }
+  /**
+   * De fyra omskrivande verktygen bär en lista kolumner, eftersom samma
+   * inställning ofta ska köras på tolv månadskolumner. Äldre profiler bar en
+   * enkel sträng och läses fortfarande.
+   */
+  | { typ: 'datum'; kolumn: string | string[]; inst: Datuminstallning }
+  | { typ: 'tal'; kolumn: string | string[]; inst: Talinstallning }
+  | { typ: 'telefon'; kolumn: string | string[]; inst: Telefoninstallning }
+  /**
+   * `namn` är en lista, eftersom `bada-namnen` skapar två kolumner. Äldre
+   * profiler bar en enkel sträng och läses fortfarande.
+   */
+  | { typ: 'epost'; kolumn: string; falt: Epostfalt; val: Epostval; namn: string | string[] }
+  | { typ: 'ersatt'; kolumn: string | string[]; inst: Ersattning }
   | { typ: 'dela'; kolumn: string; delning: Delning; namn: string[] }
   | { typ: 'mall'; mall: string; namn: string; stadaLuckor: boolean }
   | { typ: 'dopOm'; kolumn: string; till: string }
@@ -70,6 +79,11 @@ const MALFORMAT: Record<Malformat, string> = {
   ar: 'ÅÅÅÅ',
 }
 
+/** Ett kolumnfält som kan vara ett namn eller flera. */
+export function kolumnlista(kolumn: string | string[]): string[] {
+  return Array.isArray(kolumn) ? kolumn : [kolumn]
+}
+
 /** Kolumnerna ett steg behöver för att kunna köras. */
 export function stegetsKolumner(steg: Profilsteg): string[] {
   switch (steg.typ) {
@@ -78,8 +92,9 @@ export function stegetsKolumner(steg: Profilsteg): string[] {
     case 'datum':
     case 'tal':
     case 'telefon':
-    case 'epost':
     case 'ersatt':
+      return kolumnlista(steg.kolumn)
+    case 'epost':
     case 'dela':
     case 'dopOm':
     case 'taBortKolumn':
@@ -107,15 +122,17 @@ export function beskrivSteg(steg: Profilsteg): string {
       return `${namn} i ${steg.kolumner.join(', ')}`
     }
     case 'datum':
-      return `Skriv om ${steg.kolumn} till ${MALFORMAT[steg.inst.mal]}`
+      return `Skriv om ${kolumnlista(steg.kolumn).join(', ')} till ${MALFORMAT[steg.inst.mal]}`
     case 'tal':
-      return `Städa tal i ${steg.kolumn}`
+      return `Städa tal i ${kolumnlista(steg.kolumn).join(', ')}`
     case 'telefon':
-      return `Normalisera telefonnummer i ${steg.kolumn}`
-    case 'epost':
-      return `Läs ${steg.falt} ur ${steg.kolumn} till ”${steg.namn}”`
+      return `Normalisera telefonnummer i ${kolumnlista(steg.kolumn).join(', ')}`
+    case 'epost': {
+      const namn = Array.isArray(steg.namn) ? steg.namn : [steg.namn]
+      return `Läs ${steg.falt} ur ${steg.kolumn} till ”${namn.join('” och ”')}”`
+    }
     case 'ersatt':
-      return `Ersätt ”${steg.inst.sok}” i ${steg.kolumn}`
+      return `Ersätt ”${steg.inst.sok}” i ${kolumnlista(steg.kolumn).join(', ')}`
     case 'dela':
       return `Dela ${steg.kolumn} i ${steg.namn.join(', ')}`
     case 'mall':

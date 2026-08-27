@@ -232,6 +232,7 @@ export function delaEpost(rawValue: string, val: Epostval = STANDARDVAL): Epostd
 export type Epostfalt =
   | 'fornamn'
   | 'efternamn'
+  | 'bada-namnen'
   | 'helt-namn'
   | 'lokal'
   | 'doman'
@@ -241,6 +242,11 @@ export type Epostfalt =
 export const EPOSTFALT: { varde: Epostfalt; etikett: string; exempel: string }[] = [
   { varde: 'fornamn', etikett: 'Förnamn', exempel: 'Anna' },
   { varde: 'efternamn', etikett: 'Efternamn', exempel: 'Karlsson' },
+  {
+    varde: 'bada-namnen',
+    etikett: 'Förnamn och Efternamn, var sin kolumn',
+    exempel: 'Anna · Karlsson',
+  },
   { varde: 'helt-namn', etikett: 'Förnamn Efternamn', exempel: 'Anna Karlsson' },
   { varde: 'lokal', etikett: 'Allt före @', exempel: 'anna.karlsson' },
   { varde: 'doman', etikett: 'Domän', exempel: 'nordbygg.se' },
@@ -254,6 +260,7 @@ export function lasFalt(del: Epostdel, falt: Epostfalt): string {
       return del.fornamn
     case 'efternamn':
       return del.efternamn
+    case 'bada-namnen':
     case 'helt-namn':
       return [del.fornamn, del.efternamn].filter((d) => d !== '').join(' ')
     case 'lokal':
@@ -264,6 +271,21 @@ export function lasFalt(del: Epostdel, falt: Epostfalt): string {
       return del.huvuddoman
     case 'toppdoman':
       return del.toppdoman
+  }
+}
+
+/**
+ * Två värden per adress: förnamn och efternamn, var för sig.
+ *
+ * Att ta ut båda i ett svep är vad man vill nio gånger av tio, och att köra
+ * verktyget två gånger på samma kolumn är precis den sortens dubbelarbete
+ * som ett verktyg ska ta bort. `Forhandsspec.delar` fanns redan för flera
+ * kolumner, så det som tillkommer är den här funktionen.
+ */
+export function epostNamndelar(val: Epostval = STANDARDVAL): (value: string) => string[] {
+  return (value: string) => {
+    const del = delaEpost(value, val)
+    return del ? [del.fornamn, del.efternamn] : ['', '']
   }
 }
 
@@ -300,7 +322,7 @@ export interface Epostinventering {
 export function inventeraEpost(
   varden: readonly string[],
   val: Epostval = STANDARDVAL,
-  vikter?: readonly number[],
+  vikter?: ArrayLike<number>,
 ): Epostinventering {
   let adresser = 0
   let ejAdress = 0

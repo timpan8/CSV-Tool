@@ -109,7 +109,7 @@ function jamfornyckel(value: string, versalkanslig: boolean): string {
 export function raknaTraffar(
   varden: readonly string[],
   fn: (value: string) => string,
-  vikter?: readonly number[],
+  vikter?: ArrayLike<number>,
 ): number {
   let n = 0
   for (let i = 0; i < varden.length; i++) {

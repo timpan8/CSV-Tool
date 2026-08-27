@@ -262,3 +262,17 @@ describe('uppspelning', () => {
     ).toEqual(['Ort', 'Land'])
   })
 })
+
+describe('kolumnlistor i steg', () => {
+  it('läser både en sträng och en lista', () => {
+    const en: Profilsteg = {
+      typ: 'telefon',
+      kolumn: 'Mobil',
+      inst: { landsnummer: 46, format: 'e164', onError: 'behall' },
+    }
+    const flera: Profilsteg = { ...en, kolumn: ['Mobil', 'Hem'] }
+    expect(stegetsKolumner(en)).toEqual(['Mobil'])
+    expect(stegetsKolumner(flera)).toEqual(['Mobil', 'Hem'])
+    expect(beskrivSteg(flera)).toContain('Mobil, Hem')
+  })
+})

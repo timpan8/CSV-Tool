@@ -293,3 +293,34 @@ export function duplicateRows(frame: Frame, rows: Iterable<number>): void {
     if (isCopy[i] === 1) frame.sourceRow[i] = 0
   }
 }
+
+/**
+ * Sant när två ramar bär exakt samma innehåll.
+ *
+ * Används för att upptäcka att samma fil öppnats två gånger — ett vanligt
+ * misstag när man hämtar exporter ur flera system och de heter nästan samma
+ * sak.
+ *
+ * Jämförelsen är exakt och inte en hash. Den avbryter vid första skillnaden,
+ * så två olika filer kostar oftast en handfull jämförelser; hela svepet
+ * betalas bara när filerna faktiskt är lika, och då är svaret värt det.
+ * Ordböckerna får jämföras rakt av eftersom interneringen följer
+ * radordningen: två identiska filer lästa på samma sätt ger identiska
+ * ordböcker i identisk ordning.
+ */
+export function sammaInnehall(a: Frame, b: Frame): boolean {
+  if (a === b) return true
+  if (a.rowCount !== b.rowCount || a.columns.length !== b.columns.length) return false
+  for (let c = 0; c < a.columns.length; c++) {
+    const x = a.columns[c]!
+    const y = b.columns[c]!
+    if (x.name !== y.name || x.dict.length !== y.dict.length) return false
+    for (let d = 0; d < x.dict.length; d++) {
+      if (x.dict[d] !== y.dict[d]) return false
+    }
+    for (let r = 0; r < a.rowCount; r++) {
+      if (x.codes[r] !== y.codes[r]) return false
+    }
+  }
+  return true
+}

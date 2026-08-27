@@ -368,28 +368,88 @@ export function stadaKolumner(tab: Tab, valda: Column[], stadning: Stadning): nu
   return andrade
 }
 
-/** Tillämpar en öppen förhandsvisning. Returnerar antal ändrade celler. */
-export function tillampaForhandsvisning(tab: Tab, forh: Forhandsvisning): number {
-  const kall = findColumn(tab.frame, forh.colId)
-  if (!kall) return 0
-  if (forh.nyaKolumner.length > 0 || forh.fn === null) return skapaKolumnerFran(tab, kall, forh)
+/**
+ * Tillämpar en eller flera förhandsvisningar som **ett** steg.
+ * Returnerar antal ändrade celler.
+ *
+ * Ett verktyg som körts över en flerkolumnsmarkering ska backas av ett enda
+ * Ctrl+Z. `korOverKolumner` tar redan en lista kolumner och en enda
+ * ögonblicksbild över dem, så det som tillkommer är att köra transformerna i
+ * samma anrop.
+ *
+ * Nya kolumner (spökkolumner) hanteras en i taget: de skapar kolumner
+ * i stället för att skriva om, och blandas därför inte in i den gemensamma
+ * ögonblicksbilden.
+ */
+export function tillampaForhandsvisning(
+  tab: Tab,
+  forh: Forhandsvisning | readonly Forhandsvisning[],
+): number {
+  const lista = Array.isArray(forh) ? (forh as readonly Forhandsvisning[]) : [forh as Forhandsvisning]
+  if (lista.length === 0) return 0
 
-  const fn = forh.fn
+  const nya = lista.filter((f) => f.nyaKolumner.length > 0 || f.fn === null)
+  const omskrivna = lista.filter((f) => f.nyaKolumner.length === 0 && f.fn !== null)
+
   let andrade = 0
+  for (const f of nya) {
+    const kall = findColumn(tab.frame, f.colId)
+    if (kall) andrade += skapaKolumnerFran(tab, kall, f)
+  }
+
+  const jobb = omskrivna
+    .map((f) => ({ f, col: findColumn(tab.frame, f.colId) }))
+    .filter((j): j is { f: Forhandsvisning; col: Column } => j.col !== undefined)
+  if (jobb.length === 0) return andrade
+
+  const forsta = jobb[0]!.f
   korOverKolumner(
     tab,
-    forh.etikett,
-    forh.kind,
-    [kall],
+    jobb.length === 1 ? forsta.etikett : `${forsta.etikett} — ${kolumner(jobb.length)}`,
+    forsta.kind,
+    jobb.map((j) => j.col),
     () => {
-      andrade = mapColumnValues(kall, fn)
-      // Typen ingår i ögonblicksbilden, så den följer med tillbaka vid ångra.
-      if (forh.nyTyp !== undefined && !kall.typeLocked) kall.type = forh.nyTyp
+      for (const { f, col } of jobb) {
+        andrade += mapColumnValues(col, f.fn!)
+        // Typen ingår i ögonblicksbilden, så den följer med tillbaka vid ångra.
+        if (f.nyTyp !== undefined && !col.typeLocked) col.type = f.nyTyp
+      }
     },
-    forh.profil,
+    profilstegFor(jobb.map((j) => j.f)),
   )
   return andrade
 }
+
+/**
+ * Profilsteget för en körning över flera kolumner.
+ *
+ * Stegen är identiska så när som på kolumnnamnet — det är samma inställning
+ * körd på flera kolumner — så de slås ihop till ett steg med en lista
+ * kolumner. Går de inte att slå ihop blir körningen ett handgrepp utan
+ * profilsteg, vilket är sanningen: en profil som bara tog med den första
+ * kolumnen vore värre än ingen.
+ */
+function profilstegFor(lista: readonly Forhandsvisning[]): Profilsteg | undefined {
+  const steg = lista.map((f) => f.profil)
+  const forsta = steg[0]
+  if (!forsta || steg.some((s) => s === undefined)) return undefined
+  if (steg.length === 1) return forsta
+
+  // Bara de fyra omskrivande verktygen bär en kolumnlista i sitt steg.
+  if (!FLERKOLUMNSSTEG.has(forsta.typ)) return undefined
+  const namn: string[] = []
+  for (const s of steg as Profilsteg[]) {
+    if (!('kolumn' in s) || typeof s.kolumn !== 'string') return undefined
+    // Allt utom kolumnnamnet måste vara identiskt.
+    if (JSON.stringify({ ...s, kolumn: '' }) !== JSON.stringify({ ...forsta, kolumn: '' })) {
+      return undefined
+    }
+    namn.push(s.kolumn)
+  }
+  return { ...forsta, kolumn: namn } as Profilsteg
+}
+
+const FLERKOLUMNSSTEG = new Set<Profilsteg['typ']>(['datum', 'tal', 'telefon', 'ersatt'])
 
 /**
  * Skapar de nya kolumner som spökkolumnerna visade.

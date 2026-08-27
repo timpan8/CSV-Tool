@@ -218,6 +218,9 @@ export function saknadeKolumner(f: Verkstadsflikar, s: Verkstad): ColumnId[] {
   for (const p of s.par) {
     if (!findColumn(f.vanster.frame, p.vansterColId)) saknade.push(p.vansterColId)
     if (!findColumn(f.hoger.frame, p.hogerColId)) saknade.push(p.hogerColId)
+    if (p.hogerColId2 !== undefined && !findColumn(f.hoger.frame, p.hogerColId2)) {
+      saknade.push(p.hogerColId2)
+    }
   }
   return saknade
 }

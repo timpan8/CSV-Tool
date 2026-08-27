@@ -49,6 +49,7 @@ export interface Kommandohandlare {
   dubbletter: () => void
   slaIhop: () => void
   kombinera: () => void
+  oversikt: () => void
   visaAllaRader: () => void
   stada: (id: string) => void
   verktyg: (namn: Verktygsnamn) => void
@@ -110,6 +111,14 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
       etikett: 'Slå ihop med en annan fil…',
       ord: 'matcha merge join koppla',
       kor: h.slaIhop,
+    })
+    lagg({
+      id: 'oversikt',
+      grupp: 'Tabell',
+      etikett: 'Kolumnöversikt…',
+      ord: 'översikt sammanfattning profil vad innehåller filen overview',
+      beskrivning: 'Alla kolumner med ifyllnad, unika värden, problem och förslag.',
+      kor: h.oversikt,
     })
     lagg({
       id: 'kombinera',

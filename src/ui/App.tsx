@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef } from 'preact/hooks'
+import { useCallback, useEffect, useMemo, useState, useRef } from 'preact/hooks'
 import type { Column, ColumnId, ColumnType, Frame } from '../core/types.js'
 import {
   columnIndex,
@@ -6,6 +6,7 @@ import {
   findColumn,
   insertColumn,
   moveColumn,
+  sammaInnehall,
   uniqueColumnName,
 } from '../core/frame/frame.js'
 import {
@@ -70,8 +71,10 @@ import {
   tillampaForhandsvisning,
   type PasteRequest,
 } from '../state/edits.js'
-import { cell, klamp, rect, type Selection } from '../state/selection.js'
+import { antalCeller, cell, klamp, rect, type Selection } from '../state/selection.js'
+import { getCell } from '../core/frame/column.js'
 import { VirtualGrid, type Flytt } from './grid/VirtualGrid.jsx'
+import { anpassadBredd } from './grid/bredd.js'
 import { ColumnPanel } from './ColumnPanel.jsx'
 import { Inspector } from './Inspector.jsx'
 import { EmptyState } from './EmptyState.jsx'
@@ -79,7 +82,8 @@ import { ImportDialog, type ImportSettings } from './ImportDialog.jsx'
 import { ExportDialog } from './ExportDialog.jsx'
 import { SearchBar } from './SearchBar.jsx'
 import { PasteDialog } from './PasteDialog.jsx'
-import { VERKTYG, Verktyg, type Verktygsnamn } from './verktyg.jsx'
+import { Verktyg, ordnaVerktyg, type Verktygsnamn } from './verktyg.jsx'
+import { innehallsprofil } from '../core/frame/innehall.js'
 import { Statusrad } from './Statusrad.jsx'
 import { SortTool } from './SortTool.jsx'
 import { FilterTool } from './FilterTool.jsx'
@@ -87,6 +91,7 @@ import { DuplicateTool } from './DuplicateTool.jsx'
 import { Filterrad } from './Filterrad.jsx'
 import { MergeDialog } from './MergeDialog.jsx'
 import { Verkstad } from './Verkstad.jsx'
+import { Oversikt } from './Oversikt.jsx'
 import { oppnaVerkstad, stangVerkstad, verkstad } from '../state/matchning.js'
 import type { Profilsteg } from '../core/ops/profil.js'
 import { Kombinera } from './Kombinera.jsx'
@@ -98,6 +103,7 @@ import { nyRegelId, TOMT_FILTER, type Filterregel } from '../core/ops/filter.js'
 import {
   hittaDubbletter,
   overflodigaRader,
+  type Behall,
   type Dubblettnyckel,
 } from '../core/ops/duplicates.js'
 import { beskrivSortering } from '../core/ops/sort.js'
@@ -106,6 +112,20 @@ import { Meny, Toastar, type MenyPost } from './parts.jsx'
 import { EXEMPELFIL, EXEMPELFIL_MALL, EXEMPELFIL_ORDER } from './exempel.js'
 
 const TYPCYKEL: ColumnType[] = ['text', 'number', 'date', 'email', 'bool']
+
+/**
+ * Verktyg som kör över hela markeringen.
+ *
+ * De skriver om kolumnerna på plats. De övriga *skapar* kolumner, och tolv
+ * nya kolumner ur en markering är sällan vad någon menade — de arbetar på
+ * den kolumn man klickade i.
+ */
+const FLERKOLUMNSVERKTYG = new Set<Verktygsnamn>(['datum', 'tal', 'telefon', 'ersatt'])
+
+/** Kortar ett värde så att en menypost inte blir bredare än skärmen. */
+function kort(value: string): string {
+  return value.length > 28 ? `${value.slice(0, 27)}…` : value
+}
 
 
 interface MenyLage {
@@ -125,14 +145,31 @@ export function App() {
   const [slaIhopOppen, setSlaIhopOppen] = useState(false)
   const [profilerOppna, setProfilerOppna] = useState(false)
   const [palettOppen, setPalettOppen] = useState(false)
+  const [oversiktOppen, setOversiktOppen] = useState(false)
+  /**
+   * Vilken rad i varje dubblettgrupp som stannar.
+   *
+   * Valet bor här och inte i dubblettpanelen, eftersom det är rutnätet som
+   * ritar och tar emot det — panelen beskriver bara vad som räknas som lika.
+   * `egnaBehallna` går på gruppnummer, som gäller så länge grupperingen är
+   * densamma; en ny nyckel nollställer den.
+   */
+  const [behall, setBehall] = useState<Behall>('forsta')
+  const [egnaBehallna, setEgnaBehallna] = useState<Map<number, number>>(new Map())
   const palettFil = useRef<HTMLInputElement>(null)
   const [meny, setMeny] = useState<MenyLage | null>(null)
   const [laddar, setLaddar] = useState<string | null>(null)
   const [slappOver, setSlappOver] = useState(false)
   const [sokOppen, setSokOppen] = useState(false)
   const [inklistring, setInklistring] = useState<PasteState | null>(null)
-  /** Vilket städverktyg som är öppet, och på vilken kolumn. */
-  const [verktyg, setVerktyg] = useState<{ id: Verktygsnamn; colId: ColumnId } | null>(null)
+  /**
+   * Vilket städverktyg som är öppet, och på vilka kolumner.
+   *
+   * Kolumnerna fångas när verktyget öppnas och inte löpande ur markeringen:
+   * flyttar man markören medan panelen står öppen ska förhandsvisningen ligga
+   * kvar på det man valde.
+   */
+  const [verktyg, setVerktyg] = useState<{ id: Verktygsnamn; colIds: ColumnId[] } | null>(null)
   /**
    * Tabellverktyg i högerpanelen — de som inte hör till en enskild kolumn.
    * Sortering, och i nästa steg filter och dubbletter.
@@ -178,6 +215,20 @@ export function App() {
           ? { sheet: settings.sheet, decimal: settings.decimal }
           : undefined,
       )
+      /*
+       * Samma fil två gånger är ett vanligt misstag när man hämtar exporter
+       * ur flera system. Det sägs som en varning och inte som en fråga —
+       * ibland *vill* man ha två kopior att jämföra, och en dialog som står
+       * i vägen för det är värre än en mening som går att strunta i.
+       * `duplicate-file` fanns redan som varningstyp.
+       */
+      const dubblett = tabs.value.find((t) => sammaInnehall(t.frame, parsed))
+      if (dubblett) {
+        parsed.meta.warnings.push({
+          kind: 'duplicate-file',
+          message: `Innehållet är identiskt med den redan öppna fliken ”${dubblett.frame.name}”.`,
+        })
+      }
       const flik = openFrame(parsed)
       // Filen öppnades från kombineringsvyns "Öppna mallfil…". Den gick samma
       // väg som alla andra filer, genom importdialogen — en mall som lästs med
@@ -189,7 +240,8 @@ export function App() {
       const varningar = parsed.meta.warnings.filter((w) => w.kind !== 'encoding-uncertain')
       notify(
         `${file.name} öppnad — ${formatCount(parsed.rowCount)} rader, ${formatCount(parsed.columns.length)} kolumner.` +
-          (varningar.length > 0
+          (dubblett ? ` Identisk med ”${dubblett.frame.name}”.` : '') +
+          (varningar.length > (dubblett ? 1 : 0)
             ? ` ${varningar.length} sak${varningar.length === 1 ? '' : 'er'} att titta på.`
             : ''),
         { ton: varningar.length > 0 ? 'varning' : 'info' },
@@ -401,6 +453,20 @@ export function App() {
     sattTyp(id, TYPCYKEL[(TYPCYKEL.indexOf(col.type) + 1) % TYPCYKEL.length]!)
   }
 
+  /**
+   * Bredd efter innehållet.
+   *
+   * Går genom `andraBredd` och hamnar därför inte i ångra-historiken —
+   * bredd är utseende, inte data.
+   */
+  const anpassaKolumnbredd = (id: ColumnId) => {
+    if (!frame) return
+    const col = findColumn(frame, id)
+    if (!col) return
+    const bredd = anpassadBredd(col, frame)
+    if (bredd !== null) andraBredd(id, bredd)
+  }
+
   const andraBredd = (id: ColumnId, bredd: number) => {
     if (!frame) return
     const col = findColumn(frame, id)
@@ -433,6 +499,28 @@ export function App() {
 
   const markering = tab?.markering ?? null
   const synligaKolumner = tab ? selectableColumns(tab) : []
+
+  /** Grupperingen rutnätet ritar, eller null när dubblettvyn är av. */
+  const dubblettgrupper = tab?.viewSpec.dubbletter ? (tab.ordning?.grupper ?? null) : null
+
+  /**
+   * Raderna som stannar, en per grupp.
+   *
+   * Förvalet är den första raden i filen, alltså precis vad *Behåll den
+   * första* gör. Att rita förvalet i stället för tomma ringar gör att man ser
+   * vad som händer om man inte rör någonting.
+   */
+  const behallnaRader = useMemo(() => {
+    if (!dubblettgrupper || behall !== 'valda') return null
+    const forsta = new Map<number, number>()
+    for (let r = 0; r < dubblettgrupper.grupp.length; r++) {
+      const g = dubblettgrupper.grupp[r]!
+      if (g !== 0 && !forsta.has(g)) forsta.set(g, r)
+    }
+    const ut = new Set<number>()
+    for (const [g, r] of forsta) ut.add(egnaBehallna.get(g) ?? r)
+    return ut
+  }, [dubblettgrupper, egnaBehallna, behall, rev])
 
   /**
    * Läser flik och markering ur tillståndet i stället för ur renderingens
@@ -510,6 +598,71 @@ export function App() {
     }
   }
 
+  const klippUtMarkering = async () => {
+    await kopieraMarkering()
+    const nu = nuLage()
+    if (!nu || !nu.sel) return
+    const andrade = sattMarkering(nu.tab, nu.sel, '')
+    if (andrade > 0) {
+      notify(`Klippte ut ${celler(andrade)}.`, {
+        atgard: { etikett: 'Ångra', kor: () => undo(nu.tab) },
+      })
+    }
+  }
+
+  /**
+   * Klistrar in från menyn.
+   *
+   * Ctrl+V går genom webbläsarens paste-händelse och kräver ingen
+   * behörighet. En menypost måste läsa urklippet själv, vilket
+   * webbläsaren får neka — och då sägs det rakt ut i stället för att
+   * ingenting händer.
+   */
+  const klistraInFranMeny = async () => {
+    try {
+      const text = await navigator.clipboard.readText()
+      if (text.trim() !== '') forbereKlistraIn(text)
+    } catch {
+      notify('Webbläsaren tillät inte att urklippet lästes. Tryck Ctrl+V i stället.', {
+        ton: 'varning',
+      })
+    }
+  }
+
+  const tomMarkering = () => {
+    const nu = nuLage()
+    if (!nu || !nu.sel) return
+    const andrade = sattMarkering(nu.tab, nu.sel, '')
+    if (andrade > 0) {
+      notify(`Tömde ${celler(andrade)}.`, {
+        atgard: { etikett: 'Ångra', kor: () => undo(nu.tab) },
+      })
+    }
+  }
+
+  /**
+   * Fyller hela markeringen med ett värde.
+   *
+   * `sattMarkering` fanns redan men nåddes bara av Delete, alltså med tomma
+   * strängen. Att skriva samma ortsnamn i fyrtio celler för hand är precis
+   * det slit verktyget finns för.
+   */
+  const fyllMarkering = () => {
+    const nu = nuLage()
+    if (!nu || !nu.sel) return
+    const antal = antalCeller(nu.sel)
+    const svar = window.prompt(`Fyll ${celler(antal)} med värdet`, '')
+    if (svar === null) return
+    const andrade = sattMarkering(nu.tab, nu.sel, svar)
+    if (andrade === 0) {
+      notify('Cellerna hade redan det värdet.')
+      return
+    }
+    notify(`Fyllde ${celler(andrade)}.`, {
+      atgard: { etikett: 'Ångra', kor: () => undo(nu.tab) },
+    })
+  }
+
   const forbereKlistraIn = (text: string) => {
     const nu = nuLage()
     if (!nu || !nu.sel) return
@@ -583,10 +736,14 @@ export function App() {
 
   /* ---------- Städverktyg ---------- */
 
-  const oppnaVerktyg = (namn: Verktygsnamn, colId: ColumnId) => {
-    setActiveColumn(colId)
+  const oppnaVerktyg = (namn: Verktygsnamn, colIds: ColumnId | ColumnId[]) => {
+    const lista = Array.isArray(colIds) ? colIds : [colIds]
+    const forsta = lista[0]
+    if (forsta === undefined) return
+    setActiveColumn(forsta)
     setTabellverktyg(null)
-    setVerktyg({ id: namn, colId })
+    setOversiktOppen(false)
+    setVerktyg({ id: namn, colIds: lista })
   }
 
   const stangVerktyg = () => {
@@ -631,14 +788,182 @@ export function App() {
     oppnaTabellverktyg('filter')
   }
 
-  const taBortDubbletter = (nyckel: Dubblettnyckel, behall: 'forsta' | 'sista') => {
+  /* ---------- Menyer ---------- */
+
+  /**
+   * Verktygen som menyposter, det passande först.
+   *
+   * Vilka som passar avgörs av innehållet — se `innehallsprofil` — och räknas
+   * på den kolumn man klickade i. De övriga göms inte, de hamnar under *Fler
+   * verktyg*.
+   *
+   * `kolumner` är hela markeringen med den klickade först. Datum, tal,
+   * telefon och sök & ersätt kör på allihop; de verktyg som skapar nya
+   * kolumner tar den första.
+   */
+  const verktygsposter = (kolumner: Column[], klickad?: Column): (MenyPost | 'avdelare')[] => {
+    const col = klickad ?? kolumner[0]!
+    const ider = kolumner.map((c) => c.id)
+    const flera = kolumner.length > 1
+    const ordning = ordnaVerktyg(innehallsprofil(col))
+    const post = (namn: Verktygsnamn, etikett: string, skal?: string): MenyPost => {
+      // Bara de omskrivande verktygen tar hela markeringen. De som skapar
+      // kolumner arbetar på den man klickade i — tolv nya kolumner ur en
+      // markering är sällan vad någon menade.
+      const manga = flera && FLERKOLUMNSVERKTYG.has(namn)
+      return {
+        etikett: manga
+          ? `${etikett.replace(/…$/, '')} i ${kolumnerText(kolumner.length)}…`
+          : etikett,
+        skal,
+        kor: () => oppnaVerktyg(namn, manga ? ider : [col.id]),
+      }
+    }
+    return [
+      ...ordning.passande.map((p) => post(p.post.namn, p.post.etikett, p.skal)),
+      {
+        etikett: 'Fler verktyg',
+        undermeny: ordning.ovriga.map((v) => post(v.namn, v.etikett)),
+      },
+    ]
+  }
+
+  const radmenyposter = (): (MenyPost | 'avdelare')[] =>
+    radMeny({
+      infogaFore: () => {
+        const nu = nuLage()
+        if (nu?.sel) infogaRader(nu.tab, nu.sel.fokusRad, 1, false)
+      },
+      infogaEfter: () => {
+        const nu = nuLage()
+        if (nu?.sel) infogaRader(nu.tab, nu.sel.fokusRad, 1, true)
+      },
+      duplicera: () => {
+        const nu = nuLage()
+        if (nu?.sel) dupliceraRader(nu.tab, selectedRows(nu.tab, nu.sel))
+      },
+      taBort: taBortMarkeradeRader,
+    })
+
+  const kolumnmenyposter = (id: ColumnId): (MenyPost | 'avdelare')[] => {
+    if (!frame || !tab) return []
+    const col = findColumn(frame, id)
+    if (!col) return []
+    return kolumnMeny(id, {
+      dopOm: dopOmKolumn,
+      duplicera: dupliceraKolumn,
+      vaxlaDold,
+      infogaFore: (i) => infogaKolumn(columnIndex(frame, i)),
+      infogaEfter: (i) => infogaKolumn(columnIndex(frame, i) + 1),
+      flyttaForst: (i) => flyttaKolumn(i, 0),
+      flyttaSist: (i) => flyttaKolumn(i, frame.columns.length - 1),
+      anpassaBredd: (i) => anpassaKolumnbredd(i),
+      visaOgiltiga,
+      verktyg: verktygsposter([col]),
+      filtrera: (i) => filtreraKolumn(i),
+      sortera: (i, riktning) => sattSortering(tab, [{ colId: i, riktning }]),
+      laggSortering: (i) => vaxlaSortering(tab, i, true),
+      sortriktning: tab.viewSpec.sortering?.find((n) => n.colId === id)?.riktning ?? null,
+      taBort: taBortKolumn,
+      dold: col.hidden,
+    })
+  }
+
+  /**
+   * Cellmenyn.
+   *
+   * Kortare än kolumnmenyn med flit. Kolumnens sällanåtgärder — flytta
+   * först, infoga tom kolumn, byt namn — hör hemma på rubriken. Det är hela
+   * skillnaden mellan en meny som hjälper och en som måste läsas.
+   */
+  const cellmenyposter = (rad: number, kol: number): (MenyPost | 'avdelare')[] => {
+    const nu = nuLage()
+    if (!nu) return []
+    const col = nu.kolumner[kol]
+    const fysisk = nu.frame.view[rad]
+    if (!col || fysisk === undefined) return []
+    const varde = getCell(col, fysisk)
+    const flera = nu.sel !== null && antalCeller(nu.sel) > 1
+    /*
+     * De omskrivande verktygen körs på hela markeringens kolumner, i
+     * rutnätets ordning. De kolumnskapande arbetar på den man klickade i.
+     */
+    const r = nu.sel ? rect(nu.sel) : null
+    const verktygskolumner = r ? nu.kolumner.slice(r.k1, r.k2 + 1) : [col]
+
+    return [
+      { etikett: 'Klipp ut', genvag: 'Ctrl+X', kor: () => void klippUtMarkering() },
+      { etikett: 'Kopiera', genvag: 'Ctrl+C', kor: () => void kopieraMarkering() },
+      { etikett: 'Klistra in', genvag: 'Ctrl+V', kor: () => void klistraInFranMeny() },
+      'avdelare',
+      {
+        etikett: flera ? 'Fyll markeringen med ett värde…' : 'Skriv ett värde…',
+        kor: fyllMarkering,
+      },
+      { etikett: 'Fyll nedåt', genvag: 'Ctrl+D', kor: () => {
+        const n = nuLage()
+        if (!n?.sel) return
+        const andrade = fyllNedat(n.tab, n.sel)
+        if (andrade > 0) {
+          notify(`Fyllde nedåt i ${celler(andrade)}.`, {
+            atgard: { etikett: 'Ångra', kor: () => undo(n.tab) },
+          })
+        }
+      } },
+      { etikett: 'Töm', genvag: 'Delete', kor: tomMarkering },
+      'avdelare',
+      {
+        etikett: `Filtrera på ”${kort(varde)}”`,
+        inaktiv: varde === '' ? 'Cellen är tom. Filtrera på kolumnen i stället.' : undefined,
+        kor: () => filtreraKolumn(col.id, { operator: 'iLista', varden: [varde] }),
+      },
+      { etikett: `Sortera på ${col.name}`, kor: () => vaxlaSortering(nu.tab, col.id, false) },
+      'avdelare',
+      ...verktygsposter(verktygskolumner, col),
+      'avdelare',
+      { etikett: 'Radens åtgärder', undermeny: radmenyposter() },
+    ]
+  }
+
+  /**
+   * Gör filtrets urval permanent.
+   *
+   * Filtret rensas efteråt: en vy som inte längre döljer någonting ser
+   * trasig ut, precis som dubblettvyn utan dubbletter kvar. Raderna går att
+   * ångra; vyn ligger utanför historiken, som all annan vy-inställning.
+   */
+  const tillampaUrval = (behall: boolean) => {
+    const nu = nuLage()
+    if (!nu) return
+    const synliga = new Set(nu.frame.view)
+    const bort: number[] = []
+    for (let r = 0; r < nu.frame.rowCount; r++) {
+      if (synliga.has(r) !== behall) bort.push(r)
+    }
+    if (bort.length === 0) {
+      notify(behall ? 'Alla rader visas redan.' : 'Det finns inga rader att ta bort.')
+      return
+    }
+    taBortRader(nu.tab, bort)
+    sattFilter(nu.tab, TOMT_FILTER)
+    setTabellverktyg(null)
+    notify(
+      behall
+        ? `Behöll ${raderText(nu.frame.rowCount)} och tog bort ${raderText(bort.length)}.`
+        : `Tog bort ${raderText(bort.length)}.`,
+      { atgard: { etikett: 'Ångra', kor: () => undo(nu.tab) } },
+    )
+  }
+
+  const taBortDubbletter = (nyckel: Dubblettnyckel, hur: Behall) => {
     const nu = nuLage()
     if (!nu || !frame) return
     const grupper = hittaDubbletter(frame, nyckel)
-    const bort = overflodigaRader(grupper, behall)
+    const bort = overflodigaRader(grupper, hur === 'valda' ? 'forsta' : hur, egnaBehallna)
     if (bort.length === 0) return
     taBortRader(nu.tab, bort)
     sattDubbletter(nu.tab, null)
+    setEgnaBehallna(new Map())
     setTabellverktyg(null)
     notify(`Tog bort ${raderText(bort.length)} som var dubbletter.`, {
       atgard: { etikett: 'Ångra', kor: () => undo(nu.tab) },
@@ -660,6 +985,24 @@ export function App() {
   }, [tab?.id])
 
   /* ---------- Tangentbord ---------- */
+
+  /**
+   * Lägen som tangentbordshanteraren måste se *direkt*.
+   *
+   * Hanteraren registreras i en effekt, och effekter körs efter ritningen.
+   * Paletten kan alltså stå på skärmen medan hanteraren fortfarande bär det
+   * gamla värdet — och då gick Escape till rutnätet, som inte gör någonting
+   * med den, i stället för till paletten. Lokalt hann effekten alltid före;
+   * i CI, med två arbetare på en långsammare maskin, gjorde den det inte.
+   *
+   * Ref:en skrivs under renderingen och är därför sann i samma ögonblick som
+   * paletten syns. Samma resonemang gäller översikten och sökraden: de har
+   * inte visat felet, men de bygger på samma antagande.
+   */
+  const lagen = useRef({ palett: false, oversikt: false, sok: false })
+  lagen.current.palett = palettOppen
+  lagen.current.oversikt = oversiktOppen
+  lagen.current.sok = sokOppen
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -684,7 +1027,7 @@ export function App() {
        * efteråt om man klickat någon annanstans. En Escape som ibland inte
        * stänger är värre än ingen Escape alls.
        */
-      if (palettOppen) {
+      if (lagen.current.palett) {
         if (e.key === 'Escape') {
           e.preventDefault()
           setPalettOppen(false)
@@ -697,7 +1040,7 @@ export function App() {
       // Med en egen vy öppen är rutnätet inte det man tittar på. Ctrl+Z hade
       // annars ångrat i den aktiva fliken medan rättningen gjordes i den
       // andra, och piltangenterna hade flyttat en markering ingen ser.
-      if (verkstad.value || kombineraOppen.value) return
+      if (verkstad.value || kombineraOppen.value || lagen.current.oversikt) return
       const { tab, frame, kolumner: synligaKolumner, sel: markering } = nu
 
       if (mod) {
@@ -785,8 +1128,22 @@ export function App() {
             }
           }
           break
+        case 'ContextMenu':
+        case 'F10':
+          // Menytangenten, och Skift+F10 för tangentbord som saknar den.
+          // Menyn öppnas vid fokuscellen, inte vid pekaren.
+          if (markering && (e.key === 'ContextMenu' || e.shiftKey)) {
+            e.preventDefault()
+            const ruta = document.querySelector('.rutnat__cell--fokus')?.getBoundingClientRect()
+            setMeny({
+              x: ruta ? ruta.left : 120,
+              y: ruta ? ruta.bottom : 120,
+              poster: cellmenyposter(markering.fokusRad, markering.fokusKol),
+            })
+          }
+          break
         case 'Escape':
-          if (sokOppen) {
+          if (lagen.current.sok) {
             setSokOppen(false)
             clearViewSpec(tab)
           }
@@ -800,7 +1157,7 @@ export function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [tab, frame, markering, synligaKolumner.length, sokOppen, palettOppen, rev])
+  }, [tab, frame, markering, synligaKolumner.length, sokOppen, palettOppen, oversiktOppen, rev])
 
   /* ---------- Urklipp och släpp ---------- */
 
@@ -853,8 +1210,14 @@ export function App() {
 
   const aktivKolumn =
     frame && tab?.activeColumnId ? (findColumn(frame, tab.activeColumnId) ?? null) : null
-  // Kolumnen kan ha tagits bort medan verktyget stod öppet; då stängs det.
-  const verktygKolumn = frame && verktyg ? (findColumn(frame, verktyg.colId) ?? null) : null
+  // En kolumn kan ha tagits bort medan verktyget stod öppet; den faller då
+  // bort ur listan, och försvinner den sista stängs panelen.
+  const verktygKolumner =
+    frame && verktyg
+      ? verktyg.colIds
+          .map((id) => findColumn(frame, id))
+          .filter((c): c is Column => c !== undefined)
+      : []
   const begransad = viewIsLimited(tab)
   /*
    * Kolumnen palettens kommandon gäller.
@@ -871,7 +1234,7 @@ export function App() {
   // tabell man inte längre tittar på, och skulle visa tal som inte gäller.
   const iVerkstaden = verkstad.value !== null
   const iKombinera = kombineraOppen.value
-  const egenVy = iVerkstaden || iKombinera
+  const egenVy = iVerkstaden || iKombinera || oversiktOppen
 
   return (
     <div class="app">
@@ -1027,6 +1390,16 @@ export function App() {
           onFiler={oppnaFiler}
           onExempelmall={oppnaExempelmall}
         />
+      ) : oversiktOppen && frame && tab ? (
+        <Oversikt
+          frame={frame}
+          revision={rev}
+          onValjKolumn={setActiveColumn}
+          onSetType={sattTyp}
+          onVisaOgiltiga={visaOgiltiga}
+          onVerktyg={oppnaVerktyg}
+          onStang={() => setOversiktOppen(false)}
+        />
       ) : iVerkstaden ? (
         <Verkstad
           onSlaIhop={(resultat, text) => {
@@ -1038,7 +1411,7 @@ export function App() {
       ) : frame && tab ? (
         <div
           class={`arbetsyta arbetsyta--med-inspektor${
-            verktygKolumn ? ' arbetsyta--med-verktyg' : ''
+            verktygKolumner.length > 0 ? ' arbetsyta--med-verktyg' : ''
           }`}
         >
           <ColumnPanel
@@ -1050,6 +1423,7 @@ export function App() {
             onMove={flyttaKolumn}
             onInsert={() => infogaKolumn()}
             onUndoThrough={(i) => undoThrough(tab, i)}
+            onOversikt={() => setOversiktOppen(true)}
           />
           <VirtualGrid
             frame={frame}
@@ -1058,37 +1432,28 @@ export function App() {
             viewSpec={tab.viewSpec}
             forhandsvisning={tab.forhandsvisning}
             sortering={tab.viewSpec.sortering ?? []}
-            grupper={tab.viewSpec.dubbletter ? (tab.ordning?.grupper?.grupp ?? null) : null}
+            grupper={dubblettgrupper}
+            behallnaRader={behallnaRader}
+            onBehall={
+              behall === 'valda' && dubblettgrupper
+                ? (fysisk) => {
+                    const g = dubblettgrupper.grupp[fysisk] ?? 0
+                    if (g === 0) return
+                    setEgnaBehallna((nu) => new Map(nu).set(g, fysisk))
+                  }
+                : null
+            }
             markering={markering}
             redigerar={tab.redigerar}
             onSelectColumn={setActiveColumn}
-            onOpenColumnMenu={(id, anchor) =>
-              setMeny({
-                x: anchor.left,
-                y: anchor.bottom + 4,
-                poster: kolumnMeny(id, {
-                  dopOm: dopOmKolumn,
-                  duplicera: dupliceraKolumn,
-                  vaxlaDold,
-                  infogaFore: (i) => infogaKolumn(columnIndex(frame, i)),
-                  infogaEfter: (i) => infogaKolumn(columnIndex(frame, i) + 1),
-                  flyttaForst: (i) => flyttaKolumn(i, 0),
-                  flyttaSist: (i) => flyttaKolumn(i, frame.columns.length - 1),
-                  visaOgiltiga,
-                  verktyg: oppnaVerktyg,
-                  filtrera: (i) => filtreraKolumn(i),
-                  sortera: (i, riktning) =>
-                    sattSortering(tab, [{ colId: i, riktning }]),
-                  laggSortering: (i) => vaxlaSortering(tab, i, true),
-                  sortriktning:
-                    tab.viewSpec.sortering?.find((n) => n.colId === id)?.riktning ?? null,
-                  taBort: taBortKolumn,
-                  dold: findColumn(frame, id)?.hidden ?? false,
-                }),
-              })
+            onOpenColumnMenu={(id, x, y) => setMeny({ x, y, poster: kolumnmenyposter(id) })}
+            onOpenCellMenu={(rad, kol, x, y) =>
+              setMeny({ x, y, poster: cellmenyposter(rad, kol) })
             }
+            onOpenRowMenu={(x, y) => setMeny({ x, y, poster: radmenyposter() })}
             onMoveColumn={flyttaKolumn}
             onResizeColumn={andraBredd}
+            onAutofit={anpassaKolumnbredd}
             onCycleType={cyklaTyp}
             onSortera={(id, lagg) => vaxlaSortering(tab, id, lagg)}
             onSelect={(sel) => setSelection(tab, sel)}
@@ -1106,6 +1471,8 @@ export function App() {
               filter={tab.viewSpec.filter ?? TOMT_FILTER}
               startkolumn={tab.activeColumnId}
               onFilter={(f) => sattFilter(tab, f)}
+              onTaBortSynliga={() => tillampaUrval(false)}
+              onBehallSynliga={() => tillampaUrval(true)}
               onStang={() => setTabellverktyg(null)}
             />
           ) : tabellverktyg === 'dubbletter' ? (
@@ -1113,7 +1480,13 @@ export function App() {
               frame={frame}
               revision={rev}
               nyckel={tab.viewSpec.dubbletter ?? null}
-              onNyckel={(n) => sattDubbletter(tab, n)}
+              onNyckel={(n) => {
+                setEgnaBehallna(new Map())
+                sattDubbletter(tab, n)
+              }}
+              behall={behall}
+              onBehall={setBehall}
+              egnaVal={egnaBehallna.size}
               onTaBort={taBortDubbletter}
               onStang={() => setTabellverktyg(null)}
             />
@@ -1126,10 +1499,10 @@ export function App() {
               onSorteraOm={() => sorteraOm(tab)}
               onStang={() => setTabellverktyg(null)}
             />
-          ) : verktygKolumn && verktyg ? (
+          ) : verktygKolumner.length > 0 && verktyg ? (
             <Verktyg
               namn={verktyg.id}
-              col={verktygKolumn}
+              kolumner={verktygKolumner}
               frame={frame}
               dataRevision={tab.dataRevision}
               visaBara={tab.viewSpec.visaBara}
@@ -1138,10 +1511,13 @@ export function App() {
               onTillampa={(f) => {
                 const antal = tillampaForhandsvisning(tab, f)
                 stangVerktyg()
+                const forsta = f[0]
+                if (!forsta) return
+                const nya = f.reduce((n, x) => n + x.nyaKolumner.length, 0)
                 notify(
-                  f.nyaKolumner.length === 0
-                    ? `${f.etikett} — ${celler(antal)} skrevs om.`
-                    : `${f.etikett} — ny kolumn med ${celler(antal)} ifyllda.`,
+                  nya === 0
+                    ? `${forsta.etikett}${f.length > 1 ? ` i ${kolumnerText(f.length)}` : ''} — ${celler(antal)} skrevs om.`
+                    : `${forsta.etikett} — ${kolumnerText(nya)} med ${celler(antal)} ifyllda.`,
                   { atgard: { etikett: 'Ångra', kor: () => undo(tab) } },
                 )
               }}
@@ -1186,18 +1562,7 @@ export function App() {
           setSokOppen(false)
           clearViewSpec(tab)
         }}
-        onRadmeny={(x, y) =>
-          setMeny({
-            x,
-            y,
-            poster: radMeny({
-              infogaFore: () => tab && markering && infogaRader(tab, markering.fokusRad, 1, false),
-              infogaEfter: () => tab && markering && infogaRader(tab, markering.fokusRad, 1, true),
-              duplicera: () => tab && markering && dupliceraRader(tab, selectedRows(tab, markering)),
-              taBort: taBortMarkeradeRader,
-            }),
-          })
-        }
+        onRadmeny={(x, y) => setMeny({ x, y, poster: radmenyposter() })}
       />
       )}
 
@@ -1234,6 +1599,7 @@ export function App() {
               dubbletter: () => oppnaTabellverktyg('dubbletter'),
               slaIhop: () => setSlaIhopOppen(true),
               kombinera: oppnaKombinera,
+              oversikt: () => setOversiktOppen(true),
               visaAllaRader: () => {
                 if (!tab) return
                 setSokOppen(false)
@@ -1394,8 +1760,10 @@ function kolumnMeny(
     infogaEfter: (id: ColumnId) => void
     flyttaForst: (id: ColumnId) => void
     flyttaSist: (id: ColumnId) => void
+    anpassaBredd: (id: ColumnId) => void
     visaOgiltiga: (id: ColumnId) => void
-    verktyg: (namn: Verktygsnamn, id: ColumnId) => void
+    /** Verktygen, färdigsorterade efter vad kolumnen innehåller. */
+    verktyg: (MenyPost | 'avdelare')[]
     filtrera: (id: ColumnId) => void
     sortera: (id: ColumnId, riktning: Riktning) => void
     laggSortering: (id: ColumnId) => void
@@ -1417,6 +1785,7 @@ function kolumnMeny(
     'avdelare',
     { etikett: 'Flytta först', kor: () => handlers.flyttaForst(id) },
     { etikett: 'Flytta sist', kor: () => handlers.flyttaSist(id) },
+    { etikett: 'Anpassa bredden efter innehållet', kor: () => handlers.anpassaBredd(id) },
     'avdelare',
     {
       etikett: 'Sortera A→Ö',
@@ -1431,11 +1800,9 @@ function kolumnMeny(
     { etikett: 'Lägg till som sorteringsnivå', kor: () => handlers.laggSortering(id) },
     'avdelare',
     { etikett: 'Filtrera på kolumnen…', kor: () => handlers.filtrera(id) },
-    ...VERKTYG.map((v): MenyPost => ({
-      etikett: v.etikett,
-      kor: () => handlers.verktyg(v.namn, id),
-    })),
     { etikett: 'Visa rader som inte går att tolka', kor: () => handlers.visaOgiltiga(id) },
+    'avdelare',
+    ...handlers.verktyg,
     'avdelare',
     { etikett: 'Ta bort kolumnen', fara: true, kor: () => handlers.taBort(id) },
   ]

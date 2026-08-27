@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks'
 import { Resultat, Verktygspanel } from './Verktygspanel.js'
 import { Notis, Val } from './parts.js'
 import type { Column } from '../core/types.js'
-import { codeCounts } from '../core/frame/column.js'
+import { samladOrdbok } from '../core/frame/column.js'
 import {
   TELEFONFORMAT,
   inventeraTelefon,
@@ -10,8 +10,9 @@ import {
   tolkaTelefon,
   type Telefonformat,
 } from '../core/ops/phone.js'
-import { beraknaForhandsvisning, type Forhandsvisning } from '../state/preview.js'
+import { beraknaForhandsvisning, sammanfatta, type Forhandsvisning } from '../state/preview.js'
 import { celler, formatCount } from '../core/locale/sv.js'
+import { kolumnrubrik } from './verktyg.js'
 
 type Feltillstand = 'behall' | 'tom' | 'markera'
 
@@ -29,48 +30,62 @@ const LANDSNUMMER = [
 ] as const
 
 export function PhoneTool(props: {
-  col: Column
+  kolumner: Column[]
   dataRevision: number
   visaBara: 'andrade' | 'problem' | undefined
   onVisaBara: (v: 'andrade' | 'problem' | undefined) => void
-  onForhandsvisning: (forh: Forhandsvisning | null) => void
-  onTillampa: (forh: Forhandsvisning) => void
+  onForhandsvisning: (forh: Forhandsvisning[] | null) => void
+  onTillampa: (forh: Forhandsvisning[]) => void
   onStang: () => void
 }) {
-  const { col } = props
+  const { kolumner } = props
+  /*
+   * Kolumnlistan är en ny array vid varje omritning, medan kolumnobjekten
+   * är desamma. Att beroendeställa på arrayen skulle räkna om
+   * förhandsvisningen varje gång, och effekten som skriver den till fliken
+   * skulle rita om — en slinga. Nyckeln är identiteterna, inte arrayen.
+   */
+  const nyckel = kolumner.map((c) => c.id).join(',')
   const [format, setFormat] = useState<Telefonformat>('e164')
   const [land, setLand] = useState<(typeof LANDSNUMMER)[number]['varde']>('46')
   const [onError, setOnError] = useState<Feltillstand>('behall')
 
   const inst = { landsnummer: Number(land), format, onError }
 
-  const antal = useMemo(() => codeCounts(col), [col, props.dataRevision])
+  // Inventeringen räknar celler över alla valda kolumner.
+  const { varden, vikter } = useMemo(
+    () => samladOrdbok(kolumner),
+    [nyckel, props.dataRevision],
+  )
   const inv = useMemo(
-    () => inventeraTelefon(col.dict, inst, Array.from(antal)),
-    [col, props.dataRevision, antal, land, format],
+    () => inventeraTelefon(varden, inst, vikter),
+    [varden, vikter, land, format],
   )
 
-  const forh = useMemo(
+  const forhLista = useMemo(
     () =>
-      beraknaForhandsvisning(col, {
-        etikett: `Normaliserade telefonnummer i ”${col.name}”`,
-        kind: 'phone',
-        profil: { typ: 'telefon', kolumn: col.name, inst },
-        fn: telefonTransform(inst),
-        arProblem: (v) => tolkaTelefon(v, inst).siffror === null,
-      }),
-    [col, props.dataRevision, land, format, onError],
+      kolumner.map((col) =>
+        beraknaForhandsvisning(col, {
+          etikett: `Normaliserade telefonnummer i ”${col.name}”`,
+          kind: 'phone',
+          profil: { typ: 'telefon', kolumn: col.name, inst },
+          fn: telefonTransform(inst),
+          arProblem: (v) => tolkaTelefon(v, inst).siffror === null,
+        }),
+      ),
+    [nyckel, props.dataRevision, land, format, onError],
   )
+  const forh = sammanfatta(forhLista)
 
   useEffect(() => {
-    props.onForhandsvisning(forh)
-  }, [forh])
+    props.onForhandsvisning(forhLista)
+  }, [forhLista])
   useEffect(() => () => props.onForhandsvisning(null), [])
 
   return (
     <Verktygspanel
       titel="Telefon"
-      underrubrik={col.name}
+      underrubrik={kolumnrubrik(kolumner)}
       onStang={props.onStang}
       fot={
         <>
@@ -81,9 +96,9 @@ export function PhoneTool(props: {
             class="knapp knapp--primar"
             disabled={forh.andrade === 0}
             title={forh.andrade === 0 ? 'Ingenting skulle ändras.' : undefined}
-            onClick={() => props.onTillampa(forh)}
+            onClick={() => props.onTillampa(forhLista)}
           >
-            Tillämpa
+            {kolumner.length > 1 ? `Tillämpa på ${kolumner.length} kolumner` : 'Tillämpa'}
           </button>
         </>
       }

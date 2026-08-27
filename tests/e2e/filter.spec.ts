@@ -137,3 +137,38 @@ test('inspektörens vanligaste värden filtrerar fram sitt värde', async ({ pag
   await expect(page.locator('.filterrad .chip')).toContainText('Status är Aktiv')
   await expect(page.locator('.statusrad')).toContainText('10 av 16 rader')
 })
+
+test('filtret går att vända och visa det som döljs', async ({ page }) => {
+  await oppnaExempel(page)
+  await oppnaFilter(page)
+  await page.getByRole('button', { name: '＋ Lägg till regel' }).click()
+  await sattRegel(page, 0, 'Ort', 'är', 'Malmö')
+  await expect(page.locator('.statusrad')).toContainText('2 av 16 rader')
+
+  await page.getByLabel('Visa i stället de rader filtret döljer').check()
+  await expect(page.locator('.statusrad')).toContainText('14 av 16 rader')
+  await expect(page.locator('.filterrad')).toContainText('vänt')
+})
+
+test('längdoperatorn filtrerar på antal tecken', async ({ page }) => {
+  await oppnaExempel(page)
+  await oppnaFilter(page)
+  await page.getByRole('button', { name: '＋ Lägg till regel' }).click()
+  await sattRegel(page, 0, 'Ort', 'är längre än', '8')
+  await expect(page.locator('.filterrad .chip')).toContainText('Ort är längre än 8 tecken')
+  await expect(page.getByRole('gridcell', { name: 'Skellefteå', exact: true })).toBeVisible()
+  await expect(page.getByRole('gridcell', { name: 'Lund', exact: true })).toHaveCount(0)
+})
+
+test('behåll bara de rader som visas gör urvalet permanent', async ({ page }) => {
+  await oppnaExempel(page)
+  await oppnaFilter(page)
+  await page.getByRole('button', { name: '＋ Lägg till regel' }).click()
+  await sattRegel(page, 0, 'Ort', 'är', 'Malmö')
+  await page.getByRole('button', { name: /Behåll bara de 2 rader/ }).click()
+
+  await expect(page.locator('.statusrad')).toContainText('2 rader')
+  await expect(page.locator('.filterrad')).toHaveCount(0)
+  await page.locator('.toast__atgard').click()
+  await expect(page.locator('.statusrad')).toContainText('16 rader')
+})

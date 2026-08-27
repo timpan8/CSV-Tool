@@ -1,55 +1,12 @@
 import { useMemo } from 'preact/hooks'
 import type { Column, ColumnType, Frame } from '../core/types.js'
-import { filledCount, valueCounts } from '../core/frame/column.js'
-import { TYPE_LABELS, violatesType } from '../core/infer.js'
+import { kolumnstatistik } from '../core/frame/statistik.js'
+import { TYPE_LABELS } from '../core/infer.js'
 import { formatCount } from '../core/locale/sv.js'
-import { VERKTYG, type Verktygsnamn } from './verktyg.jsx'
+import { innehallsprofil } from '../core/frame/innehall.js'
+import { ordnaVerktyg, type Verktygsnamn } from './verktyg.jsx'
 
 const TYPER: ColumnType[] = ['text', 'number', 'date', 'email', 'bool']
-
-interface Statistik {
-  totalt: number
-  ifyllda: number
-  tomma: number
-  ogiltiga: number
-  unika: number
-  topp: { varde: string; antal: number }[]
-}
-
-/**
- * All statistik räknas ur ordboken.
- *
- * Antal unika värden, vanligaste värden och andelen ogiltiga är en enda
- * räknarslinga över raderna plus ett svep över de unika värdena — inte en
- * strängjämförelse per cell.
- */
-function berakna(col: Column, frame: Frame): Statistik {
-  const counts = valueCounts(col, frame.view)
-  const totalt = frame.view.length
-  const ifyllda = filledCount(col, frame.view)
-
-  let unika = 0
-  let ogiltiga = 0
-  const poster: { varde: string; antal: number }[] = []
-  for (let d = 1; d < col.dict.length; d++) {
-    const antal = counts[d]!
-    if (antal === 0) continue
-    unika += 1
-    const varde = col.dict[d]!
-    if (violatesType(varde, col.type)) ogiltiga += antal
-    poster.push({ varde, antal })
-  }
-  poster.sort((a, b) => b.antal - a.antal)
-
-  return {
-    totalt,
-    ifyllda,
-    tomma: totalt - ifyllda,
-    ogiltiga,
-    unika,
-    topp: poster.slice(0, 8),
-  }
-}
 
 export function Inspector(props: {
   frame: Frame
@@ -66,11 +23,21 @@ export function Inspector(props: {
 }) {
   const { column, frame } = props
   const stat = useMemo(
-    () => (column ? berakna(column, frame) : null),
+    () => (column ? kolumnstatistik(column, frame) : null),
     [column, frame, props.revision],
   )
+  /*
+   * Vilka verktyg som föreslås kommer ur innehållet, inte ur typen.
+   * `foreslasFor` fanns här förut och kunde inte uttrycka det viktigaste
+   * fallet: en telefonkolumn, som inte har någon egen kolumntyp alls.
+   */
+  const ordning = useMemo(
+    () => (column ? ordnaVerktyg(innehallsprofil(column)) : null),
+    [column, props.revision],
+  )
+  const forstaSkalet = ordning?.passande[0]?.skal ?? null
 
-  if (!column || !stat) {
+  if (!column || !stat || !ordning) {
     return (
       <div class="panel panel--hoger">
         <div class="panel__rubrik">Kolumn</div>
@@ -174,16 +141,25 @@ export function Inspector(props: {
         <div class="insp__grupp">
           <span class="falt__etikett">Städa kolumnen</span>
           <div class="insp__knappar" style={{ marginTop: 6 }}>
-            {VERKTYG.map((v) => (
+            {ordning.passande.map(({ post, skal }) => (
               <button
-                key={v.namn}
-                class={`knapp${v.foreslasFor.includes(column.type) ? ' knapp--primar' : ''}`}
-                onClick={() => props.onVerktyg(v.namn)}
+                key={post.namn}
+                class="knapp knapp--primar"
+                title={skal}
+                onClick={() => props.onVerktyg(post.namn)}
               >
-                {v.etikett}
+                {post.etikett}
+              </button>
+            ))}
+            {ordning.ovriga.map((post) => (
+              <button key={post.namn} class="knapp" onClick={() => props.onVerktyg(post.namn)}>
+                {post.etikett}
               </button>
             ))}
           </div>
+          {forstaSkalet && (
+            <p class="insp__skal">{forstaSkalet}</p>
+          )}
         </div>
 
         <div class="insp__grupp" style={{ borderBottom: 0 }}>

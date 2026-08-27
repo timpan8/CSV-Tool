@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { dismiss, toasts } from '../state/store.js'
 
 export function Modal(props: {
@@ -43,7 +43,184 @@ export interface MenyPost {
   fara?: boolean
   /** Markerar posten som det nuvarande valet, t.ex. sorteringens riktning. */
   aktiv?: boolean
-  kor: () => void
+  /** Kort förklaring efter etiketten: ”14 av 16 ser ut som adresser”. */
+  skal?: string
+  /** Undermeny. Posten öppnar den i stället för att köra något. */
+  undermeny?: (MenyPost | 'avdelare')[]
+  /** Skäl till att posten inte går att välja. Visas som förklaring. */
+  inaktiv?: string
+  kor?: () => void
+}
+
+/** Postens knappar på den här nivån, i DOM-ordning. */
+function knapparna(container: HTMLElement): HTMLButtonElement[] {
+  return Array.from(
+    container.querySelectorAll<HTMLButtonElement>(
+      ':scope > .meny__post, :scope > .meny__grupp > .meny__post',
+    ),
+  )
+}
+
+function flyttaFokus(container: HTMLElement, steg: number): void {
+  const knappar = knapparna(container)
+  if (knappar.length === 0) return
+  const nu = knappar.indexOf(document.activeElement as HTMLButtonElement)
+  const nasta =
+    nu === -1
+      ? steg > 0
+        ? 0
+        : knappar.length - 1
+      : (nu + steg + knappar.length) % knappar.length
+  knappar[nasta]!.focus()
+}
+
+/**
+ * En menynivå.
+ *
+ * Menyn tar fokus när den öppnas. Utan det skulle piltangenterna gå till
+ * rutnätet bakom och flytta markeringen medan menyn står öppen — och
+ * tangentbordet är hela poängen med att menyn också går att nå med
+ * menytangenten.
+ */
+function Niva(props: {
+  poster: (MenyPost | 'avdelare')[]
+  onStang: () => void
+  style?: Record<string, string>
+  /** Sant för en undermeny: placeras intill sin förälder i stället för fritt. */
+  under?: boolean
+  /** Flytta fokus hit när nivån öppnas. */
+  autofokus?: boolean
+  /** Stäng den här nivån och lämna fokus till föräldern. */
+  onTillbaka?: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [oppen, setOppen] = useState<number | null>(null)
+  const [oppnadMedTangent, setOppnadMedTangent] = useState(false)
+  const [atVanster, setAtVanster] = useState(false)
+
+  useEffect(() => {
+    if (props.autofokus !== false) knapparna(ref.current!)[0]?.focus()
+  }, [])
+
+  // En undermeny nära högerkanten fälls ut åt vänster i stället. Mätningen
+  // sker efter monteringen, eftersom bredden beror på postens text.
+  useLayoutEffect(() => {
+    if (!props.under) return
+    const el = ref.current
+    if (!el) return
+    setAtVanster(el.getBoundingClientRect().right > window.innerWidth - 8)
+  }, [props.under])
+
+  return (
+    <div
+      class={`meny${props.under ? ' meny--under' : ''}${atVanster ? ' meny--vanster' : ''}`}
+      ref={ref}
+      style={props.style}
+      role="menu"
+      onKeyDown={(e) => {
+        // Menyns tangenter är menyns. Utan stoppet flyttar rutnätet
+        // markeringen bakom en öppen meny.
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault()
+          e.stopPropagation()
+          flyttaFokus(ref.current!, e.key === 'ArrowDown' ? 1 : -1)
+        } else if (e.key === 'ArrowLeft' && props.onTillbaka) {
+          e.preventDefault()
+          e.stopPropagation()
+          props.onTillbaka()
+        } else if (e.key === 'Escape') {
+          e.preventDefault()
+          e.stopPropagation()
+          if (props.onTillbaka) props.onTillbaka()
+          else props.onStang()
+        } else if (e.key !== 'Tab') {
+          e.stopPropagation()
+        }
+      }}
+    >
+      {props.poster.map((post, i) => {
+        if (post === 'avdelare') return <div class="meny__avdelare" key={`a${i}`} />
+
+        const knapp = (
+          <button
+            key={post.etikett}
+            class={`meny__post${post.fara ? ' meny__post--fara' : ''}${
+              post.aktiv ? ' meny__post--aktiv' : ''
+            }${post.skal ? ' meny__post--medskal' : ''}${
+              post.inaktiv ? ' meny__post--inaktiv' : ''
+            }`}
+            role={post.aktiv === undefined ? 'menuitem' : 'menuitemradio'}
+            aria-checked={post.aktiv === undefined ? undefined : post.aktiv}
+            aria-haspopup={post.undermeny ? 'menu' : undefined}
+            aria-expanded={post.undermeny ? oppen === i : undefined}
+            /*
+             * En avstängd post står kvar och går att nå med piltangenterna.
+             * Skälet är det man behövde veta — `disabled` skulle dölja både
+             * posten och förklaringen till varför den inte går att välja.
+             */
+            aria-disabled={post.inaktiv !== undefined}
+            title={post.inaktiv}
+            onKeyDown={(e) => {
+              if (post.undermeny && e.key === 'ArrowRight') {
+                e.preventDefault()
+                e.stopPropagation()
+                setOppen(i)
+                setOppnadMedTangent(true)
+              }
+            }}
+            onClick={() => {
+              if (post.inaktiv !== undefined) return
+              if (post.undermeny) {
+                setOppen((nu) => (nu === i ? null : i))
+                setOppnadMedTangent(true)
+                return
+              }
+              post.kor?.()
+              props.onStang()
+            }}
+          >
+            <span class="meny__etikett">{post.etikett}</span>
+            {post.skal && <span class="meny__skal">{post.skal}</span>}
+            {post.genvag && <span class="meny__genvag">{post.genvag}</span>}
+            {post.undermeny && (
+              <span class="meny__pil" aria-hidden="true">
+                ›
+              </span>
+            )}
+          </button>
+        )
+
+        if (!post.undermeny) return knapp
+
+        return (
+          <div
+            class="meny__grupp"
+            key={post.etikett}
+            onMouseEnter={() => {
+              setOppen(i)
+              setOppnadMedTangent(false)
+            }}
+            onMouseLeave={() => setOppen((nu) => (nu === i ? null : nu))}
+          >
+            {knapp}
+            {oppen === i && (
+              <Niva
+                poster={post.undermeny}
+                onStang={props.onStang}
+                under
+                autofokus={oppnadMedTangent}
+                onTillbaka={() => {
+                  setOppen(null)
+                  const knappar = knapparna(ref.current!)
+                  knappar.find((k) => k.textContent?.startsWith(post.etikett))?.focus()
+                }}
+              />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 export function Meny(props: {
@@ -58,6 +235,8 @@ export function Meny(props: {
     const onDown = (e: MouseEvent) => {
       if (!ref.current?.contains(e.target as Node)) props.onStang()
     }
+    // Escape fångas också av nivån när fokus står i menyn. Här ligger den
+    // kvar för fallet att fokus hunnit hamna någon annanstans.
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') props.onStang()
     }
@@ -76,28 +255,12 @@ export function Meny(props: {
   const top = Math.min(props.y, window.innerHeight - 40 - props.poster.length * 30)
 
   return (
-    <div class="meny" ref={ref} style={{ left: `${Math.max(8, left)}px`, top: `${Math.max(8, top)}px` }} role="menu">
-      {props.poster.map((post, i) =>
-        post === 'avdelare' ? (
-          <div class="meny__avdelare" key={`a${i}`} />
-        ) : (
-          <button
-            key={post.etikett}
-            class={`meny__post${post.fara ? ' meny__post--fara' : ''}${
-              post.aktiv ? ' meny__post--aktiv' : ''
-            }`}
-            role={post.aktiv === undefined ? 'menuitem' : 'menuitemradio'}
-            aria-checked={post.aktiv === undefined ? undefined : post.aktiv}
-            onClick={() => {
-              post.kor()
-              props.onStang()
-            }}
-          >
-            {post.etikett}
-            {post.genvag && <span class="meny__genvag">{post.genvag}</span>}
-          </button>
-        ),
-      )}
+    <div ref={ref} class="meny__rot">
+      <Niva
+        poster={props.poster}
+        onStang={props.onStang}
+        style={{ left: `${Math.max(8, left)}px`, top: `${Math.max(8, top)}px` }}
+      />
     </div>
   )
 }

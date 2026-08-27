@@ -96,3 +96,24 @@ test('pilarna flyttar valet och rutnätet rör sig inte bakom', async ({ page })
   // Markeringen står kvar där den stod: pilarna gick till paletten.
   await expect(forst).toHaveClass(/rutnat__cell--fokus/)
 })
+
+test('Escape stänger paletten även när effekterna släpar efter', async ({ page }) => {
+  /*
+   * Fönstrets tangenthanterare registreras i en effekt, och Preact spolar
+   * effekter i requestAnimationFrame. Fördröjs den ligger paletten på
+   * skärmen innan hanteraren sett att den öppnats — och då gick Escape till
+   * rutnätet, som inte gör någonting med den. Felet syntes bara i CI, på en
+   * långsammare maskin med två arbetare; här framkallas samma läge med flit.
+   */
+  await page.addInitScript(() => {
+    window.requestAnimationFrame = ((cb: FrameRequestCallback) =>
+      window.setTimeout(() => cb(performance.now()), 2000)) as typeof requestAnimationFrame
+  })
+  await oppnaExempel(page)
+
+  await page.keyboard.press('Control+k')
+  await expect(palett(page)).toBeVisible()
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+  await page.keyboard.press('Escape')
+  await expect(palett(page)).toHaveCount(0)
+})

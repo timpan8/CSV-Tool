@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks'
 import { Verktygspanel } from './Verktygspanel.js'
 import { Notis, Val } from './parts.js'
 import type { Column } from '../core/types.js'
-import { codeCounts } from '../core/frame/column.js'
+import { samladOrdbok } from '../core/frame/column.js'
 import {
   FORMATNAMN,
   MALFORMAT,
@@ -12,8 +12,9 @@ import {
   type Feltillstand,
   type Malformat,
 } from '../core/ops/dates.js'
-import { beraknaForhandsvisning, type Forhandsvisning } from '../state/preview.js'
+import { beraknaForhandsvisning, sammanfatta, type Forhandsvisning } from '../state/preview.js'
 import { celler, formatCount } from '../core/locale/sv.js'
+import { kolumnrubrik } from './verktyg.js'
 
 const FELTILLSTAND: { varde: Feltillstand; etikett: string; titel: string }[] = [
   {
@@ -35,7 +36,7 @@ const FELTILLSTAND: { varde: Feltillstand; etikett: string; titel: string }[] = 
  * ett svar utan att ha ställt frågan.
  */
 export function DateTool(props: {
-  col: Column
+  kolumner: Column[]
   /**
    * Flikens `dataRevision`, inte den globala `revision`.
    *
@@ -45,23 +46,34 @@ export function DateTool(props: {
   dataRevision: number
   visaBara: 'andrade' | 'problem' | undefined
   onVisaBara: (v: 'andrade' | 'problem' | undefined) => void
-  onForhandsvisning: (forh: Forhandsvisning | null) => void
-  onTillampa: (forh: Forhandsvisning) => void
+  onForhandsvisning: (forh: Forhandsvisning[] | null) => void
+  onTillampa: (forh: Forhandsvisning[]) => void
   onStang: () => void
 }) {
-  const { col } = props
+  const { kolumner } = props
+  /*
+   * Kolumnlistan är en ny array vid varje omritning, medan kolumnobjekten
+   * är desamma. Att beroendeställa på arrayen skulle räkna om
+   * förhandsvisningen varje gång, och effekten som skriver den till fliken
+   * skulle rita om — en slinga. Nyckeln är identiteterna, inte arrayen.
+   */
+  const nyckel = kolumner.map((c) => c.id).join(',')
   const [mal, setMal] = useState<Malformat>('datum')
   const [onError, setOnError] = useState<Feltillstand>('behall')
   const [excelSerie, setExcelSerie] = useState(false)
   // null betyder "inte besvarad än" — skiljt från att ha valt dag först.
   const [svar, setSvar] = useState<boolean | null>(null)
 
-  // Räknat på ordboken med cellantal som vikt: varje unikt värde tolkas en
-  // gång, men siffrorna som visas är celler.
-  const antal = useMemo(() => codeCounts(col), [col, props.dataRevision])
+  // Räknat på ordböckerna med cellantal som vikt: varje unikt värde tolkas en
+  // gång, men siffrorna som visas är celler — och över alla valda kolumner,
+  // eftersom det är dem Tillämpa kommer att röra.
+  const { varden, vikter } = useMemo(
+    () => samladOrdbok(kolumner),
+    [nyckel, props.dataRevision],
+  )
   const grundinventering = useMemo(
-    () => inventera(col.dict, { dagForst: true, excelSerie }, Array.from(antal)),
-    [col, props.dataRevision, antal, excelSerie],
+    () => inventera(varden, { dagForst: true, excelSerie }, vikter),
+    [varden, vikter, excelSerie],
   )
 
   const bevisSvar = grundinventering.bevis !== null ? grundinventering.bevisSagerDagForst : null
@@ -70,26 +82,29 @@ export function DateTool(props: {
 
   const inst = { dagForst, excelSerie, mal, onError }
 
-  const forh = useMemo(
+  const forhLista = useMemo(
     () =>
-      beraknaForhandsvisning(col, {
-        etikett: `Datum i ”${col.name}” → ${MALFORMAT.find((m) => m.varde === mal)!.etikett}`,
-        kind: 'dates',
-        profil: { typ: 'datum', kolumn: col.name, inst },
-        fn: datumTransform(inst),
-        arProblem: (v) => tolkaDatum(v, inst).datum === null,
-        // Bara ett rent datum gör kolumnen till en datumkolumn. ÅÅÅÅ-MM och
-        // ÅÅÅÅ är sammanfattningar, inte datum, och ska inte typas som sådana.
-        nyTyp: mal === 'datum' ? 'date' : undefined,
-      }),
-    [col, props.dataRevision, dagForst, excelSerie, mal, onError],
+      kolumner.map((col) =>
+        beraknaForhandsvisning(col, {
+          etikett: `Datum i ”${col.name}” → ${MALFORMAT.find((m) => m.varde === mal)!.etikett}`,
+          kind: 'dates',
+          profil: { typ: 'datum', kolumn: col.name, inst },
+          fn: datumTransform(inst),
+          arProblem: (v) => tolkaDatum(v, inst).datum === null,
+          // Bara ett rent datum gör kolumnen till en datumkolumn. ÅÅÅÅ-MM och
+          // ÅÅÅÅ är sammanfattningar, inte datum, och ska inte typas som sådana.
+          nyTyp: mal === 'datum' ? 'date' : undefined,
+        }),
+      ),
+    [nyckel, props.dataRevision, dagForst, excelSerie, mal, onError],
   )
+  const forh = sammanfatta(forhLista)
 
   // Förhandsvisningen är levande: panelen ligger bredvid tabellen, inte över
   // den, så det finns ingen anledning att göra det till ett extra klick.
   useEffect(() => {
-    props.onForhandsvisning(forh)
-  }, [forh])
+    props.onForhandsvisning(forhLista)
+  }, [forhLista])
 
   useEffect(() => {
     return () => props.onForhandsvisning(null)
@@ -102,7 +117,7 @@ export function DateTool(props: {
   return (
     <Verktygspanel
       titel="Datum"
-      underrubrik={col.name}
+      underrubrik={kolumnrubrik(kolumner)}
       onStang={props.onStang}
       fot={
         <>
@@ -119,9 +134,9 @@ export function DateTool(props: {
                   ? 'Ingenting skulle ändras.'
                   : undefined
             }
-            onClick={() => props.onTillampa(forh)}
+            onClick={() => props.onTillampa(forhLista)}
           >
-            Tillämpa
+            {kolumner.length > 1 ? `Tillämpa på ${kolumner.length} kolumner` : 'Tillämpa'}
           </button>
         </>
       }

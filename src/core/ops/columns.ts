@@ -100,7 +100,7 @@ export function delaVarde(rawValue: string, inst: Delning): string[] {
 export function inventeraDelning(
   varden: readonly string[],
   inst: Delning,
-  vikter?: readonly number[],
+  vikter?: ArrayLike<number>,
 ): { flest: number; utanAvgransare: number; exempel: { fore: string; efter: string[] } | null } {
   let flest = 1
   let utanAvgransare = 0

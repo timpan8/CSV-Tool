@@ -386,3 +386,68 @@ describe('slaSamman', () => {
     )
   })
 })
+
+describe('namn mot förnamn + efternamn', () => {
+  const vanster = frameOf('vänster', ['Namn'], [
+    ['Anna Karlsson'],
+    ['Erik Öberg'],
+    ['Åsa'],
+    ['Nils Ödman'],
+  ])
+  const hoger = frameOf('höger', ['Fornamn', 'Efternamn'], [
+    ['Karlsson', 'Anna'],
+    ['erik', 'öberg'],
+    ['Åsa', ''],
+    ['Nils', 'Ödman'],
+  ])
+  const par = [
+    {
+      vansterColId: vanster.columns[0]!.id,
+      hogerColId: hoger.columns[0]!.id,
+      hogerColId2: hoger.columns[1]!.id,
+      typ: 'namndelar' as const,
+    },
+  ]
+
+  it('matchar hela namnet mot de två delarna oavsett ordning', () => {
+    const m = matcha(vanster, hoger, par)
+    // Rad 0: Anna Karlsson ↔ Karlsson + Anna. Rad 1: skiftläget spelar ingen roll.
+    expect(m.par).toContainEqual({ v: 0, h: 0 })
+    expect(m.par).toContainEqual({ v: 1, h: 1 })
+    expect(m.par).toContainEqual({ v: 3, h: 3 })
+  })
+
+  it('låter en tom del göra raden omatchbar', () => {
+    // Åsa har inget efternamn på högersidan. Utan regeln skulle "Åsa" matcha
+    // vilken Åsa som helst — samma fel som en tom nyckel.
+    const m = matcha(vanster, hoger, par)
+    expect(m.par.some((p) => p.v === 2 || p.h === 2)).toBe(false)
+    expect(m.vansterUtan).toContain(2)
+    expect(m.hogerUtan).toContain(2)
+  })
+
+  it('behåller prickarna: Oberg är inte Öberg', () => {
+    const v = frameOf('v', ['Namn'], [['Erik Oberg']])
+    const h = frameOf('h', ['F', 'E'], [['Erik', 'Öberg']])
+    const m = matcha(v, h, [
+      {
+        vansterColId: v.columns[0]!.id,
+        hogerColId: h.columns[0]!.id,
+        hogerColId2: h.columns[1]!.id,
+        typ: 'namndelar',
+      },
+    ])
+    expect(m.par).toHaveLength(0)
+  })
+
+  it('ger ingen träff alls när den andra kolumnen inte valts', () => {
+    const m = matcha(vanster, hoger, [
+      {
+        vansterColId: vanster.columns[0]!.id,
+        hogerColId: hoger.columns[0]!.id,
+        typ: 'namndelar',
+      },
+    ])
+    expect(m.par).toHaveLength(0)
+  })
+})

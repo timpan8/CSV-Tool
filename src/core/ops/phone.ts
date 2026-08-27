@@ -135,7 +135,7 @@ export interface Telefoninventering {
 export function inventeraTelefon(
   varden: readonly string[],
   inst: Telefoninstallning,
-  vikter?: readonly number[],
+  vikter?: ArrayLike<number>,
 ): Telefoninventering {
   let nummer = 0
   let ejNummer = 0

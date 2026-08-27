@@ -290,7 +290,7 @@ export interface Inventering {
 export function inventera(
   varden: readonly string[],
   val: Tolkningsval = STANDARDVAL,
-  vikter?: readonly number[],
+  vikter?: ArrayLike<number>,
 ): Inventering {
   const rakning = new Map<Formatnyckel, { antal: number; exempel: string[] }>()
   let tolkade = 0

@@ -7,10 +7,27 @@ async function oppnaExempel(page: Page) {
   await expect(page.locator('.statusrad')).toContainText('16 rader')
 }
 
-async function oppnaEpostverktyget(page: Page) {
-  await page.getByRole('button', { name: 'Meny för kolumnen E-post' }).click()
-  await page.getByRole('menuitem', { name: 'E-post → namn…' }).click()
+/**
+ * Öppnar ett verktyg ur kolumnmenyn.
+ *
+ * Verktygen sorteras efter vad kolumnen innehåller, och de som inte passar
+ * ligger under *Fler verktyg*. Hjälparen tar båda vägarna, så att testet
+ * handlar om verktyget och inte om var i menyn det råkar hamna.
+ */
+async function oppnaUrKolumnmenyn(page: Page, kolumn: string, post: string) {
+  await page.getByRole('button', { name: `Meny för kolumnen ${kolumn}` }).click()
+  // Ett föreslaget verktyg står med sitt skäl efter etiketten, så namnet
+  // matchas som delsträng och inte exakt.
+  const direkt = page.getByRole('menuitem', { name: post })
+  if ((await direkt.count()) === 0) {
+    await page.getByRole('menuitem', { name: 'Fler verktyg' }).hover()
+  }
+  await page.getByRole('menuitem', { name: post }).first().click()
   await expect(page.locator('.verktyg')).toBeVisible()
+}
+
+async function oppnaEpostverktyget(page: Page) {
+  await oppnaUrKolumnmenyn(page, 'E-post', 'E-post → namn…')
 }
 
 const cell = (page: Page, text: string) => page.getByRole('gridcell', { name: text, exact: true })
@@ -101,4 +118,21 @@ test('kan läsa efternamnet först när adresserna är skrivna så', async ({ pa
 
   await page.getByRole('radio', { name: 'Efternamnet' }).click()
   await expect(page.locator('.rutnat__cell--spoke').first()).toHaveText('Karlsson')
+})
+
+test('förnamn och efternamn i ett svep ger två kolumner', async ({ page }) => {
+  await oppnaExempel(page)
+  await page.locator('.rubrik[title="E-post"]').click({ button: 'right' })
+  await page.getByRole('menuitem', { name: /E-post → namn/ }).click()
+
+  await page.getByRole('radio', { name: 'Förnamn och Efternamn, var sin kolumn' }).click()
+  await expect(page.getByLabel('Namn på förnamnskolumnen')).toHaveValue('Förnamn')
+  await expect(page.getByLabel('Namn på efternamnskolumnen')).toHaveValue('Efternamn')
+  // Två spökkolumner ritas intill källan.
+  await expect(page.locator('.rubrik--spoke')).toHaveCount(2)
+
+  await page.getByRole('button', { name: 'Skapa kolumnerna' }).click()
+  await expect(page.locator('.statusrad')).toContainText('10 kolumner')
+  await expect(page.getByRole('gridcell', { name: 'Anna', exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('gridcell', { name: 'Karlsson', exact: true }).first()).toBeVisible()
 })

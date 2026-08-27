@@ -120,3 +120,53 @@ test('varnar när nästan inget matchar', async ({ page }) => {
 
   await expect(page.getByRole('button', { name: 'Slå ihop', exact: true })).toBeDisabled()
 })
+
+test('namn mot förnamn + efternamn matchar över två högerkolumner', async ({ page }) => {
+  const csv = [
+    'Fornamn;Efternamn;Rabatt',
+    'Karlsson;Anna;10',
+    'erik;öberg;5',
+    'Åsa;;7',
+    '',
+  ].join('\r\n')
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Öppna exempelfil' }).click()
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await expect(page.locator('.statusrad')).toContainText('16 rader')
+
+  await page.locator('input[type=file]').first().setInputFiles({
+    name: 'namndelar.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(csv, 'utf8'),
+  })
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await page.locator('.flik__namn', { hasText: 'exempel-kunder.csv' }).click()
+
+  await oppnaDialogen(page)
+  // Bara en annan flik finns, så den är redan vald.
+  const dialog = page.getByRole('dialog')
+
+  // Rubrikerna liknar ingenting i kundfilen, så förslaget hittar inget par.
+  await expect(dialog).toContainText('Inga kolumnpar valda')
+  await page.getByRole('button', { name: '＋ Lägg till kolumnpar' }).click()
+
+  const par = page.locator('.regel').first()
+  await par.locator('select').first().selectOption({ label: 'Namn' })
+  await par.locator('select').nth(1).selectOption({ label: 'Fornamn' })
+  await par.locator('select').last().selectOption({ label: 'Namn mot förnamn + efternamn' })
+
+  // Utan den andra kolumnen kan matchningen inte köras, och det sägs rakt ut.
+  await expect(dialog).toContainText('saknar sin andra högerkolumn')
+
+  await page.getByLabel('Andra högerkolumnen').selectOption({ label: 'Efternamn' })
+  await expect(dialog).not.toContainText('saknar sin andra högerkolumn')
+
+  await page.getByRole('button', { name: 'Slå ihop', exact: true }).click()
+  await expect(page.locator('.rubrik[title="Rabatt"]')).toBeVisible()
+  // Anna Karlsson finns två gånger i kundfilen och båda får rabatten; Erik
+  // Öberg matchar trots skiftläget. Åsa saknar efternamn och får ingenting.
+  await expect(page.getByRole('gridcell', { name: '10', exact: true })).toHaveCount(2)
+  await expect(page.getByRole('gridcell', { name: '5', exact: true })).toHaveCount(1)
+  await expect(page.getByRole('gridcell', { name: '7', exact: true })).toHaveCount(0)
+})

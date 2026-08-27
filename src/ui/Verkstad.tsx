@@ -27,6 +27,7 @@ import {
   verkstad,
 } from '../state/matchning.js'
 import { redigeraCellFysisk } from '../state/edits.js'
+import { EXCEL_FRIENDLY, encodeExport, urvalTillCsv } from '../core/csv/stringify.js'
 import { notify, undo } from '../state/store.js'
 import { formatCount, rader as raderText } from '../core/locale/sv.js'
 import { Notis } from './parts.js'
@@ -356,6 +357,17 @@ export function Verkstad(props: {
         <span class="verkstad__fot__text">
           Listorna står i filens ordning, inte i den du sorterat fram i fliken.
         </span>
+        <button
+          class="knapp"
+          disabled={rest.vanster.length + rest.hoger.length === 0}
+          title="Skriver de kvarvarande raderna ur vardera filen som var sin CSV."
+          onClick={() => {
+            exporteraRest(vanster, rest.vanster)
+            exporteraRest(hoger, rest.hoger)
+          }}
+        >
+          Exportera restlistorna
+        </button>
         <button class="knapp" onClick={props.onStang}>
           Avbryt
         </button>
@@ -365,6 +377,32 @@ export function Verkstad(props: {
       </div>
     </div>
   )
+}
+
+/**
+ * Skriver de kvarvarande raderna ur en fil som en egen CSV.
+ *
+ * Raderna som blev över är ofta det man behöver skicka vidare — till den som
+ * kan svara på varför de inte finns i det andra systemet. Filen får samma
+ * Excel-vänliga format som den vanliga exporten, och hela ramens kolumner:
+ * det som ska granskas är raden, inte nyckeln.
+ */
+function exporteraRest(frame: Frame, rader: readonly number[]): void {
+  if (rader.length === 0) return
+  const text = urvalTillCsv(
+    frame.columns.filter((c) => !c.hidden),
+    rader,
+    EXCEL_FRIENDLY.delimiter,
+    EXCEL_FRIENDLY.newline,
+  )
+  const { bytes } = encodeExport(text, EXCEL_FRIENDLY)
+  const blob = new Blob([bytes as unknown as BlobPart], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${frame.name.replace(/\.[^.]+$/, '')} — kvar.csv`
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 2000)
 }
 
 /**
@@ -473,7 +511,8 @@ function beskrivPar(vanster: Frame, hoger: Frame, par: readonly Matchningspar[])
     .map((p) => {
       const v = findColumn(vanster, p.vansterColId)?.name ?? '?'
       const h = findColumn(hoger, p.hogerColId)?.name ?? '?'
-      return `${v} ↔ ${h}`
+      const h2 = p.hogerColId2 ? findColumn(hoger, p.hogerColId2)?.name : undefined
+      return `${v} ↔ ${h2 ? `${h} + ${h2}` : h}`
     })
     .join(', ')
 }

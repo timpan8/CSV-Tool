@@ -294,6 +294,27 @@ input[type='radio'] {
   font-weight: 600;
 }
 
+/* Vägen till kolumnöversikten. Ligger i panelens rubrik i stället för i
+   verktygsraden, som redan är full — och det är här man står när frågan
+   ”vad är det här för fil?” uppstår. */
+.panel__rubrik__knapp {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--linje-stark);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-svag);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.panel__rubrik__knapp:hover {
+  background: var(--yta-hover);
+  color: var(--text);
+}
+
 .panel__innehall {
   overflow-y: auto;
   padding: 0 8px 10px;

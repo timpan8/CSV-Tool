@@ -192,6 +192,20 @@ export function spokvarde(forh: Forhandsvisning, kall: Column, row: number, mal:
   return forh.nya[uppslag(forh, kall, row) * forh.stride + mal] ?? ''
 }
 
+/**
+ * Förhandsvisningen som gäller en viss kolumn, eller null.
+ *
+ * Ett verktyg som körs över en flerkolumnsmarkering ger en förhandsvisning
+ * per kolumn. Rutnätet slår upp rätt en per kolumn det ritar; listan är
+ * aldrig lång — det är en markering, inte en fil.
+ */
+export function forKolumn(
+  lista: readonly Forhandsvisning[],
+  colId: ColumnId,
+): Forhandsvisning | null {
+  return lista.find((f) => f.colId === colId) ?? null
+}
+
 /** Vad en cell blir, för rutnätet. Returnerar null när kolumnen inte skrivs om. */
 export function forCell(
   forh: Forhandsvisning | null,
@@ -207,4 +221,26 @@ export function forCell(
     andrad: (bitar & ANDRAD) !== 0,
     problem: (bitar & PROBLEM) !== 0,
   }
+}
+
+/**
+ * Antalen för en hel körning, summerade över kolumnerna.
+ *
+ * Panelen visar ett tal och inte ett per kolumn: frågan är ”vad gör det här
+ * med min fil?”, och svaret är antalet celler.
+ */
+export function sammanfatta(lista: readonly Forhandsvisning[]): {
+  andrade: number
+  problem: number
+  ifyllda: number
+} {
+  let andrade = 0
+  let problem = 0
+  let ifyllda = 0
+  for (const f of lista) {
+    andrade += f.andrade
+    problem += f.problem
+    ifyllda += f.ifyllda
+  }
+  return { andrade, problem, ifyllda }
 }

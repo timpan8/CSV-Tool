@@ -5,9 +5,17 @@ import { getCell, filledCount, flagCount, matchDictionary } from '../../core/fra
 import { TYPE_BADGES, TYPE_LABELS, violatesType } from '../../core/infer.js'
 import { formatCount } from '../../core/locale/sv.js'
 import { cellenMatchar, type ViewSpec } from '../../state/view.js'
-import { forCell, spokvarde, uppslag, PROBLEM, type Forhandsvisning } from '../../state/preview.js'
+import {
+  forCell,
+  forKolumn,
+  spokvarde,
+  uppslag,
+  PROBLEM,
+  type Forhandsvisning,
+} from '../../state/preview.js'
 import type { Riktning, Sorteringsniva } from '../../core/ops/sort.js'
 import { innehaller, rect, type Selection } from '../../state/selection.js'
+import type { Dubblettgrupper } from '../../core/ops/duplicates.js'
 
 const DEFAULT_WIDTH = 168
 const MIN_WIDTH = 56
@@ -31,18 +39,32 @@ export interface GridProps {
   revision: number
   activeColumnId: ColumnId | null
   viewSpec: ViewSpec
-  /** Omskrivning som visas men ännu inte är gjord. Ritas som före → efter. */
-  forhandsvisning: Forhandsvisning | null
+  /**
+   * Omskrivningar som visas men ännu inte är gjorda, en per kolumn verktyget
+   * körs över. Ritas som före → efter, eller som spökkolumner.
+   */
+  forhandsvisning: readonly Forhandsvisning[]
   /** Aktiva sorteringsnivåer, för pilen i rubriken. */
   sortering: readonly Sorteringsniva[]
-  /** Dubblettgrupp per fysisk rad, för linjen mellan grupperna. */
-  grupper: Uint32Array | null
+  /** Dubblettgrupperna, för linjen mellan dem och för valet av vilken rad som stannar. */
+  grupper: Dubblettgrupper | null
+  /** Fysiska rader som är utpekade att stanna, eller null när valet är av. */
+  behallnaRader: ReadonlySet<number> | null
+  /** Pekar ut raden som ska stanna i sin grupp. */
+  onBehall: ((fysisk: number) => void) | null
   markering: Selection | null
   redigerar: { rad: number; kol: number } | null
   onSelectColumn: (id: ColumnId) => void
-  onOpenColumnMenu: (id: ColumnId, anchor: DOMRect) => void
+  /** Kolumnmenyn, vid en punkt i fönstret. */
+  onOpenColumnMenu: (id: ColumnId, x: number, y: number) => void
+  /** Cellmenyn, vid pekaren. Markeringen är redan flyttad hit vid behov. */
+  onOpenCellMenu: (rad: number, kol: number, x: number, y: number) => void
+  /** Radmenyn, vid pekaren. */
+  onOpenRowMenu: (x: number, y: number) => void
   onMoveColumn: (id: ColumnId, toIndex: number) => void
   onResizeColumn: (id: ColumnId, width: number) => void
+  /** Dubbelklick på kolumngreppet: anpassa bredden efter innehållet. */
+  onAutofit: (id: ColumnId) => void
   onCycleType: (id: ColumnId) => void
   /** Klick på sortpilen. `lagg` när skift hölls nere: bygg en nivå till. */
   onSortera: (id: ColumnId, lagg: boolean) => void
@@ -120,10 +142,10 @@ export function VirtualGrid(props: GridProps) {
   // Förhandsvisningen av en *ny* kolumn ritas som en spökkolumn intill sin
   // källa. Den ligger inte i ramen och går inte att markera, så
   // markeringens kolumnindex räknar fortfarande bara riktiga kolumner.
-  const spokeEfter =
-    (props.forhandsvisning?.nyaKolumner.length ?? 0) > 0
-      ? columns.findIndex((c) => c.id === props.forhandsvisning!.colId)
-      : -1
+  const spoke = (col: Column): Forhandsvisning | null => {
+    const f = forKolumn(props.forhandsvisning, col.id)
+    return f && f.nyaKolumner.length > 0 ? f : null
+  }
 
   const total = frame.view.length
   const first = Math.max(0, Math.floor(scrollTop / rowHeight) - OVERSCAN)
@@ -136,6 +158,26 @@ export function VirtualGrid(props: GridProps) {
     else props.onSelect({ ankareRad: rad, ankareKol: kol, fokusRad: rad, fokusKol: kol })
   }
 
+  /** Klick på radnumret markerar hela raden; skift-klick ett spann av rader. */
+  const valjRad = (rad: number, utoka: boolean) => {
+    const sista = Math.max(0, columns.length - 1)
+    if (utoka && markering) {
+      props.onSelect({ ...markering, ankareKol: 0, fokusRad: rad, fokusKol: sista })
+    } else {
+      props.onSelect({ ankareRad: rad, ankareKol: 0, fokusRad: rad, fokusKol: sista })
+    }
+  }
+
+  /**
+   * Högerklick flyttar markeringen bara när det sker utanför den.
+   *
+   * Att markera tre kolumner och sedan högerklicka i dem för att komma åt
+   * Städa vore meningslöst om klicket först kastade markeringen.
+   */
+  const menyklick = (rad: number, kol: number) => {
+    if (!markering || !innehaller(markering, rad, kol)) valj(rad, kol, false)
+  }
+
   const rows: preact.JSX.Element[] = []
   for (let i = first; i < last; i++) {
     const physical = frame.view[i]!
@@ -145,10 +187,13 @@ export function VirtualGrid(props: GridProps) {
     // går att skilja åt utan att färgas — en bakgrundsfärg skulle krocka med
     // markeringen.
     const nasta = frame.view[i + 1]
+    const gruppnr = props.grupper?.grupp[physical] ?? 0
     const gruppslut =
       props.grupper !== null &&
-      props.grupper[physical] !== 0 &&
-      (nasta === undefined || props.grupper[nasta] !== props.grupper[physical])
+      gruppnr !== 0 &&
+      (nasta === undefined || props.grupper.grupp[nasta] !== gruppnr)
+    const heltLika = gruppnr !== 0 && props.grupper?.heltLika[gruppnr] === 1
+    const behallen = props.behallnaRader?.has(physical) === true
     rows.push(
       <div
         class={`rutnat__rad${radMarkerad ? ' rutnat__rad--markerad' : ''}${
@@ -159,9 +204,47 @@ export function VirtualGrid(props: GridProps) {
         style={{ height: `${rowHeight}px` }}
       >
         <div
-          class={`rutnat__radnr${source === 0 ? ' rutnat__radnr--tillagd' : ''}`}
-          title={source === 0 ? 'Tillagd rad — fanns inte i filen' : `Rad ${source} i filen`}
+          class={`rutnat__radnr rutnat__radnr--valjbar${
+            source === 0 ? ' rutnat__radnr--tillagd' : ''
+          }`}
+          title={
+            (source === 0 ? 'Tillagd rad — fanns inte i filen' : `Rad ${source} i filen`) +
+            (heltLika ? '. Identisk med de andra i sin dubblettgrupp.' : '') +
+            '. Klicka för att markera raden.'
+          }
+          onPointerDown={(e) => {
+            if (e.button !== 0) return
+            valjRad(i, e.shiftKey)
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            if (!markerat || i < markerat.r1 || i > markerat.r2) valjRad(i, false)
+            props.onOpenRowMenu(e.clientX, e.clientY)
+          }}
         >
+          {props.onBehall !== null && gruppnr !== 0 && (
+            <button
+              class={`radnr__behall${behallen ? ' radnr__behall--vald' : ''}`}
+              aria-pressed={behallen}
+              title={
+                behallen
+                  ? 'Den här raden stannar när dubbletterna tas bort.'
+                  : 'Låt den här raden stanna i stället.'
+              }
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                props.onBehall!(physical)
+              }}
+            >
+              {behallen ? '●' : '○'}
+            </button>
+          )}
+          {gruppnr !== 0 && heltLika && props.onBehall === null && (
+            <span class="radnr__identisk" title="Raden är identisk med de andra i sin grupp i varje kolumn.">
+              =
+            </span>
+          )}
           {source === 0 ? '–' : formatCount(source)}
         </div>
         {columns.flatMap((col, kol) => [
@@ -173,7 +256,7 @@ export function VirtualGrid(props: GridProps) {
             fokus={markering?.fokusRad === i && markering.fokusKol === kol}
             redigeras={redigerar?.rad === i && redigerar.kol === kol}
             viewSpec={props.viewSpec}
-            forhandsvisning={props.forhandsvisning}
+            forhandsvisning={forKolumn(props.forhandsvisning, col.id)}
             onPointerDown={(utoka) => {
               drarMarkering.current = true
               valj(i, kol, utoka)
@@ -183,21 +266,23 @@ export function VirtualGrid(props: GridProps) {
                 props.onSelect({ ...markering, fokusRad: i, fokusKol: kol })
               }
             }}
+            onMeny={(x, y) => {
+              menyklick(i, kol)
+              props.onOpenCellMenu(i, kol, x, y)
+            }}
             onDoubleClick={() => props.onStartEdit(i, kol)}
             onCommit={(value, flytt) => props.onCommitEdit(i, kol, value, flytt)}
             onCancel={props.onCancelEdit}
           />,
-          ...(kol === spokeEfter
-            ? props.forhandsvisning!.nyaKolumner.map((_, mal) => (
-                <SpokCell
-                  key={`spoke${mal}`}
-                  kall={col}
-                  row={physical}
-                  mal={mal}
-                  forh={props.forhandsvisning!}
-                />
-              ))
-            : []),
+          ...(spoke(col)?.nyaKolumner.map((_, mal) => (
+            <SpokCell
+              key={`spoke${col.id}-${mal}`}
+              kall={col}
+              row={physical}
+              mal={mal}
+              forh={spoke(col)!}
+            />
+          )) ?? []),
         ])}
       </div>,
     )
@@ -249,7 +334,8 @@ export function VirtualGrid(props: GridProps) {
                 })
               }
             }}
-            onMenu={(rect) => props.onOpenColumnMenu(col.id, rect)}
+            onMenu={(x, y) => props.onOpenColumnMenu(col.id, x, y)}
+            onAutofit={() => props.onAutofit(col.id)}
             onCycleType={() => props.onCycleType(col.id)}
             onResize={(width) => props.onResizeColumn(col.id, width)}
             onDragStart={() => setDragging(col.id)}
@@ -270,19 +356,17 @@ export function VirtualGrid(props: GridProps) {
               setDropIndex(null)
             }}
           />,
-          ...(index === spokeEfter
-            ? props.forhandsvisning!.nyaKolumner.map((namn, mal) => (
-                <div
-                  key={`spoke${mal}`}
-                  class="rubrik rubrik--spoke"
-                  style={{ width: `${col.width ?? DEFAULT_WIDTH}px` }}
-                  role="columnheader"
-                >
-                  <span class="rubrik__namn">{namn}</span>
-                  <span class="rubrik__spoke">ny kolumn</span>
-                </div>
-              ))
-            : []),
+          ...(spoke(col)?.nyaKolumner.map((namn, mal) => (
+            <div
+              key={`spoke${col.id}-${mal}`}
+              class="rubrik rubrik--spoke"
+              style={{ width: `${col.width ?? DEFAULT_WIDTH}px` }}
+              role="columnheader"
+            >
+              <span class="rubrik__namn">{namn}</span>
+              <span class="rubrik__spoke">ny kolumn</span>
+            </div>
+          )) ?? []),
         ])}
       </div>
 
@@ -335,6 +419,7 @@ interface CellProps {
   forhandsvisning: Forhandsvisning | null
   onPointerDown: (utoka: boolean) => void
   onPointerEnter: () => void
+  onMeny: (x: number, y: number) => void
   onDoubleClick: () => void
   onCommit: (value: string, flytt: Flytt) => void
   onCancel: () => void
@@ -380,9 +465,16 @@ function Cell(props: CellProps) {
       }
       onPointerDown={(e) => {
         if (props.redigeras) return
+        // Bara vänsterknappen flyttar markeringen. Högerklick hanteras av
+        // onContextMenu, som behåller en flercellsmarkering man just gjort.
+        if (e.button !== 0) return
         props.onPointerDown(e.shiftKey)
       }}
       onPointerEnter={props.onPointerEnter}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        props.onMeny(e.clientX, e.clientY)
+      }}
       onDblClick={props.onDoubleClick}
     >
       {props.redigeras ? (
@@ -472,7 +564,8 @@ interface HeaderProps {
   drar: boolean
   slappmal: boolean
   onSelect: () => void
-  onMenu: (rect: DOMRect) => void
+  onMenu: (x: number, y: number) => void
+  onAutofit: () => void
   onCycleType: () => void
   onResize: (width: number) => void
   onDragStart: () => void
@@ -516,6 +609,10 @@ function Header(props: HeaderProps) {
       title={col.name}
       draggable
       onClick={props.onSelect}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        props.onMenu(e.clientX, e.clientY)
+      }}
       onDragStart={props.onDragStart}
       onDragOver={(e) => {
         e.preventDefault()
@@ -551,8 +648,9 @@ function Header(props: HeaderProps) {
           class="rubrik__meny"
           aria-label={`Meny för kolumnen ${col.name}`}
           onClick={(e) => {
+            const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
             e.stopPropagation()
-            props.onMenu((e.currentTarget as HTMLElement).getBoundingClientRect())
+            props.onMenu(r.left, r.bottom + 4)
           }}
         >
           ⋮
@@ -581,7 +679,16 @@ function Header(props: HeaderProps) {
           <div class="kvalitet__tom" style={{ width: `${(kvalitet.empty / total) * 100}%` }} />
         </div>
       </div>
-      <div class="rubrik__greppa" onPointerDown={startResize} onClick={(e) => e.stopPropagation()} />
+      <div
+        class="rubrik__greppa"
+        title="Dra för att ändra bredd. Dubbelklicka för att anpassa efter innehållet."
+        onPointerDown={startResize}
+        onClick={(e) => e.stopPropagation()}
+        onDblClick={(e) => {
+          e.stopPropagation()
+          props.onAutofit()
+        }}
+      />
     </div>
   )
 }

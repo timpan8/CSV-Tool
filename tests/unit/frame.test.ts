@@ -15,8 +15,9 @@ import {
   insertRows,
   restoreRows,
   createFrame,
+  sammaInnehall,
 } from '../../src/core/frame/frame.js'
-import { createColumn } from '../../src/core/frame/column.js'
+import { createColumn, resetColumnIds } from '../../src/core/frame/column.js'
 import { Flag, type Frame } from '../../src/core/types.js'
 
 function frameOf(headers: string[], rows: string[][]): Frame {
@@ -215,5 +216,56 @@ describe('radoperationer', () => {
     frame.view = Uint32Array.from([0])
     insertRows(frame, 0, 1)
     expect(frame.view.length).toBe(frame.rowCount)
+  })
+})
+
+describe('sammaInnehall', () => {
+  const bygg = () => {
+    resetColumnIds()
+    const a = createColumn('Ort', 3)
+    const b = createColumn('Antal', 3)
+    ;['Malmö', 'Lund', 'Malmö'].forEach((v, r) => {
+      a.codes[r] = intern(a, v)
+    })
+    ;['1', '2', '3'].forEach((v, r) => {
+      b.codes[r] = intern(b, v)
+    })
+    return createFrame('fil.csv', [a, b], 3)
+  }
+
+  it('är sant för två likadana ramar', () => {
+    expect(sammaInnehall(bygg(), bygg())).toBe(true)
+  })
+
+  it('är sant för samma ram', () => {
+    const f = bygg()
+    expect(sammaInnehall(f, f)).toBe(true)
+  })
+
+  it('är falskt när en cell skiljer sig', () => {
+    const a = bygg()
+    const b = bygg()
+    b.columns[0]!.codes[1] = intern(b.columns[0]!, 'Kiruna')
+    expect(sammaInnehall(a, b)).toBe(false)
+  })
+
+  it('är falskt när en rubrik skiljer sig', () => {
+    const a = bygg()
+    const b = bygg()
+    b.columns[1]!.name = 'Summa'
+    expect(sammaInnehall(a, b)).toBe(false)
+  })
+
+  it('är falskt när radantalet skiljer sig', () => {
+    const a = bygg()
+    const b = createFrame('fil.csv', [createColumn('Ort', 2), createColumn('Antal', 2)], 2)
+    expect(sammaInnehall(a, b)).toBe(false)
+  })
+
+  it('bryr sig inte om filnamnet — innehållet är frågan', () => {
+    const a = bygg()
+    const b = bygg()
+    b.name = 'annat namn.csv'
+    expect(sammaInnehall(a, b)).toBe(true)
   })
 })

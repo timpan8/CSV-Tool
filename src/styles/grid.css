@@ -304,6 +304,44 @@
   font-weight: 600;
 }
 
+/* Radnumret markerar hela raden. Muspekaren säger det innan man provar. */
+.rutnat__radnr--valjbar {
+  cursor: pointer;
+  user-select: none;
+}
+
+.rutnat__radnr--valjbar:hover {
+  color: var(--text);
+}
+
+/* Valet av vilken rad som stannar i sin dubblettgrupp. Ligger i
+   radnummerkolumnen, som redan är fryst och alltid syns. */
+.radnr__behall {
+  margin-right: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-svagast);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.radnr__behall:hover {
+  color: var(--accent);
+}
+
+.radnr__behall--vald {
+  color: var(--accent);
+}
+
+/* En grupp vars rader är identiska i varje kolumn kan tas bort utan att man
+   tittar. Skillnaden mot en grupp som bara är lika i nyckeln syns här. */
+.radnr__identisk {
+  margin-right: 5px;
+  color: var(--text-svagast);
+  font-weight: 700;
+}
+
 .rutnat__radnr--tillagd {
   font-style: italic;
 }
@@ -522,6 +560,16 @@
 
 .chip--av .chip__text {
   text-decoration: line-through;
+}
+
+/* Ett vänt filter visar motsatsen till vad reglerna säger. Det måste synas i
+   banderollen, annars läser man raderna som om de matchade. */
+.chip--vand {
+  padding: 2px 9px;
+  border-color: var(--varning);
+  background: var(--varning-svag);
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 /* En regel vars kolumn tagits bort filtrerar inte — och ska inte se ut som om den gör det. */

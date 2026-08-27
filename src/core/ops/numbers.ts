@@ -168,7 +168,7 @@ export interface Talinventering {
 export function inventeraTal(
   varden: readonly string[],
   val: Talval = STANDARDVAL,
-  vikter?: readonly number[],
+  vikter?: ArrayLike<number>,
 ): Talinventering {
   let tal = 0
   let ejTal = 0

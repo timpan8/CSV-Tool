@@ -6,7 +6,7 @@ import { stadningarEfterId } from '../core/ops/clean.js'
 import { delaVarde } from '../core/ops/columns.js'
 import { korMall, tolkaMall } from '../core/ops/columns.js'
 import { datumTransform, tolkaDatum } from '../core/ops/dates.js'
-import { epostTransform } from '../core/ops/email.js'
+import { epostNamndelar, epostTransform } from '../core/ops/email.js'
 import { talTransform, tolkaTal } from '../core/ops/numbers.js'
 import { telefonTransform, tolkaTelefon } from '../core/ops/phone.js'
 import { byggErsattare } from '../core/ops/replace.js'
@@ -221,14 +221,25 @@ function spec(steg: Profilsteg): Forhandsspec | null {
         fn: telefonTransform(steg.inst),
         arProblem: (v) => tolkaTelefon(v, steg.inst).siffror === null,
       }
-    case 'epost':
+    case 'epost': {
+      const namn = Array.isArray(steg.namn) ? steg.namn : [steg.namn]
+      if (steg.falt === 'bada-namnen') {
+        return {
+          etikett,
+          kind: 'email',
+          profil: steg,
+          delar: epostNamndelar(steg.val),
+          nyaKolumner: [namn[0] ?? 'Förnamn', namn[1] ?? 'Efternamn'],
+        }
+      }
       return {
         etikett,
         kind: 'email',
         profil: steg,
         fn: epostTransform(steg.falt, steg.val),
-        nyaKolumner: [steg.namn],
+        nyaKolumner: [namn[0] ?? 'Ny kolumn'],
       }
+    }
     case 'ersatt': {
       const ersattare = byggErsattare(steg.inst)
       if (!ersattare.fn) return null
@@ -370,10 +381,15 @@ export function korSteg(tab: Tab, steg: Profilsteg): Stegresultat {
       return { steg, utfall: 'kord', andrade: 1 }
     }
     default: {
-      const col = hittaKolumn(frame, stegetsKolumner(steg)[0] ?? '')
-      const s = col ? spec(steg) : null
-      if (!col || !s) return { steg, utfall: 'ingenAndring', andrade: 0 }
-      const forh = beraknaForhandsvisning(col, s, frame)
+      // Ett steg kan gälla flera kolumner — samma inställning körd på tolv
+      // månadskolumner. Alla får sin egen förhandsvisning, men tillämpas som
+      // ett steg, precis som när verktyget kördes för hand.
+      const kolumner = stegetsKolumner(steg)
+        .map((namn) => hittaKolumn(frame, namn))
+        .filter((c): c is Column => c !== null)
+      const s = kolumner.length > 0 ? spec(steg) : null
+      if (!s) return { steg, utfall: 'ingenAndring', andrade: 0 }
+      const forh = kolumner.map((col) => beraknaForhandsvisning(col, s, frame))
       const andrade = tillampaForhandsvisning(tab, forh)
       return { steg, utfall: andrade === 0 ? 'ingenAndring' : 'kord', andrade }
     }

@@ -6,6 +6,7 @@ import { rubriknyckel, synonymgrupp } from '../core/ops/rubriker.js'
 import {
   FLERTRAFF,
   MATCHNINGSTYPER,
+  kraverTvaHoger,
   matcha,
   slaIhop,
   type Flertraff,
@@ -48,9 +49,22 @@ export function MergeDialog(props: {
   ])
   const aktivaPar = egnaPar ? par : foreslagna
 
+  /**
+   * Par som väntar på sin andra högerkolumn.
+   *
+   * De körs inte, och det sägs rakt ut. En matchning som tyst ger noll
+   * träffar ser ut som att filerna inte hör ihop.
+   */
+  const ofardigaPar = aktivaPar.filter(
+    (p) => kraverTvaHoger(p.typ) && p.hogerColId2 === undefined,
+  ).length
+
   const matchning = useMemo(
-    () => (hoger && aktivaPar.length > 0 ? matcha(props.vanster, hoger, aktivaPar) : null),
-    [props.vanster, hoger, aktivaPar],
+    () =>
+      hoger && aktivaPar.length > 0 && ofardigaPar === 0
+        ? matcha(props.vanster, hoger, aktivaPar)
+        : null,
+    [props.vanster, hoger, aktivaPar, ofardigaPar],
   )
 
   const hogerKolumner = hoger ? visibleColumns(hoger) : []
@@ -217,6 +231,30 @@ export function MergeDialog(props: {
                     </option>
                   ))}
                 </select>
+                {kraverTvaHoger(p.typ) && (
+                  <>
+                    <span class="parpil" aria-hidden="true">
+                      +
+                    </span>
+                    <select
+                      class="nivarad__kolumn"
+                      value={p.hogerColId2 ?? ''}
+                      aria-label="Andra högerkolumnen"
+                      onChange={(e) =>
+                        andraPar(i, {
+                          hogerColId2: (e.currentTarget as HTMLSelectElement).value || undefined,
+                        })
+                      }
+                    >
+                      <option value="">Välj kolumn…</option>
+                      {hogerKolumner.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
                 <select
                   class="nivarad__kolumn"
                   value={p.typ}
@@ -304,6 +342,16 @@ export function MergeDialog(props: {
                 </tbody>
               </table>
             </div>
+          )}
+
+          {ofardigaPar > 0 && (
+            <Notis ton="varning">
+              {ofardigaPar === 1
+                ? 'Ett kolumnpar saknar sin andra högerkolumn'
+                : `${ofardigaPar} kolumnpar saknar sin andra högerkolumn`}
+              . Matchningen kan inte köras förrän den är vald — utan den finns ingen nyckel att
+              jämföra med.
+            </Notis>
           )}
 
           {matchning && traffprocent < 20 && matchning.vansterMatchade > 0 && (

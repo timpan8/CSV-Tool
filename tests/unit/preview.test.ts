@@ -104,18 +104,18 @@ describe('visaBara', () => {
 
   it('utan begransning visas allt', () => {
     const { frame, forh } = bygg()
-    expect(computeView(frame, {}, forh).view.length).toBe(5)
+    expect(computeView(frame, {}, [forh]).view.length).toBe(5)
   })
 
   it('bara andrade ger raderna som skrivs om', () => {
     const { frame, forh } = bygg()
-    const vy = computeView(frame, { visaBara: 'andrade' }, forh).view
+    const vy = computeView(frame, { visaBara: 'andrade' }, [forh]).view
     expect(Array.from(vy)).toEqual([1])
   })
 
   it('bara problem ger raderna som inte gar att tolka', () => {
     const { frame, forh } = bygg()
-    const vy = computeView(frame, { visaBara: 'problem' }, forh).view
+    const vy = computeView(frame, { visaBara: 'problem' }, [forh]).view
     expect(Array.from(vy)).toEqual([2])
   })
 
@@ -134,13 +134,13 @@ describe('visaBara', () => {
       kind: 'dates',
       fn: datumTransform(inst),
     })
-    const vy = computeView(frame, { search: 'anna', visaBara: 'andrade' }, forh).view
+    const vy = computeView(frame, { search: 'anna', visaBara: 'andrade' }, [forh]).view
     expect(Array.from(vy)).toEqual([0])
   })
 
   it('utan forhandsvisning ar begransningen verkningslos i stallet for tom', () => {
     const { frame } = bygg()
-    expect(computeView(frame, { visaBara: 'andrade' }, null).view.length).toBe(5)
+    expect(computeView(frame, { visaBara: 'andrade' }, []).view.length).toBe(5)
   })
 })
 
@@ -278,5 +278,87 @@ describe('inventering pa en ordbok med vikter', () => {
     expect(perOrdbok.otolkade).toBe(perCell.otolkade)
     expect(perOrdbok.poster.find((p) => p.format === 'iso')?.antal).toBe(3)
     expect(perOrdbok.bevis).toBe(perCell.bevis)
+  })
+})
+
+describe('flera kolumner i ett steg', () => {
+  const inst = {
+    dagForst: true,
+    excelSerie: false,
+    mal: 'datum' as const,
+    onError: 'behall' as const,
+  }
+
+  const bygg = () => {
+    const tab = tabOf(
+      ['jan', 'feb', 'ort'],
+      [
+        ['27/08/2026', '01/09/2026', 'Malmö'],
+        ['i gar', '02/09/2026', 'Lund'],
+      ],
+    )
+    const forh = [tab.frame.columns[0]!, tab.frame.columns[1]!].map((col) =>
+      beraknaForhandsvisning(col, {
+        etikett: `Datum i ”${col.name}”`,
+        kind: 'dates',
+        profil: { typ: 'datum', kolumn: col.name, inst },
+        fn: datumTransform(inst),
+        nyTyp: 'date',
+      }),
+    )
+    return { tab, forh }
+  }
+
+  it('skriver om alla kolumnerna och backas av ett enda angra', () => {
+    const { tab, forh } = bygg()
+    expect(tillampaForhandsvisning(tab, forh)).toBe(3)
+    expect(getCell(tab.frame.columns[0]!, 0)).toBe('2026-08-27')
+    expect(getCell(tab.frame.columns[1]!, 1)).toBe('2026-09-02')
+    // Kolumnen utanför markeringen ror ingen.
+    expect(getCell(tab.frame.columns[2]!, 0)).toBe('Malmö')
+
+    undo(tab)
+    expect(getCell(tab.frame.columns[0]!, 0)).toBe('27/08/2026')
+    expect(getCell(tab.frame.columns[1]!, 1)).toBe('02/09/2026')
+
+    redo(tab)
+    expect(getCell(tab.frame.columns[1]!, 1)).toBe('2026-09-02')
+  })
+
+  it('slar ihop profilstegen till ett steg med en kolumnlista', () => {
+    const { tab, forh } = bygg()
+    tillampaForhandsvisning(tab, forh)
+    const steg = tab.history[tab.history.length - 1]!.profil
+    expect(steg).toBeDefined()
+    expect(steg!.typ).toBe('datum')
+    expect((steg as { kolumn: string[] }).kolumn).toEqual(['jan', 'feb'])
+  })
+
+  it('lamnar profilsteget ute nar installningarna skiljer sig', () => {
+    const tab = tabOf(['jan', 'feb'], [['27/08/2026', '01/09/2026']])
+    const forh = [
+      beraknaForhandsvisning(tab.frame.columns[0]!, {
+        etikett: 'a',
+        kind: 'dates',
+        profil: { typ: 'datum', kolumn: 'jan', inst },
+        fn: datumTransform(inst),
+      }),
+      beraknaForhandsvisning(tab.frame.columns[1]!, {
+        etikett: 'b',
+        kind: 'dates',
+        profil: { typ: 'datum', kolumn: 'feb', inst: { ...inst, mal: 'ar' } },
+        fn: datumTransform({ ...inst, mal: 'ar' }),
+      }),
+    ]
+    tillampaForhandsvisning(tab, forh)
+    // En profil som bara tog med den forsta kolumnen vore varre an ingen.
+    expect(tab.history[tab.history.length - 1]!.profil).toBeUndefined()
+  })
+
+  it('visar bara-andrade for rader som andras i nagon av kolumnerna', () => {
+    const { tab, forh } = bygg()
+    const vy = computeView(tab.frame, { visaBara: 'andrade' }, forh).view
+    // Rad 1 ar oforandrad i jan (i gar) men andras i feb.
+    expect(Array.from(vy)).toEqual([0, 1])
   })
 })

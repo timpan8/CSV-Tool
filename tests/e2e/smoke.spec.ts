@@ -75,3 +75,20 @@ test('exporterar Excel-vänlig CSV med BOM och semikolon', async ({ page }) => {
   expect(text).toContain('Åsa Öhman')
   expect(text).toContain(';01234;')
 })
+
+test('samma fil två gånger sägs rakt ut', async ({ page }) => {
+  const csv = 'Ort;Antal\r\nMalmö;1\r\nLund;2\r\n'
+  const fil = { name: 'orter.csv', mimeType: 'text/csv', buffer: Buffer.from(csv, 'utf8') }
+
+  await page.goto('/')
+  await page.locator('input[type=file]').first().setInputFiles(fil)
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await expect(page.locator('.statusrad')).toContainText('2 rader')
+
+  // Samma innehåll igen — ett vanligt misstag när exporter hämtas ur flera
+  // system. Det sägs som en varning, inte som en fråga som står i vägen.
+  await page.locator('input[type=file]').first().setInputFiles(fil)
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await expect(page.locator('.toast--varning')).toContainText('Identisk med ”orter.csv”')
+  await expect(page.locator('.flik')).toHaveCount(2)
+})

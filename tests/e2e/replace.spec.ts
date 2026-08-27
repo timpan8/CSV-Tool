@@ -7,10 +7,27 @@ async function oppnaExempel(page: Page) {
   await expect(page.locator('.statusrad')).toContainText('16 rader')
 }
 
-async function oppnaSokOchErsatt(page: Page, kolumn: string) {
+/**
+ * Öppnar ett verktyg ur kolumnmenyn.
+ *
+ * Verktygen sorteras efter vad kolumnen innehåller, och de som inte passar
+ * ligger under *Fler verktyg*. Hjälparen tar båda vägarna, så att testet
+ * handlar om verktyget och inte om var i menyn det råkar hamna.
+ */
+async function oppnaUrKolumnmenyn(page: Page, kolumn: string, post: string) {
   await page.getByRole('button', { name: `Meny för kolumnen ${kolumn}` }).click()
-  await page.getByRole('menuitem', { name: 'Sök och ersätt…' }).click()
+  // Ett föreslaget verktyg står med sitt skäl efter etiketten, så namnet
+  // matchas som delsträng och inte exakt.
+  const direkt = page.getByRole('menuitem', { name: post })
+  if ((await direkt.count()) === 0) {
+    await page.getByRole('menuitem', { name: 'Fler verktyg' }).hover()
+  }
+  await page.getByRole('menuitem', { name: post }).first().click()
   await expect(page.locator('.verktyg')).toBeVisible()
+}
+
+async function oppnaSokOchErsatt(page: Page, kolumn: string) {
+  await oppnaUrKolumnmenyn(page, kolumn, 'Sök och ersätt…')
 }
 
 const sokfalt = (page: Page) => page.locator('.verktyg .falt', { hasText: 'Sök efter' }).locator('input')

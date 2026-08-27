@@ -36,6 +36,8 @@ export type Operator =
   | 'mindreAn'
   | 'hogstLika'
   | 'mellan'
+  | 'langreAn'
+  | 'kortareAn'
 
 export interface Operatorpost {
   op: Operator
@@ -59,6 +61,8 @@ export const OPERATORER: Operatorpost[] = [
   { op: 'mindreAn', etikett: 'mindre än', gallerFor: ['number', 'date'], falt: 1 },
   { op: 'hogstLika', etikett: 'högst', gallerFor: ['number', 'date'], falt: 1 },
   { op: 'mellan', etikett: 'mellan', gallerFor: ['number', 'date'], falt: 2 },
+  { op: 'langreAn', etikett: 'är längre än', gallerFor: [], falt: 1 },
+  { op: 'kortareAn', etikett: 'är kortare än', gallerFor: [], falt: 1 },
   { op: 'tom', etikett: 'är tom', gallerFor: [], falt: 0 },
   { op: 'ifylld', etikett: 'är ifylld', gallerFor: [], falt: 0 },
   { op: 'ogiltig', etikett: 'går inte att tolka', gallerFor: [], falt: 0 },
@@ -90,6 +94,15 @@ export interface Filterregel {
 export interface Filter {
   regler: Filterregel[]
   koppling: 'alla' | 'nagon'
+  /**
+   * Visa de rader filtret annars döljer.
+   *
+   * Vändningen sker på resultatet, inte på varje regel. ”Inte (Ort är Malmö
+   * och Status är Aktiv)” är en annan mängd än ”Ort är inte Malmö och Status
+   * är inte Aktiv”, och det är den första man menar när man vill se vad man
+   * sorterat bort.
+   */
+  inverterat?: boolean
 }
 
 export const TOMT_FILTER: Filter = { regler: [], koppling: 'alla' }
@@ -188,6 +201,24 @@ function raknaMask(col: Column, regel: Filterregel): { mask: Uint8Array; fel: st
     case 'ogiltig':
       return { mask: matchDictionary(col, (v) => v !== '' && violatesType(v, col.type)), fel: null }
 
+    case 'langreAn':
+    case 'kortareAn': {
+      // Tecken räknas på det normaliserade och trimmade värdet, alltså på det
+      // som faktiskt står i cellen — inte på osynliga blanksteg runt om.
+      const gräns = Number(regel.varde.trim())
+      if (!Number.isFinite(gräns)) {
+        return { mask: tom().mask, fel: 'Skriv ett antal tecken.' }
+      }
+      const langre = regel.operator === 'langreAn'
+      return {
+        mask: matchDictionary(col, (v) => {
+          const n = [...normalizeAlways(v).trim()].length
+          return langre ? n > gräns : n < gräns
+        }),
+        fel: null,
+      }
+    }
+
     case 'iLista': {
       const valda = new Set((regel.varden ?? []).map((v) => nyckel(v, kansligt)))
       return { mask: matchDictionary(col, (v) => valda.has(nyckel(v, kansligt))), fel: null }
@@ -280,6 +311,10 @@ export function tillampaFilter(
 ): { rader: Uint32Array; fel: Regelfel[] } {
   const regler = aktivaRegler(frame, filter)
   const fel: Regelfel[] = []
+  // Utan aktiva regler döljs ingenting, och då finns det inget att vända på
+  // heller. Ett tänt `inverterat` med tom regellista visar alltså allt, inte
+  // ingenting — annars skulle en tom skärm mötas av den som slår på växeln
+  // innan hen skrivit sin regel.
   if (regler.length === 0) return { rader: utgangslage, fel }
 
   const masker: { col: Column; mask: Uint8Array }[] = []
@@ -295,6 +330,7 @@ export function tillampaFilter(
   if (masker.length === 0) return { rader: utgangslage, fel }
 
   const alla = filter.koppling === 'alla'
+  const vand = filter.inverterat === true
   const traffar: number[] = []
   for (let i = 0; i < utgangslage.length; i++) {
     const r = utgangslage[i]!
@@ -310,7 +346,7 @@ export function tillampaFilter(
         break
       }
     }
-    if (slapp) traffar.push(r)
+    if (slapp !== vand) traffar.push(r)
   }
   return { rader: Uint32Array.from(traffar), fel }
 }
@@ -333,5 +369,8 @@ export function beskrivRegel(frame: Frame, regel: Filterregel): string {
   }
   if (post.falt === 0) return `${namn} ${post.etikett}`
   if (post.falt === 2) return `${namn} ${post.etikett} ${regel.varde}–${regel.varde2 ?? ''}`
+  if (regel.operator === 'langreAn' || regel.operator === 'kortareAn') {
+    return `${namn} ${post.etikett} ${regel.varde} tecken`
+  }
   return `${namn} ${post.etikett} ${regel.varde}`
 }
