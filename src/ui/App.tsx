@@ -1,19 +1,24 @@
 import { useCallback, useEffect, useState } from 'preact/hooks'
-import type { ColumnId, ColumnType, Frame } from '../core/types.js'
-import { getCell } from '../core/frame/column.js'
+import type { Column, ColumnId, ColumnType, Frame } from '../core/types.js'
 import {
   columnIndex,
   duplicateColumn,
   findColumn,
-  identityView,
   insertColumn,
   moveColumn,
   uniqueColumnName,
 } from '../core/frame/frame.js'
-import { violatesType } from '../core/infer.js'
-import { formatCount } from '../core/locale/sv.js'
+import {
+  celler,
+  formatCount,
+  formatSum,
+  kolumner as kolumnerText,
+  rader as raderText,
+} from '../core/locale/sv.js'
 import { DELIMITER_NAMES } from '../core/csv/sniff.js'
-import { toTsv } from '../core/csv/stringify.js'
+import { parseDelimitedText } from '../core/csv/parse.js'
+import { toDelimited } from '../core/csv/stringify.js'
+import { STADNINGAR } from '../core/ops/clean.js'
 import { dataWorker } from '../worker/client.js'
 import {
   activeTab,
@@ -21,6 +26,7 @@ import {
   applyAppearance,
   canRedo,
   canUndo,
+  clearViewSpec,
   closeTab,
   notify,
   openFrame,
@@ -28,20 +34,42 @@ import {
   revision,
   runStep,
   setActiveColumn,
+  setSelection,
+  setViewSpec,
   tabs,
   tathet,
   theme,
   touch,
   undo,
   undoThrough,
+  viewIsLimited,
   type Tab,
 } from '../state/store.js'
-import { VirtualGrid } from './grid/VirtualGrid.jsx'
+import {
+  dupliceraRader,
+  fyllNedat,
+  infogaRader,
+  klistraIn,
+  planeraInklistring,
+  redigeraCell,
+  sattMarkering,
+  selectableColumns,
+  selectedRows,
+  stadaKolumner,
+  taBortRader,
+  taBortTommaKolumner,
+  taBortTommaRader,
+  type PasteRequest,
+} from '../state/edits.js'
+import { aggregera, cell, klamp, rect, type Selection } from '../state/selection.js'
+import { VirtualGrid, type Flytt } from './grid/VirtualGrid.jsx'
 import { ColumnPanel } from './ColumnPanel.jsx'
 import { Inspector } from './Inspector.jsx'
 import { EmptyState } from './EmptyState.jsx'
 import { ImportDialog, type ImportSettings } from './ImportDialog.jsx'
 import { ExportDialog } from './ExportDialog.jsx'
+import { SearchBar } from './SearchBar.jsx'
+import { PasteDialog } from './PasteDialog.jsx'
 import { Meny, Toastar, type MenyPost } from './parts.jsx'
 import { EXEMPELFIL } from './exempel.js'
 
@@ -50,7 +78,12 @@ const TYPCYKEL: ColumnType[] = ['text', 'number', 'date', 'email', 'bool']
 interface MenyLage {
   x: number
   y: number
-  columnId: ColumnId
+  poster: (MenyPost | 'avdelare')[]
+}
+
+interface PasteState {
+  plan: PasteRequest
+  sel: Selection
 }
 
 export function App() {
@@ -59,6 +92,8 @@ export function App() {
   const [meny, setMeny] = useState<MenyLage | null>(null)
   const [laddar, setLaddar] = useState<string | null>(null)
   const [slappOver, setSlappOver] = useState(false)
+  const [sokOppen, setSokOppen] = useState(false)
+  const [inklistring, setInklistring] = useState<PasteState | null>(null)
 
   const tab = activeTab.value
   const frame = tab?.frame ?? null
@@ -69,9 +104,11 @@ export function App() {
   /* ---------- Filer ---------- */
 
   const oppnaFiler = useCallback((files: File[]) => {
-    const tillatna = files.filter((f) => /\.(csv|txt|tsv)$/i.test(f.name) || f.type.startsWith('text/'))
+    const tillatna = files.filter(
+      (f) => /\.(csv|txt|tsv|xlsx)$/i.test(f.name) || f.type.startsWith('text/'),
+    )
     if (tillatna.length === 0) {
-      notify('Bara CSV-, TXT- och TSV-filer kan öppnas än så länge.', { ton: 'varning' })
+      notify('Verktyget öppnar CSV, TXT, TSV och Excel-filer (.xlsx).', { ton: 'varning' })
       return
     }
     setKö((current) => [...current, ...tillatna])
@@ -81,18 +118,27 @@ export function App() {
     setKö((current) => current.slice(1))
     setLaddar(file.name)
     try {
-      const parsed = await dataWorker.parse(file, {
-        delimiter: settings.delimiter,
-        encoding: settings.encoding,
-        trimFields: settings.trimFields,
-        skipEmptyRows: settings.skipEmptyRows,
-        headerRow: settings.headerRow,
-      })
+      const parsed = await dataWorker.parse(
+        file,
+        {
+          delimiter: settings.delimiter,
+          encoding: settings.encoding,
+          trimFields: settings.trimFields,
+          skipEmptyRows: settings.skipEmptyRows,
+          headerRow: settings.headerRow,
+        },
+        undefined,
+        /\.xlsx$/i.test(file.name)
+          ? { sheet: settings.sheet, decimal: settings.decimal }
+          : undefined,
+      )
       openFrame(parsed)
       const varningar = parsed.meta.warnings.filter((w) => w.kind !== 'encoding-uncertain')
       notify(
         `${file.name} öppnad — ${formatCount(parsed.rowCount)} rader, ${formatCount(parsed.columns.length)} kolumner.` +
-          (varningar.length > 0 ? ` ${varningar.length} sak${varningar.length === 1 ? '' : 'er'} att titta på.` : ''),
+          (varningar.length > 0
+            ? ` ${varningar.length} sak${varningar.length === 1 ? '' : 'er'} att titta på.`
+            : ''),
         { ton: varningar.length > 0 ? 'varning' : 'info' },
       )
     } catch (error) {
@@ -104,8 +150,13 @@ export function App() {
 
   const oppnaExempel = () => {
     const blob = new Blob([EXEMPELFIL], { type: 'text/csv' })
-    const file = new File([blob], 'exempel-kunder.csv', { type: 'text/csv' })
-    setKö((current) => [...current, file])
+    setKö((current) => [...current, new File([blob], 'exempel-kunder.csv', { type: 'text/csv' })])
+  }
+
+  /** Öppnar text från urklipp som en ny flik. */
+  const oppnaText = (text: string, namn: string) => {
+    const blob = new Blob([text], { type: 'text/csv' })
+    setKö((current) => [...current, new File([blob], namn, { type: 'text/csv' })])
   }
 
   /* ---------- Kolumnåtgärder ---------- */
@@ -116,7 +167,7 @@ export function App() {
   }
 
   const flyttaKolumn = (id: ColumnId, toIndex: number) => {
-    if (!frame || !tab) return
+    if (!frame) return
     const col = findColumn(frame, id)
     if (!col) return
     const from = columnIndex(frame, id)
@@ -221,8 +272,7 @@ export function App() {
       `Duplicerade kolumnen ${col.name}`,
       'duplicate',
       () => {
-        const kopia = duplicateColumn(frame, id)
-        skapad = kopia?.id ?? null
+        skapad = duplicateColumn(frame, id)?.id ?? null
       },
       () => {
         if (skapad) {
@@ -258,15 +308,14 @@ export function App() {
     if (!frame) return
     const col = findColumn(frame, id)
     if (!col) return
-    const nasta = TYPCYKEL[(TYPCYKEL.indexOf(col.type) + 1) % TYPCYKEL.length]!
-    sattTyp(id, nasta)
+    sattTyp(id, TYPCYKEL[(TYPCYKEL.indexOf(col.type) + 1) % TYPCYKEL.length]!)
   }
 
   const andraBredd = (id: ColumnId, bredd: number) => {
     if (!frame) return
     const col = findColumn(frame, id)
     if (!col) return
-    // Bredd är utseende, inte data. Den hör inte hemma i ångra-historiken —
+    // Bredd är utseende, inte data, och hör inte hemma i ångra-historiken —
     // annars känns Ctrl+Z trasigt när den backar en kolumnbredd.
     col.width = bredd
     touch()
@@ -275,36 +324,145 @@ export function App() {
   /* ---------- Vy ---------- */
 
   const visaOgiltiga = (id: ColumnId) => {
-    if (!frame) return
+    if (!tab || !frame) return
+    setViewSpec(tab, { invalidIn: id, search: undefined })
     const col = findColumn(frame, id)
-    if (!col) return
-    const traffar: number[] = []
-    for (let r = 0; r < frame.rowCount; r++) {
-      const value = getCell(col, r)
-      if (value !== '' && violatesType(value, col.type)) traffar.push(r)
-    }
-    frame.view = Uint32Array.from(traffar)
-    touch()
     notify(
-      `Visar ${formatCount(traffar.length)} rader där ”${col.name}” inte går att tolka.`,
-      { atgard: { etikett: 'Visa alla igen', kor: rensaVy } },
+      `Visar ${formatCount(frame.view.length)} rader där ”${col?.name ?? ''}” inte går att tolka.`,
+      { atgard: { etikett: 'Visa alla igen', kor: () => tab && clearViewSpec(tab) } },
     )
   }
 
-  const rensaVy = () => {
-    if (!frame) return
-    frame.view = identityView(frame.rowCount)
+  /* ---------- Markering och redigering ---------- */
+
+  const markering = tab?.markering ?? null
+  const synligaKolumner = tab ? selectableColumns(tab) : []
+
+  /**
+   * Läser flik och markering ur tillståndet i stället för ur renderingens
+   * closure.
+   *
+   * Tangentbords- och urklippshanterare registreras i en effekt, och den
+   * effekten körs *efter* renderingen. Klickar man på en cell och klistrar in
+   * innan effekten hunnit registreras om, ser hanteraren fortfarande den
+   * gamla markeringen och skriver på fel plats. Det var precis vad som hände
+   * i CI, där maskinen klickar och klistrar in inom samma bildruta.
+   */
+  const nuLage = (): { tab: Tab; frame: Frame; kolumner: Column[]; sel: Selection | null } | null => {
+    const t = activeTab.value
+    if (!t) return null
+    return { tab: t, frame: t.frame, kolumner: selectableColumns(t), sel: t.markering }
+  }
+
+  const flyttaMarkering = (dRad: number, dKol: number, utoka: boolean, tillKant: boolean) => {
+    const nu = nuLage()
+    if (!nu) return
+    const { tab, frame, kolumner: synligaKolumner } = nu
+    if (frame.view.length === 0 || synligaKolumner.length === 0) return
+    const nuvarande = nu.sel ?? cell(0, 0)
+    const sistaRad = frame.view.length - 1
+    const sistaKol = synligaKolumner.length - 1
+    const rad = tillKant
+      ? dRad > 0
+        ? sistaRad
+        : dRad < 0
+          ? 0
+          : nuvarande.fokusRad
+      : nuvarande.fokusRad + dRad
+    const kol = tillKant
+      ? dKol > 0
+        ? sistaKol
+        : dKol < 0
+          ? 0
+          : nuvarande.fokusKol
+      : nuvarande.fokusKol + dKol
+    const ny: Selection = utoka
+      ? { ...nuvarande, fokusRad: rad, fokusKol: kol }
+      : { ankareRad: rad, ankareKol: kol, fokusRad: rad, fokusKol: kol }
+    setSelection(tab, klamp(ny, frame.view.length, synligaKolumner.length))
+  }
+
+  const startaRedigering = (rad?: number, kol?: number) => {
+    const nu = nuLage()
+    if (!nu || !nu.sel) return
+    nu.tab.redigerar = { rad: rad ?? nu.sel.fokusRad, kol: kol ?? nu.sel.fokusKol }
     touch()
   }
 
-  const kopieraTsv = async () => {
-    if (!frame) return
+  const avslutaRedigering = (rad: number, kol: number, value: string, flytt: Flytt) => {
+    if (!tab) return
+    tab.redigerar = null
+    redigeraCell(tab, rad, kol, value)
+    if (flytt === 'ned') flyttaMarkering(1, 0, false, false)
+    else if (flytt === 'hoger') flyttaMarkering(0, 1, false, false)
+    else touch()
+  }
+
+  const kopieraMarkering = async () => {
+    const nu = nuLage()
+    if (!nu || !nu.sel) return
+    const r = rect(nu.sel)
+    const kolumner = nu.kolumner.slice(r.k1, r.k2 + 1)
+    const rader = selectedRows(nu.tab, nu.sel)
     try {
-      await navigator.clipboard.writeText(toTsv(frame))
-      notify('Tabellen kopierad. Klistra in direkt i Excel.')
+      await navigator.clipboard.writeText(toDelimited(kolumner, rader, '\t'))
+      notify(
+        `${celler(rader.length * kolumner.length)} kopierade. Klistra in direkt i Excel.`,
+      )
     } catch {
       notify('Webbläsaren tillät inte kopiering till urklipp.', { ton: 'varning' })
     }
+  }
+
+  const forbereKlistraIn = (text: string) => {
+    const nu = nuLage()
+    if (!nu || !nu.sel) return
+    const { tab, sel } = nu
+    const { rows } = parseDelimitedText(text)
+    if (rows.length === 0) return
+    const plan = planeraInklistring(tab, sel, rows)
+    if (plan.extraRader === 0 && plan.extraKolumner === 0) {
+      const andrade = klistraIn(tab, sel, plan, false)
+      notify(`Klistrade in ${celler(andrade)}.`, {
+        atgard: { etikett: 'Ångra', kor: () => undo(tab) },
+      })
+      return
+    }
+    setInklistring({ plan, sel })
+  }
+
+  /* ---------- Rader ---------- */
+
+  const taBortMarkeradeRader = () => {
+    const nu = nuLage()
+    if (!nu || !nu.sel) return
+    const rader = selectedRows(nu.tab, nu.sel)
+    if (rader.length === 0) return
+    taBortRader(nu.tab, rader)
+    notify(`Tog bort ${raderText(rader.length)}.`, {
+      atgard: { etikett: 'Ångra', kor: () => undo(nu.tab) },
+    })
+  }
+
+  const stada = (id: string) => {
+    const nu = nuLage()
+    if (!nu || !nu.sel) return
+    const { tab } = nu
+    const stadning = STADNINGAR.find((s) => s.id === id)
+    if (!stadning) return
+    const r = rect(nu.sel)
+    const kolumner = nu.kolumner.slice(r.k1, r.k2 + 1)
+    const andrade = stadaKolumner(tab, kolumner, stadning)
+    if (andrade === 0) {
+      notify(`${stadning.etikett}: inget att ändra i markeringen.`)
+      return
+    }
+    notify(
+      `${stadning.etikett} — ${celler(andrade)} ändrades i ${
+        kolumner.length === 1 ? `”${kolumner[0]!.name}”` : kolumnerText(kolumner.length)
+      }.`,
+      { atgard: { etikett: 'Ångra', kor: () => undo(tab) } },
+    )
   }
 
   /* ---------- Tangentbord ---------- */
@@ -312,34 +470,129 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null
-      if (target && /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)) return
+      const iFalt = target !== null && /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)
       const mod = e.ctrlKey || e.metaKey
-      if (!mod) return
-      if (e.key.toLowerCase() === 'z' && !e.shiftKey) {
-        e.preventDefault()
-        if (tab) {
+      const nu = nuLage()
+      if (!nu) return
+      const { tab, frame, kolumner: synligaKolumner, sel: markering } = nu
+
+      if (mod) {
+        const tangent = e.key.toLowerCase()
+        if (tangent === 'z' && !e.shiftKey) {
+          e.preventDefault()
           const step = undo(tab)
           if (step) notify(`Ångrade: ${step.label}`)
-        }
-      } else if ((e.key.toLowerCase() === 'y') || (e.key.toLowerCase() === 'z' && e.shiftKey)) {
-        e.preventDefault()
-        if (tab) {
+        } else if (tangent === 'y' || (tangent === 'z' && e.shiftKey)) {
+          e.preventDefault()
           const step = redo(tab)
           if (step) notify(`Gjorde om: ${step.label}`)
+        } else if (tangent === 's') {
+          e.preventDefault()
+          setExportOppen(true)
+        } else if (tangent === 'f') {
+          e.preventDefault()
+          setSokOppen(true)
+        } else if (tangent === 'a' && !iFalt) {
+          e.preventDefault()
+          if (frame.view.length > 0 && synligaKolumner.length > 0) {
+            setSelection(tab, {
+              ankareRad: 0,
+              ankareKol: 0,
+              fokusRad: frame.view.length - 1,
+              fokusKol: synligaKolumner.length - 1,
+            })
+          }
+        } else if (tangent === 'c' && !iFalt) {
+          e.preventDefault()
+          void kopieraMarkering()
+        } else if (tangent === 'd' && !iFalt && markering) {
+          e.preventDefault()
+          const andrade = fyllNedat(tab, markering)
+          if (andrade > 0) {
+            notify(`Fyllde nedåt i ${celler(andrade)}.`, {
+              atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) },
+            })
+          }
         }
-      } else if (e.key.toLowerCase() === 's') {
-        e.preventDefault()
-        if (frame) setExportOppen(true)
-      } else if (e.key.toLowerCase() === 'c' && e.shiftKey) {
-        e.preventDefault()
-        void kopieraTsv()
+        return
+      }
+
+      if (iFalt) return
+
+      switch (e.key) {
+        case 'ArrowUp':
+          e.preventDefault()
+          flyttaMarkering(-1, 0, e.shiftKey, e.altKey)
+          break
+        case 'ArrowDown':
+          e.preventDefault()
+          flyttaMarkering(1, 0, e.shiftKey, e.altKey)
+          break
+        case 'ArrowLeft':
+          e.preventDefault()
+          flyttaMarkering(0, -1, e.shiftKey, e.altKey)
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          flyttaMarkering(0, 1, e.shiftKey, e.altKey)
+          break
+        case 'Home':
+          e.preventDefault()
+          flyttaMarkering(0, -1, e.shiftKey, true)
+          break
+        case 'End':
+          e.preventDefault()
+          flyttaMarkering(0, 1, e.shiftKey, true)
+          break
+        case 'Enter':
+        case 'F2':
+          e.preventDefault()
+          startaRedigering()
+          break
+        case 'Delete':
+        case 'Backspace':
+          if (markering) {
+            e.preventDefault()
+            const andrade = sattMarkering(tab, markering, '')
+            if (andrade > 0) {
+              notify(`Tömde ${celler(andrade)}.`, {
+                atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) },
+              })
+            }
+          }
+          break
+        case 'Escape':
+          if (sokOppen) {
+            setSokOppen(false)
+            clearViewSpec(tab)
+          }
+          break
+        default:
+          // Börja skriva direkt i en markerad cell, som i ett kalkylark.
+          if (e.key.length === 1 && !e.altKey && markering && !tab.redigerar) {
+            startaRedigering()
+          }
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [tab, frame])
+  }, [tab, frame, markering, synligaKolumner.length, sokOppen, rev])
 
-  /* ---------- Släpp var som helst ---------- */
+  /* ---------- Urklipp och släpp ---------- */
+
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target && /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)) return
+      const text = e.clipboardData?.getData('text/plain') ?? ''
+      if (text.trim() === '') return
+      e.preventDefault()
+      if (!tab) oppnaText(text, 'inklistrat.csv')
+      else forbereKlistraIn(text)
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [tab, markering, rev])
 
   useEffect(() => {
     const over = (e: DragEvent) => {
@@ -366,8 +619,6 @@ export function App() {
     }
   }, [oppnaFiler])
 
-  /* ---------- Varna innan arbete går förlorat ---------- */
-
   useEffect(() => {
     const onUnload = (e: BeforeUnloadEvent) => {
       if (tabs.value.some((t) => t.smutsig)) e.preventDefault()
@@ -376,8 +627,9 @@ export function App() {
     return () => window.removeEventListener('beforeunload', onUnload)
   }, [])
 
-  const aktivKolumn = frame && tab?.activeColumnId ? findColumn(frame, tab.activeColumnId) ?? null : null
-  const harFilter = frame !== null && frame.view.length !== frame.rowCount
+  const aktivKolumn =
+    frame && tab?.activeColumnId ? (findColumn(frame, tab.activeColumnId) ?? null) : null
+  const begransad = viewIsLimited(tab)
 
   return (
     <div class="app">
@@ -389,6 +641,44 @@ export function App() {
           CSV-verkstan
         </span>
         <FilValjare onFiler={oppnaFiler} />
+        <button
+          class="knapp"
+          disabled={!frame}
+          onClick={(e) =>
+            setMeny({
+              x: (e.currentTarget as HTMLElement).getBoundingClientRect().left,
+              y: (e.currentTarget as HTMLElement).getBoundingClientRect().bottom + 4,
+              poster: stadMeny(stada, {
+                tommaRader: () => {
+                  if (!tab) return
+                  const n = taBortTommaRader(tab)
+                  notify(
+                    n === 0
+                      ? 'Inga helt tomma rader hittades.'
+                      : `Tog bort ${raderText(n)} som var helt tomma.`,
+                    n > 0
+                      ? { atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) } }
+                      : undefined,
+                  )
+                },
+                tommaKolumner: () => {
+                  if (!tab) return
+                  const n = taBortTommaKolumner(tab)
+                  notify(
+                    n === 0
+                      ? 'Inga helt tomma kolumner hittades.'
+                      : `Tog bort ${kolumnerText(n)} som var helt tomma.`,
+                    n > 0
+                      ? { atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) } }
+                      : undefined,
+                  )
+                },
+              }),
+            })
+          }
+        >
+          Städa ▾
+        </button>
         <button class="knapp" disabled={!frame} onClick={() => setExportOppen(true)}>
           Exportera
         </button>
@@ -429,6 +719,21 @@ export function App() {
         </div>
       )}
 
+      {sokOppen && tab && frame && (
+        <SearchBar
+          varde={tab.viewSpec.search ?? ''}
+          traffar={frame.view.length}
+          totalt={frame.rowCount}
+          kolumnerMedTraff={tab.kolumnerMedTraff}
+          onSok={(fraga) => setViewSpec(tab, { search: fraga, invalidIn: undefined })}
+          onStang={() => {
+            setSokOppen(false)
+            clearViewSpec(tab)
+          }}
+          onNasta={() => flyttaMarkering(1, 0, false, false)}
+        />
+      )}
+
       {laddar && (
         <div class="forlopp" role="progressbar" aria-label={`Läser ${laddar}`}>
           <div class="forlopp__stapel" />
@@ -451,13 +756,38 @@ export function App() {
             frame={frame}
             revision={rev}
             activeColumnId={tab.activeColumnId}
+            viewSpec={tab.viewSpec}
+            markering={markering}
+            redigerar={tab.redigerar}
             onSelectColumn={setActiveColumn}
             onOpenColumnMenu={(id, anchor) =>
-              setMeny({ x: anchor.left, y: anchor.bottom + 4, columnId: id })
+              setMeny({
+                x: anchor.left,
+                y: anchor.bottom + 4,
+                poster: kolumnMeny(id, {
+                  dopOm: dopOmKolumn,
+                  duplicera: dupliceraKolumn,
+                  vaxlaDold,
+                  infogaFore: (i) => infogaKolumn(columnIndex(frame, i)),
+                  infogaEfter: (i) => infogaKolumn(columnIndex(frame, i) + 1),
+                  flyttaForst: (i) => flyttaKolumn(i, 0),
+                  flyttaSist: (i) => flyttaKolumn(i, frame.columns.length - 1),
+                  visaOgiltiga,
+                  taBort: taBortKolumn,
+                  dold: findColumn(frame, id)?.hidden ?? false,
+                }),
+              })
             }
             onMoveColumn={flyttaKolumn}
             onResizeColumn={andraBredd}
             onCycleType={cyklaTyp}
+            onSelect={(sel) => setSelection(tab, sel)}
+            onStartEdit={startaRedigering}
+            onCommitEdit={avslutaRedigering}
+            onCancelEdit={() => {
+              tab.redigerar = null
+              touch()
+            }}
           />
           <Inspector
             frame={frame}
@@ -474,7 +804,27 @@ export function App() {
         <EmptyState onFiler={oppnaFiler} onExempel={oppnaExempel} />
       )}
 
-      <Statusrad frame={frame} harFilter={harFilter} onRensaVy={rensaVy} onKopiera={kopieraTsv} />
+      <Statusrad
+        tab={tab}
+        begransad={begransad}
+        onRensaVy={() => {
+          if (!tab) return
+          setSokOppen(false)
+          clearViewSpec(tab)
+        }}
+        onRadmeny={(x, y) =>
+          setMeny({
+            x,
+            y,
+            poster: radMeny({
+              infogaFore: () => tab && markering && infogaRader(tab, markering.fokusRad, 1, false),
+              infogaEfter: () => tab && markering && infogaRader(tab, markering.fokusRad, 1, true),
+              duplicera: () => tab && markering && dupliceraRader(tab, selectedRows(tab, markering)),
+              taBort: taBortMarkeradeRader,
+            }),
+          })
+        }
+      />
 
       {kö.length > 0 && (
         <ImportDialog
@@ -487,7 +837,7 @@ export function App() {
       {exportOppen && frame && (
         <ExportDialog
           frame={frame}
-          harFilter={harFilter}
+          harFilter={begransad}
           onStang={() => setExportOppen(false)}
           onExporterad={() => {
             setExportOppen(false)
@@ -497,30 +847,60 @@ export function App() {
         />
       )}
 
-      {meny && frame && (
-        <Meny
-          x={meny.x}
-          y={meny.y}
-          onStang={() => setMeny(null)}
-          poster={kolumnMeny(meny.columnId, {
-            dopOm: dopOmKolumn,
-            duplicera: dupliceraKolumn,
-            vaxlaDold,
-            infogaFore: (id) => infogaKolumn(columnIndex(frame, id)),
-            infogaEfter: (id) => infogaKolumn(columnIndex(frame, id) + 1),
-            flyttaForst: (id) => flyttaKolumn(id, 0),
-            flyttaSist: (id) => flyttaKolumn(id, frame.columns.length - 1),
-            visaOgiltiga,
-            taBort: taBortKolumn,
-            dold: findColumn(frame, meny.columnId)?.hidden ?? false,
-          })}
+      {inklistring && tab && (
+        <PasteDialog
+          plan={inklistring.plan}
+          markeradeRader={rect(inklistring.sel).r2 - rect(inklistring.sel).r1 + 1}
+          markeradeKolumner={rect(inklistring.sel).k2 - rect(inklistring.sel).k1 + 1}
+          onAvbryt={() => setInklistring(null)}
+          onKlistraIn={(utoka) => {
+            const andrade = klistraIn(tab, inklistring.sel, inklistring.plan, utoka)
+            setInklistring(null)
+            notify(`Klistrade in ${celler(andrade)}.`, {
+              atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) },
+            })
+          }}
         />
+      )}
+
+      {meny && (
+        <Meny x={meny.x} y={meny.y} poster={meny.poster} onStang={() => setMeny(null)} />
       )}
 
       {slappOver && <div class="slappoverlagg">Släpp för att öppna som ny flik</div>}
       <Toastar />
     </div>
   )
+}
+
+function stadMeny(
+  stada: (id: string) => void,
+  rader: { tommaRader: () => void; tommaKolumner: () => void },
+): (MenyPost | 'avdelare')[] {
+  return [
+    ...STADNINGAR.map((s): MenyPost => ({
+      etikett: s.etikett,
+      kor: () => stada(s.id),
+    })),
+    'avdelare',
+    { etikett: 'Ta bort helt tomma rader', kor: rader.tommaRader },
+    { etikett: 'Ta bort helt tomma kolumner', kor: rader.tommaKolumner },
+  ]
+}
+
+function radMeny(handlers: {
+  infogaFore: () => void
+  infogaEfter: () => void
+  duplicera: () => void
+  taBort: () => void
+}): (MenyPost | 'avdelare')[] {
+  return [
+    { etikett: 'Infoga rad ovanför', kor: handlers.infogaFore },
+    { etikett: 'Infoga rad nedanför', kor: handlers.infogaEfter },
+    { etikett: 'Dubblera markerade rader', kor: handlers.duplicera },
+    'avdelare',
+    { etikett: 'Ta bort markerade rader', fara: true, kor: handlers.taBort },
+  ]
 }
 
 function kolumnMeny(
@@ -564,7 +944,7 @@ function FilValjare({ onFiler }: { onFiler: (files: File[]) => void }) {
       Öppna
       <input
         type="file"
-        accept=".csv,.txt,.tsv,text/csv,text/plain"
+        accept=".csv,.txt,.tsv,.xlsx,text/csv,text/plain"
         multiple
         style={{ display: 'none' }}
         onChange={(e) => {
@@ -582,7 +962,13 @@ function FlikKnapp({ tab, aktiv }: { tab: Tab; aktiv: boolean }) {
     <span class={`flik${aktiv ? ' flik--aktiv' : ''}`}>
       <button
         class="flik__namn"
-        style={{ border: 0, background: 'transparent', padding: 0, color: 'inherit', font: 'inherit' }}
+        style={{
+          border: 0,
+          background: 'transparent',
+          padding: 0,
+          color: 'inherit',
+          font: 'inherit',
+        }}
         onClick={() => {
           activeTabId.value = tab.id
         }}
@@ -595,7 +981,12 @@ function FlikKnapp({ tab, aktiv }: { tab: Tab; aktiv: boolean }) {
         class="flik__stang"
         aria-label={`Stäng ${tab.frame.name}`}
         onClick={() => {
-          if (tab.smutsig && !window.confirm(`${tab.frame.name} har ändringar som inte exporterats. Stänga ändå?`)) return
+          if (
+            tab.smutsig &&
+            !window.confirm(`${tab.frame.name} har ändringar som inte exporterats. Stänga ändå?`)
+          ) {
+            return
+          }
           closeTab(tab.id)
         }}
       >
@@ -606,13 +997,13 @@ function FlikKnapp({ tab, aktiv }: { tab: Tab; aktiv: boolean }) {
 }
 
 function Statusrad(props: {
-  frame: Frame | null
-  harFilter: boolean
+  tab: Tab | null
+  begransad: boolean
   onRensaVy: () => void
-  onKopiera: () => void
+  onRadmeny: (x: number, y: number) => void
 }) {
-  const { frame } = props
-  if (!frame) {
+  const tab = props.tab
+  if (!tab) {
     return (
       <div class="statusrad">
         <span>Ingen fil öppen</span>
@@ -620,28 +1011,46 @@ function Statusrad(props: {
       </div>
     )
   }
+  const frame: Frame = tab.frame
   const parse = frame.meta.parse
+  const kolumner = selectableColumns(tab)
+  const agg = tab.markering ? aggregera(frame, kolumner, tab.markering) : null
+
   return (
     <div class="statusrad">
       <span>
-        {props.harFilter
+        {props.begransad
           ? `${formatCount(frame.view.length)} av ${formatCount(frame.rowCount)} rader`
           : `${formatCount(frame.rowCount)} rader`}
       </span>
-      <span>{formatCount(frame.columns.filter((c) => !c.hidden).length)} kolumner</span>
+      <span>{formatCount(kolumner.length)} kolumner</span>
       {parse && (
         <span>
           {parse.encoding.toUpperCase()}
           {parse.hadBom && ' med BOM'} · {DELIMITER_NAMES[parse.delimiter].toLowerCase()}
         </span>
       )}
-      {props.harFilter && (
+      {agg && agg.celler > 1 && (
+        <span title="Snabbsumma för markeringen">
+          {formatCount(agg.celler)} markerade
+          {agg.tal > 0 && ` · Σ ${formatSum(agg.summa)}`}
+          {agg.tal > 1 && ` · ø ${formatSum(agg.medel)}`}
+          {agg.tal === 0 && agg.ifyllda > 0 && ` · ${formatCount(agg.unika)} unika`}
+        </span>
+      )}
+      {props.begransad && (
         <button class="statusrad__knapp" onClick={props.onRensaVy}>
           Visa alla rader
         </button>
       )}
-      <button class="statusrad__knapp" onClick={props.onKopiera} title="Ctrl+Shift+C">
-        Kopiera för Excel
+      <button
+        class="statusrad__knapp"
+        onClick={(e) => {
+          const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+          props.onRadmeny(r.left, r.top - 150)
+        }}
+      >
+        Rader ▾
       </button>
       <span class="statusrad__lokal" title="Verktyget kan inte skicka data någonstans.">
         ● Allt lokalt

@@ -18,19 +18,26 @@ Inga externa typsnitt, inget CDN, ingen analys, ingen felrapportering, ingen inl
 
 ## Vad som fungerar idag
 
-- **Öppna** CSV, TXT och TSV genom att släppa filen var som helst i fönstret, eller välja den. Flera filer samtidigt, som flikar.
+- **Öppna** CSV, TXT, TSV och Excel (`.xlsx`) genom att släppa filen var som helst i fönstret, eller välja den. Flera filer samtidigt, som flikar. Arbetsböcker med flera blad låter dig välja blad.
 - **Teckenkodning och avgränsare upptäcks** — UTF-8, UTF-8 med BOM, UTF-16 och Windows-1252, samt `;` `,` tabb och `|`. Importdialogen visar gissningen i stället för att fatta den i tysthet, och säger på svenska om svenska tecken ser rätt ut.
 - **Importvarningar** för det som annars försvinner tyst: trasiga rader, dubbletta rubriker, tomma rubriker, Excels `sep=;`-rad och spökrader som bara är avgränsare.
 - **Kolumner** kan infogas, tas bort, byta namn, dupliceras, döljas och flyttas — genom att dra rubriken, dra i sidopanelen, eller via kolumnmenyn.
 - **Kolumninspektör** med antal ifyllda, tomma, unika och otolkbara värden, plus de vanligaste värdena. Klick på ”Visa de N raderna” filtrerar fram problemen.
+- **Redigera** celler direkt (`Enter`, `F2` eller dubbelklick), markera områden med mus eller `Skift`+piltangenter, töm markeringen med `Delete`, och fyll nedåt med `Ctrl+D`.
+- **Snabbsumma** i statusraden för markeringen — antal, summa och medel, med svenska tal som `1 240,50` korrekt tolkade.
+- **Rader** kan infogas, dubbleras och tas bort. Helt tomma rader och kolumner kan städas bort i ett svep.
+- **Urklipp mot Excel**: `Ctrl+C` kopierar markeringen som TSV, `Ctrl+V` klistrar in TSV eller CSV. Är det inklistrade större än markeringen frågar verktyget om det ska lägga till plats eller klippa av — det klipper aldrig av i tysthet. Inklistring i tomma läget öppnar datat som en ny fil.
+- **Sök** med `Ctrl+F`, accentokänsligt: `oberg` hittar `Öberg`. Träffarna markeras och räknas.
+- **Städa text**: trimma blanksteg, slå ihop dubbla mellanslag, ta bort osynliga tecken, VERSALER, gemener och Stor Första Bokstav.
 - **Ångra och gör om** på allt, med en steglista där du kan backa till vilket steg som helst.
-- **Export** till CSV med val av avgränsare, teckenkodning, BOM, radslut och vilka rader och kolumner som ska med. Förvalet är Excel-vänligt: semikolon, CRLF och UTF-8 med BOM. Formelskyddet är riskbaserat och rör inte negativa tal.
-- **Kopiera för Excel** lägger tabellen som TSV på urklipp.
+- **Export** till Excel (`.xlsx`) eller CSV. Excel är förvalt, eftersom det är det enda formatet som både bevarar `01234` som `01234` och skriver talkolumner som riktiga tal så att `SUMMA` fungerar. CSV-exporten har val av avgränsare, teckenkodning, BOM och radslut, med en Excel-vänlig profil (semikolon, CRLF, UTF-8 med BOM) och ett riskbaserat formelskydd som inte rör negativa tal.
 - Mörkt läge, tomt läge med exempelfil, och en varning innan sidan lämnas med osparat arbete.
+
+En Excel-fil innehåller typade värden i stället för text, så importen måste skriva om dem. Det sägs rakt ut i dialogen: datum blir `ÅÅÅÅ-MM-DD` (läst i UTC, så dagen aldrig förskjuts) och tal får det decimaltecken du väljer, utan tusentalsavgränsare.
 
 ## På gång
 
-Datum- och e-postverktyg, textstädning, flernivåsortering, filterbyggare, dubbletthantering, matchning av två filer med restlistor, samt Combine, Template och profiler. Se planen i projektets historik.
+Datum- och e-postverktyg, sök & ersätt, flernivåsortering, filterbyggare, dubbletthantering, matchning av två filer med restlistor, samt Combine, Template och profiler.
 
 ## Utveckling
 
@@ -52,4 +59,4 @@ Filparsning körs i en Web Worker. Datamodellen är kolumnbaserad och ordbokskod
 
 ## Publicering
 
-GitHub Actions kör typkontroll, enhetstester, bygge och röktest vid varje push, och publicerar till GitHub Pages från `main`. Bygget använder relativ bas, så det fungerar oavsett om sajten ligger under ett repo-namn, på ett eget domännamn eller öppnas direkt från disk.
+GitHub Actions kör typkontroll, enhetstester, bygge och röktest på varje pull request och på varje push till `main`, och publicerar till GitHub Pages från `main`. En utvecklingsgren får alltså sina kontroller så snart den har en öppen PR — vilket också är det som gör att varje commit bara körs en gång. Bygget använder relativ bas, så det fungerar oavsett om sajten ligger under ett repo-namn, på ett eget domännamn eller öppnas direkt från disk.

@@ -1,6 +1,14 @@
 import Papa from 'papaparse'
-import { Flag, type Column, type Frame, type ParseSettings, type Warning } from '../types.js'
-import { createColumn, intern } from '../frame/column.js'
+import {
+  Flag,
+  type Column,
+  type Delimiter,
+  type Frame,
+  type ParseSettings,
+  type Warning,
+} from '../types.js'
+import { intern } from '../frame/column.js'
+import { ColumnBuilder } from '../frame/builder.js'
 import { createFrame, uniqueColumnName } from '../frame/frame.js'
 import { decodeBytes, type DecodeResult } from './decode.js'
 import { sniff } from './sniff.js'
@@ -9,58 +17,6 @@ export interface ParseResult {
   frame: Frame
   decode: DecodeResult
   settings: ParseSettings
-}
-
-/**
- * Bygger en kolumn rad för rad utan att först materialisera hela filen som
- * strängmatris. Arrayerna växer genom fördubbling, precis som en vanlig
- * lista, men i typade arrayer.
- */
-class ColumnBuilder {
-  dict: string[] = ['']
-  dictIndex = new Map<string, number>([['', 0]])
-  codes = new Uint32Array(1024)
-  flags = new Uint8Array(1024)
-  n = 0
-
-  constructor(public name: string) {}
-
-  private grow(): void {
-    if (this.n < this.codes.length) return
-    const codes = new Uint32Array(this.codes.length * 2)
-    codes.set(this.codes)
-    this.codes = codes
-    const flags = new Uint8Array(this.flags.length * 2)
-    flags.set(this.flags)
-    this.flags = flags
-  }
-
-  push(value: string, flag = 0): void {
-    this.grow()
-    let code = this.dictIndex.get(value)
-    if (code === undefined) {
-      code = this.dict.length
-      this.dict.push(value)
-      this.dictIndex.set(value, code)
-    }
-    this.codes[this.n] = code
-    this.flags[this.n] = flag
-    this.n += 1
-  }
-
-  /** Fyller på tomma celler så att alla kolumner blir lika långa. */
-  padTo(length: number, flag = 0): void {
-    while (this.n < length) this.push('', flag)
-  }
-
-  finish(rowCount: number): Column {
-    const col = createColumn(this.name, 0)
-    col.dict = this.dict
-    col.dictIndex = this.dictIndex
-    col.codes = this.codes.subarray(0, rowCount).slice()
-    col.flags = this.flags.subarray(0, rowCount).slice()
-    return col
-  }
 }
 
 export interface ParseOverrides {
@@ -267,4 +223,32 @@ export function parseCsvBytes(
 export function fillColumn(col: Column, value: string, rowCount: number): void {
   const code = intern(col, value)
   col.codes.fill(code, 0, rowCount)
+}
+
+/**
+ * Tolkar text från urklipp som en rutnätsyta.
+ *
+ * Excel och Kalkylark lägger TSV på urklipp, men användare klistrar också in
+ * komma- och semikolonseparerad text direkt ur ett mejl. Samma
+ * avgränsargissning som filimporten används, så beteendet är ett och samma
+ * på båda ställena.
+ *
+ * Ingen rubrikrad antas: det som klistras in i ett rutnät är celler.
+ */
+export function parseDelimitedText(text: string): { rows: string[][]; delimiter: Delimiter } {
+  const trimmed = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '')
+  if (trimmed === '') return { rows: [], delimiter: '\t' }
+
+  const sniffed = sniff(trimmed)
+  const rows: string[][] = []
+  Papa.parse<string[]>(trimmed, {
+    delimiter: sniffed.delimiter,
+    quoteChar: '"',
+    escapeChar: '"',
+    skipEmptyLines: false,
+    step: (results) => {
+      rows.push(results.data.map((f) => f ?? ''))
+    },
+  })
+  return { rows, delimiter: sniffed.delimiter }
 }

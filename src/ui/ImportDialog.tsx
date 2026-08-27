@@ -29,6 +29,9 @@ export interface ImportSettings {
   trimFields: boolean
   skipEmptyRows: boolean
   headerRow: number | null
+  /** Endast för .xlsx. */
+  sheet?: string
+  decimal: ',' | '.'
 }
 
 export function ImportDialog(props: {
@@ -36,10 +39,12 @@ export function ImportDialog(props: {
   onAvbryt: () => void
   onOppna: (settings: ImportSettings) => void
 }) {
+  const arExcel = /\.xlsx$/i.test(props.file.name)
   const [settings, setSettings] = useState<ImportSettings>({
     trimFields: true,
     skipEmptyRows: true,
     headerRow: 0,
+    decimal: ',',
   })
   const [preview, setPreview] = useState<ParsePreview | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -48,13 +53,18 @@ export function ImportDialog(props: {
   useEffect(() => {
     let avbruten = false
     dataWorker
-      .preview(props.file, {
-        delimiter: settings.delimiter,
-        encoding: settings.encoding,
-        trimFields: settings.trimFields,
-        skipEmptyRows: settings.skipEmptyRows,
-        headerRow: settings.headerRow,
-      })
+      .preview(
+        props.file,
+        {
+          delimiter: settings.delimiter,
+          encoding: settings.encoding,
+          trimFields: settings.trimFields,
+          skipEmptyRows: settings.skipEmptyRows,
+          headerRow: settings.headerRow,
+        },
+        8,
+        arExcel ? { sheet: settings.sheet, decimal: settings.decimal } : undefined,
+      )
       .then((p) => {
         if (!avbruten) {
           setPreview(p)
@@ -96,24 +106,50 @@ export function ImportDialog(props: {
         </>
       }
     >
-      <div class="faltrad">
-        <div class="falt">
-          <span class="falt__etikett">Avgränsare</span>
-          <Val
-            varden={DELIMITER_VAL}
-            valt={(settings.delimiter ?? (preview?.delimiter as Delimiter) ?? ';')}
-            onValj={(v) => uppdatera({ delimiter: v })}
-          />
+      {arExcel ? (
+        <div class="faltrad">
+          {preview && preview.sheets && preview.sheets.length > 1 && (
+            <div class="falt">
+              <span class="falt__etikett">Blad</span>
+              <Val
+                varden={preview.sheets.map((namn) => ({ varde: namn, etikett: namn }))}
+                valt={settings.sheet ?? preview.valdSheet ?? preview.sheets[0]!}
+                onValj={(v) => uppdatera({ sheet: v })}
+              />
+            </div>
+          )}
+          <div class="falt">
+            <span class="falt__etikett">Decimaltecken för tal</span>
+            <Val
+              varden={[
+                { varde: ',' as const, etikett: 'Komma  1240,5', titel: 'Det svenskt Excel förväntar sig när filen läses tillbaka.' },
+                { varde: '.' as const, etikett: 'Punkt  1240.5', titel: 'Internationell form.' },
+              ]}
+              valt={settings.decimal}
+              onValj={(v) => uppdatera({ decimal: v })}
+            />
+          </div>
         </div>
-        <div class="falt">
-          <span class="falt__etikett">Teckenkodning</span>
-          <Val
-            varden={ENCODING_VAL}
-            valt={(settings.encoding ?? (preview?.encoding as Encoding) ?? 'utf-8')}
-            onValj={(v) => uppdatera({ encoding: v })}
-          />
+      ) : (
+        <div class="faltrad">
+          <div class="falt">
+            <span class="falt__etikett">Avgränsare</span>
+            <Val
+              varden={DELIMITER_VAL}
+              valt={(settings.delimiter ?? (preview?.delimiter as Delimiter) ?? ';')}
+              onValj={(v) => uppdatera({ delimiter: v })}
+            />
+          </div>
+          <div class="falt">
+            <span class="falt__etikett">Teckenkodning</span>
+            <Val
+              varden={ENCODING_VAL}
+              valt={(settings.encoding ?? (preview?.encoding as Encoding) ?? 'utf-8')}
+              onValj={(v) => uppdatera({ encoding: v })}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       <div class="faltrad">
         <label class="kryss">
@@ -148,7 +184,7 @@ export function ImportDialog(props: {
 
       {error && <Notis ton="fara">Filen kunde inte läsas: {error}</Notis>}
 
-      {preview && <Sjalvkontroll preview={preview} />}
+      {preview && <Sjalvkontroll preview={preview} arExcel={arExcel} />}
 
       {preview && (
         <div class="falt">
@@ -156,11 +192,13 @@ export function ImportDialog(props: {
             <span class="falt__etikett">
               Förhandsvisning — {formatCount(preview.rows.length)} första raderna
             </span>
-            <button class="knapp knapp--tyst" onClick={() => setVisaRa(!visaRa)}>
-              {visaRa ? 'Visa tolkat' : 'Visa rådata'}
-            </button>
+            {!arExcel && (
+              <button class="knapp knapp--tyst" onClick={() => setVisaRa(!visaRa)}>
+                {visaRa ? 'Visa tolkat' : 'Visa rådata'}
+              </button>
+            )}
           </div>
-          {visaRa ? (
+          {visaRa && !arExcel ? (
             <RaData file={props.file} encoding={settings.encoding ?? (preview.encoding as Encoding)} />
           ) : (
             <div class="fortab__omslag">
@@ -197,10 +235,29 @@ export function ImportDialog(props: {
  * bevis för att kodningen är rätt vald, och att visa en grön bock där vore
  * att ljuga med hög konfidens.
  */
-function Sjalvkontroll({ preview }: { preview: ParsePreview }) {
+function Sjalvkontroll({ preview, arExcel }: { preview: ParsePreview; arExcel: boolean }) {
   const extra = preview.warnings.filter(
     (w) => w.kind !== 'encoding-uncertain' && w.kind !== 'mojibake',
   )
+  if (arExcel) {
+    // En arbetsbok har inga tecken att avkoda, men den har heller ingen
+    // råtext. Det som står här är alltså inte en bekräftelse utan en
+    // upplysning om vad vi behövde skriva om.
+    return (
+      <>
+        <Notis ton="info">
+          En Excel-fil innehåller typade värden, inte text. Datum skrivs om till{' '}
+          <strong>ÅÅÅÅ-MM-DD</strong> och tal med det decimaltecken du valt, utan
+          tusentalsavgränsare. Ledande nollor i textceller bevaras.
+        </Notis>
+        {extra.map((w, i) => (
+          <Notis ton="varning" key={i}>
+            {w.message}
+          </Notis>
+        ))}
+      </>
+    )
+  }
   return (
     <>
       {preview.check.state === 'ok' && (

@@ -3,6 +3,11 @@ import type { ParseOverrides } from '../core/csv/parse.js'
 import { deserializeFrame } from '../core/frame/serialize.js'
 import type { JobId, ParsePreview, WorkerRequest, WorkerResponse } from './protocol.js'
 
+export interface XlsxVal {
+  sheet?: string
+  decimal: ',' | '.'
+}
+
 /** Omit över en union måste distribueras, annars faller varianternas fält bort. */
 type WithoutId<T> = T extends unknown ? Omit<T, 'id'> : never
 
@@ -81,17 +86,23 @@ export class DataWorkerClient {
     })
   }
 
-  preview(file: File, overrides: ParseOverrides, rows = 8): Promise<ParsePreview> {
-    return this.send<ParsePreview>({ kind: 'preview', file, overrides, rows })
+  preview(
+    file: File,
+    overrides: ParseOverrides,
+    rows = 8,
+    xlsx?: XlsxVal,
+  ): Promise<ParsePreview> {
+    return this.send<ParsePreview>({ kind: 'preview', file, overrides, rows, xlsx })
   }
 
   parse(
     file: File,
     overrides: ParseOverrides,
     onProgress?: (p: Progress) => void,
+    xlsx?: XlsxVal,
   ): Promise<Frame> {
     return this.send<Frame>(
-      { kind: 'parse', file, fileName: file.name, overrides },
+      { kind: 'parse', file, fileName: file.name, overrides, xlsx },
       onProgress,
     )
   }

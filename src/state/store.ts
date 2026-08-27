@@ -1,5 +1,7 @@
 import { computed, signal } from '@preact/signals'
 import type { ColumnId, Frame } from '../core/types.js'
+import { computeView, harBegransning, TOM_VY, type ViewSpec } from './view.js'
+import { cell, klamp, type Selection } from './selection.js'
 
 let seq = 0
 const nextId = () => `t${(seq += 1).toString(36)}`
@@ -32,6 +34,16 @@ export interface Tab {
   activeColumnId: ColumnId | null
   /** Sant tills innehållet exporterats — visas som prick i fliken. */
   smutsig: boolean
+  /**
+   * Vad som visas. Sökning och "visa ogiltiga" skriver hit, aldrig direkt
+   * till `frame.view`, så att de inte skriver över varandra.
+   */
+  viewSpec: ViewSpec
+  /** Antal kolumner med sökträff, för sökradens räknare. */
+  kolumnerMedTraff: number
+  markering: Selection | null
+  /** Cellen som redigeras just nu, i vy-koordinater. */
+  redigerar: { rad: number; kol: number } | null
 }
 
 export const tabs = signal<Tab[]>([])
@@ -54,6 +66,48 @@ export function touch(): void {
   revision.value += 1
 }
 
+/**
+ * Räknar om vilka rader som visas utifrån flikens vy-beskrivning.
+ *
+ * Anropas efter varje ändring av `viewSpec` och efter varje dataändring som
+ * kan påverka vilka rader som matchar — en redigerad cell kan mycket väl
+ * falla ur en pågående sökning.
+ */
+export function refreshView(tab: Tab): void {
+  const result = computeView(tab.frame, tab.viewSpec)
+  tab.frame.view = result.view
+  tab.kolumnerMedTraff = result.kolumnerMedTraff
+  if (tab.markering) {
+    const synliga = tab.frame.columns.filter((c) => !c.hidden).length
+    tab.markering =
+      result.view.length === 0 || synliga === 0
+        ? null
+        : klamp(tab.markering, result.view.length, synliga)
+  }
+  touch()
+}
+
+export function setViewSpec(tab: Tab, delta: Partial<ViewSpec>): void {
+  tab.viewSpec = { ...tab.viewSpec, ...delta }
+  tab.redigerar = null
+  refreshView(tab)
+}
+
+export function clearViewSpec(tab: Tab): void {
+  tab.viewSpec = { ...TOM_VY }
+  tab.redigerar = null
+  refreshView(tab)
+}
+
+export function viewIsLimited(tab: Tab | null): boolean {
+  return tab !== null && harBegransning(tab.viewSpec)
+}
+
+export function setSelection(tab: Tab, markering: Selection | null): void {
+  tab.markering = markering
+  touch()
+}
+
 export function openFrame(frame: Frame): Tab {
   const tab: Tab = {
     id: nextId(),
@@ -62,6 +116,10 @@ export function openFrame(frame: Frame): Tab {
     cursor: 0,
     activeColumnId: frame.columns[0]?.id ?? null,
     smutsig: false,
+    viewSpec: { ...TOM_VY },
+    kolumnerMedTraff: 0,
+    markering: frame.rowCount > 0 ? cell(0, 0) : null,
+    redigerar: null,
   }
   tabs.value = [...tabs.value, tab]
   activeTabId.value = tab.id
@@ -100,7 +158,9 @@ export function runStep(
   tab.history = trimmed
   tab.cursor = trimmed.length
   tab.smutsig = true
-  touch()
+  tab.redigerar = null
+  // En dataändring kan mycket väl få raden att falla ur en pågående sökning.
+  refreshView(tab)
 }
 
 export function canUndo(tab: Tab | null): boolean {
@@ -116,7 +176,7 @@ export function undo(tab: Tab): AppliedStep | null {
   const step = tab.history[tab.cursor - 1]!
   step.revert()
   tab.cursor -= 1
-  touch()
+  refreshView(tab)
   return step
 }
 
@@ -125,7 +185,7 @@ export function redo(tab: Tab): AppliedStep | null {
   const step = tab.history[tab.cursor]!
   step.apply()
   tab.cursor += 1
-  touch()
+  refreshView(tab)
   return step
 }
 
@@ -137,7 +197,7 @@ export function undoThrough(tab: Tab, stepIndex: number): void {
     step.revert()
     tab.cursor -= 1
   }
-  touch()
+  refreshView(tab)
 }
 
 /* ---------- Notiser ---------- */

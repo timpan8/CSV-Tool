@@ -5,6 +5,14 @@
   min-height: 0;
   /* Tal och datum ska stå i pelare, inte hoppa. */
   font-variant-numeric: tabular-nums;
+  /* Markering sköts av rutnätet självt. Utan det här drar skift-klick med
+     sig webbläsarens textmarkering och lägger en andra, blå markering ovanpå
+     cellmarkeringen. Kopiering går ändå via Ctrl+C, som vi hanterar själva. */
+  user-select: none;
+}
+
+.rutnat__redigering {
+  user-select: text;
 }
 
 .rutnat__rad {
@@ -248,4 +256,83 @@
   padding: 40px 20px;
   text-align: center;
   color: var(--text-svag);
+}
+
+/* ---------- Markering ---------- */
+
+.rutnat__cell--markerad {
+  background: var(--accent-svag);
+}
+
+.rutnat__rad:hover .rutnat__cell--markerad {
+  background: var(--accent-svag);
+}
+
+/* Fokuscellen är den som tar emot skrivning och som pilarna utgår från. */
+.rutnat__cell--fokus {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  z-index: 1;
+}
+
+.rutnat__cell--fokus.rutnat__cell--ogiltig {
+  box-shadow: inset 0 0 0 2px var(--accent), inset 4px 0 0 var(--varning);
+}
+
+.rutnat__cell--traff > span {
+  background: color-mix(in srgb, var(--varning) 34%, transparent);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.rutnat__redigering {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 2px solid var(--accent);
+  border-radius: 0;
+  padding: 0 6px;
+  font: inherit;
+  background: var(--yta);
+  color: var(--text);
+  z-index: 2;
+}
+
+.rutnat__rad--markerad .rutnat__radnr {
+  background: var(--accent-svag);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.rutnat__radnr--tillagd {
+  font-style: italic;
+}
+
+.rubrik--markerad {
+  background: var(--accent-svag);
+}
+
+/* ---------- Sökrad ---------- */
+
+.sokrad {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--linje);
+  background: var(--yta-2);
+}
+
+.sokrad input[type='search'] {
+  flex: 0 1 340px;
+}
+
+.sokrad__antal {
+  color: var(--text-svag);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sokrad__antal--noll {
+  color: var(--varning);
 }

@@ -24,11 +24,11 @@ export function EmptyState(props: {
         }}
       >
         <p class="tomt__rubrik">Släpp dina filer här</p>
-        <p class="tomt__underrubrik">CSV, TXT eller tabbseparerad text</p>
+        <p class="tomt__underrubrik">CSV, TXT, tabbseparerad text eller Excel (.xlsx)</p>
         <input
           ref={inputRef}
           type="file"
-          accept=".csv,.txt,.tsv,text/csv,text/plain"
+          accept=".csv,.txt,.tsv,.xlsx,text/csv,text/plain"
           multiple
           style={{ display: 'none' }}
           onChange={(e) => {
