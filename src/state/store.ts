@@ -1,6 +1,11 @@
 import { computed, signal } from '@preact/signals'
 import type { ColumnId, Frame } from '../core/types.js'
-import { computeView, harBegransning, TOM_VY, type ViewSpec } from './view.js'
+import { computeView, harBegransning, TOM_VY, utanBegransning, type ViewSpec } from './view.js'
+import type { Forhandsvisning } from './preview.js'
+import { synkaOrdning, type Ordning } from './ordning.js'
+import type { Sorteringsniva } from '../core/ops/sort.js'
+import { aktivaRegler, TOMT_FILTER, type Filter } from '../core/ops/filter.js'
+import type { Dubblettnyckel } from '../core/ops/duplicates.js'
 import { cell, klamp, type Selection } from './selection.js'
 
 let seq = 0
@@ -31,6 +36,17 @@ export interface Tab {
   history: AppliedStep[]
   /** Antal steg i `history` som är tillämpade. Ångra flyttar den bakåt. */
   cursor: number
+  /**
+   * Räknare som bara stegas när cellinnehållet faktiskt ändrats.
+   *
+   * Den globala `revision` bumpas av allt som ska ritas om, inklusive
+   * markering, sökning och förhandsvisning. Ett verktyg som räknar om sitt
+   * förslag varje gång `revision` ändras skulle mata sig självt: förslaget
+   * skrivs till fliken, fliken ritas om, förslaget räknas om. Den här
+   * räknaren svarar på den snävare frågan — har datat ändrats? — och är
+   * därför den ett verktyg ska lyssna på.
+   */
+  dataRevision: number
   activeColumnId: ColumnId | null
   /** Sant tills innehållet exporterats — visas som prick i fliken. */
   smutsig: boolean
@@ -44,6 +60,21 @@ export interface Tab {
   markering: Selection | null
   /** Cellen som redigeras just nu, i vy-koordinater. */
   redigerar: { rad: number; kol: number } | null
+  /**
+   * Den omskrivning som visas i tabellen men ännu inte är gjord.
+   *
+   * Den ligger på fliken och inte i dialogens eget läge, eftersom rutnätet
+   * ritar den och `refreshView` filtrerar på den. En förhandsvisning är
+   * heller aldrig en dataändring och hamnar därför aldrig i historiken.
+   */
+  forhandsvisning: Forhandsvisning | null
+  /**
+   * Den frusna visningsordningen, eller null när filens ordning gäller.
+   *
+   * Den är en cache av `viewSpec.sortering` och inget annat — se
+   * `src/state/ordning.ts` för varför den aldrig får bli en sanning i sig.
+   */
+  ordning: Ordning | null
 }
 
 export const tabs = signal<Tab[]>([])
@@ -74,7 +105,8 @@ export function touch(): void {
  * falla ur en pågående sökning.
  */
 export function refreshView(tab: Tab): void {
-  const result = computeView(tab.frame, tab.viewSpec)
+  synkaOrdning(tab, tab.viewSpec.sortering ?? [], tab.viewSpec.dubbletter ?? null)
+  const result = computeView(tab.frame, tab.viewSpec, tab.forhandsvisning, tab.ordning)
   tab.frame.view = result.view
   tab.kolumnerMedTraff = result.kolumnerMedTraff
   if (tab.markering) {
@@ -93,14 +125,132 @@ export function setViewSpec(tab: Tab, delta: Partial<ViewSpec>): void {
   refreshView(tab)
 }
 
+/**
+ * Nollställer allt som *döljer* rader.
+ *
+ * Sorteringen behålls med flit: den gömmer ingenting, så en knapp som heter
+ * "Visa alla rader" ska inte kasta den. Dubblettvyn däremot måste med — en
+ * gruppordning utan gruppfilter är obegriplig att titta på.
+ */
 export function clearViewSpec(tab: Tab): void {
-  tab.viewSpec = { ...TOM_VY }
+  tab.viewSpec = utanBegransning(tab.viewSpec)
   tab.redigerar = null
   refreshView(tab)
 }
 
 export function viewIsLimited(tab: Tab | null): boolean {
-  return tab !== null && harBegransning(tab.viewSpec)
+  return tab !== null && harBegransning(tab.viewSpec, tab.frame)
+}
+
+/* ---------- Sortering ---------- */
+
+export function harSortering(tab: Tab | null): boolean {
+  return (tab?.viewSpec.sortering?.length ?? 0) > 0
+}
+
+export function sorteringenArInaktuell(tab: Tab | null): boolean {
+  return tab?.ordning?.inaktuell === true
+}
+
+/**
+ * Byter ordning och låter markeringen följa med sin rad.
+ *
+ * Markeringen ligger i vy-koordinater, vilket är rätt när urvalet ändras —
+ * då ska blicken stanna där den är. Men när *ordningen* byts förväntar man
+ * sig, som i Excel, att raden man tittade på fortfarande är markerad. Ett
+ * rektangulärt område över rader som inte längre ligger intill varandra är
+ * dessutom inte en markering någon har gjort, så det kollapsar till
+ * fokuscellen.
+ */
+function medOmforankring(tab: Tab, andra: () => void): void {
+  const fysisk = tab.markering ? (tab.frame.view[tab.markering.fokusRad] ?? null) : null
+  const kol = tab.markering?.fokusKol ?? 0
+  andra()
+  tab.redigerar = null
+  refreshView(tab)
+  if (fysisk === null) return
+  const ny = tab.frame.view.indexOf(fysisk)
+  // Föll raden ur vyn gäller klämningen som refreshView redan gjort.
+  if (ny !== -1) tab.markering = cell(ny, kol)
+  touch()
+}
+
+export function sattSortering(tab: Tab, nivaer: Sorteringsniva[]): void {
+  medOmforankring(tab, () => {
+    tab.viewSpec = { ...tab.viewSpec, sortering: nivaer.length > 0 ? nivaer : undefined }
+  })
+}
+
+/**
+ * Växlar sorteringen på en kolumn.
+ *
+ * Utan `lagg` ersätter den alla nivåer — det är vad ett klick på en rubrik
+ * betyder. Med `lagg` läggs kolumnen till som en ytterligare nivå, eller
+ * vänds om den redan finns.
+ */
+export function vaxlaSortering(tab: Tab, colId: ColumnId, lagg = false): void {
+  const nuvarande = tab.viewSpec.sortering ?? []
+  const index = nuvarande.findIndex((n) => n.colId === colId)
+  const riktning =
+    index !== -1 && nuvarande[index]!.riktning === 'stigande' ? 'fallande' : 'stigande'
+
+  if (!lagg) {
+    sattSortering(tab, [{ colId, riktning }])
+    return
+  }
+  const nya = nuvarande.map((n) => ({ ...n }))
+  if (index === -1) nya.push({ colId, riktning })
+  else nya[index]!.riktning = riktning
+  sattSortering(tab, nya)
+}
+
+/** Räknar om den frusna ordningen på nytt data. */
+export function sorteraOm(tab: Tab): void {
+  medOmforankring(tab, () => {
+    synkaOrdning(tab, tab.viewSpec.sortering ?? [], tab.viewSpec.dubbletter ?? null, true)
+  })
+}
+
+export function rensaSortering(tab: Tab): void {
+  sattSortering(tab, [])
+}
+
+/* ---------- Filter och dubbletter ---------- */
+
+/**
+ * Filtret räknas om löpande, till skillnad från sorteringen.
+ *
+ * Att filtrera fram trasiga rader, rätta dem och se dem försvinna är ett bra
+ * arbetsflöde — och det är redan hur `runStep` beter sig.
+ */
+export function sattFilter(tab: Tab, filter: Filter): void {
+  setViewSpec(tab, { filter: filter.regler.length > 0 ? filter : undefined })
+}
+
+export function harFilter(tab: Tab | null): boolean {
+  return tab !== null && aktivaRegler(tab.frame, tab.viewSpec.filter ?? TOMT_FILTER).length > 0
+}
+
+/** Dubblettvyn byter ordning, så markeringen ska följa med sin rad. */
+export function sattDubbletter(tab: Tab, nyckel: Dubblettnyckel | null): void {
+  medOmforankring(tab, () => {
+    tab.viewSpec = { ...tab.viewSpec, dubbletter: nyckel ?? undefined }
+  })
+}
+
+/**
+ * Visar eller stänger en förhandsvisning.
+ *
+ * Att stänga den återställer alltid `visaBara`: annars skulle vyn bli tom och
+ * oförklarlig när det som filtrerade den försvann.
+ */
+export function setForhandsvisning(tab: Tab, forh: Forhandsvisning | null): void {
+  tab.forhandsvisning = forh
+  if (forh === null && tab.viewSpec.visaBara !== undefined) {
+    const { visaBara: _, ...kvar } = tab.viewSpec
+    tab.viewSpec = kvar
+  }
+  refreshView(tab)
 }
 
 export function setSelection(tab: Tab, markering: Selection | null): void {
@@ -108,19 +258,33 @@ export function setSelection(tab: Tab, markering: Selection | null): void {
   touch()
 }
 
-export function openFrame(frame: Frame): Tab {
-  const tab: Tab = {
+/**
+ * En ny flik i utgångsläge.
+ *
+ * Formen bor här och ingen annanstans. Testfixturer som bygger en `Tab` för
+ * hand går sönder vid varje nytt fält, och det fältet är alltid något de
+ * inte bryr sig om.
+ */
+export function nyTab(frame: Frame): Tab {
+  return {
     id: nextId(),
     frame,
     history: [],
     cursor: 0,
+    dataRevision: 0,
     activeColumnId: frame.columns[0]?.id ?? null,
     smutsig: false,
     viewSpec: { ...TOM_VY },
     kolumnerMedTraff: 0,
     markering: frame.rowCount > 0 ? cell(0, 0) : null,
     redigerar: null,
+    forhandsvisning: null,
+    ordning: null,
   }
+}
+
+export function openFrame(frame: Frame): Tab {
+  const tab = nyTab(frame)
   tabs.value = [...tabs.value, tab]
   activeTabId.value = tab.id
   return tab
@@ -153,6 +317,7 @@ export function runStep(
   step: Omit<AppliedStep, 'id'>,
 ): void {
   step.apply()
+  tab.dataRevision += 1
   const trimmed = tab.history.slice(0, tab.cursor)
   trimmed.push({ ...step, id: (seq += 1) })
   tab.history = trimmed
@@ -176,6 +341,7 @@ export function undo(tab: Tab): AppliedStep | null {
   const step = tab.history[tab.cursor - 1]!
   step.revert()
   tab.cursor -= 1
+  tab.dataRevision += 1
   refreshView(tab)
   return step
 }
@@ -185,6 +351,7 @@ export function redo(tab: Tab): AppliedStep | null {
   const step = tab.history[tab.cursor]!
   step.apply()
   tab.cursor += 1
+  tab.dataRevision += 1
   refreshView(tab)
   return step
 }
@@ -196,6 +363,7 @@ export function undoThrough(tab: Tab, stepIndex: number): void {
     if (!step) break
     step.revert()
     tab.cursor -= 1
+    tab.dataRevision += 1
   }
   refreshView(tab)
 }

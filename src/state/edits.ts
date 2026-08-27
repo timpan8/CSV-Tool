@@ -2,6 +2,7 @@ import type { Column, ColumnId } from '../core/types.js'
 import {
   createColumn,
   getCell,
+  intern,
   mapColumnValues,
   restoreCell,
   restoreColumn,
@@ -10,8 +11,10 @@ import {
   type ColumnSnapshot,
 } from '../core/frame/column.js'
 import {
+  columnIndex,
   deleteRows,
   duplicateRows,
+  findColumn,
   findEmptyColumns,
   findEmptyRows,
   insertRows,
@@ -19,6 +22,7 @@ import {
   uniqueColumnName,
   type SavedRow,
 } from '../core/frame/frame.js'
+import type { Forhandsvisning } from './preview.js'
 import { rect, type Selection } from './selection.js'
 import { runStep, type Tab } from './store.js'
 import { celler, kolumner, rader } from '../core/locale/sv.js'
@@ -332,4 +336,112 @@ export function stadaKolumner(tab: Tab, valda: Column[], stadning: Stadning): nu
     },
   )
   return andrade
+}
+
+/* ---------- Omskrivning av en kolumn ---------- */
+
+/**
+ * Kör en godtycklig transform över en kolumn som ett ångringsbart steg.
+ *
+ * Det här är den gemensamma vägen in för samtliga städverktyg — datum,
+ * e-post→namn, sök & ersätt, talstädning. De skiljer sig åt i vilken funktion
+ * de skickar in och vad de kallar steget, inte i hur ändringen görs.
+ */
+export function omvandlaKolumn(
+  tab: Tab,
+  col: Column,
+  etikett: string,
+  kind: string,
+  fn: (value: string) => string,
+): number {
+  let andrade = 0
+  korOverKolumner(tab, etikett, kind, [col], () => {
+    andrade = mapColumnValues(col, fn)
+  })
+  return andrade
+}
+
+/** Tillämpar en öppen förhandsvisning. Returnerar antal ändrade celler. */
+export function tillampaForhandsvisning(tab: Tab, forh: Forhandsvisning): number {
+  const kall = findColumn(tab.frame, forh.colId)
+  if (!kall) return 0
+  if (forh.nyaKolumner.length > 0 || forh.fn === null) return skapaKolumnerFran(tab, kall, forh)
+
+  const fn = forh.fn
+  let andrade = 0
+  korOverKolumner(tab, forh.etikett, forh.kind, [kall], () => {
+    andrade = mapColumnValues(kall, fn)
+    // Typen ingår i ögonblicksbilden, så den följer med tillbaka vid ångra.
+    if (forh.nyTyp !== undefined && !kall.typeLocked) kall.type = forh.nyTyp
+  })
+  return andrade
+}
+
+/**
+ * Skapar de nya kolumner som spökkolumnerna visade.
+ *
+ * Kolumnerna byggs direkt ur förhandsvisningens tabell. Räknas den per unikt
+ * värde blir det en intern-operation per ordbokspost och sedan ett
+ * heltalssvep över raderna; räknas den per rad finns ingen sådan genväg, och
+ * då görs arbetet en gång per rad — vilket är precis vad en mall över flera
+ * kolumner kräver.
+ *
+ * Ångra tar bort kolumnerna igen, och gör om lägger tillbaka exakt samma
+ * kolumnobjekt.
+ */
+function skapaKolumnerFran(tab: Tab, kall: Column, forh: Forhandsvisning): number {
+  const index = columnIndex(tab.frame, kall.id) + 1
+  const tagna = tab.frame.columns.map((c) => c.name)
+  const nya: Column[] = []
+
+  for (let mal = 0; mal < forh.stride; mal++) {
+    const namn = uniqueColumnName(tagna, forh.nyaKolumner[mal] ?? kall.name)
+    tagna.push(namn)
+    nya.push(createColumn(namn, tab.frame.rowCount, forh.nyTyp ?? 'text'))
+  }
+
+  let ifyllda = 0
+  if (forh.perRad) {
+    for (let r = 0; r < tab.frame.rowCount; r++) {
+      let nagot = false
+      for (let mal = 0; mal < forh.stride; mal++) {
+        const kod = intern(nya[mal]!, forh.nya[r * forh.stride + mal] ?? '')
+        nya[mal]!.codes[r] = kod
+        if (kod !== 0) nagot = true
+      }
+      if (nagot) ifyllda += 1
+    }
+  } else {
+    const kartor = nya.map(() => new Uint32Array(kall.dict.length))
+    for (let kod = 0; kod < kall.dict.length; kod++) {
+      for (let mal = 0; mal < forh.stride; mal++) {
+        kartor[mal]![kod] = intern(nya[mal]!, forh.nya[kod * forh.stride + mal] ?? '')
+      }
+    }
+    for (let r = 0; r < tab.frame.rowCount; r++) {
+      const kallkod = kall.codes[r]!
+      let nagot = false
+      for (let mal = 0; mal < forh.stride; mal++) {
+        const kod = kartor[mal]![kallkod]!
+        nya[mal]!.codes[r] = kod
+        if (kod !== 0) nagot = true
+      }
+      if (nagot) ifyllda += 1
+    }
+  }
+
+  runStep(tab, {
+    label: forh.etikett,
+    kind: forh.kind,
+    apply: () => {
+      tab.frame.columns.splice(index, 0, ...nya)
+    },
+    revert: () => {
+      for (const col of nya) {
+        const i = tab.frame.columns.indexOf(col)
+        if (i !== -1) tab.frame.columns.splice(i, 1)
+      }
+    },
+  })
+  return ifyllda
 }

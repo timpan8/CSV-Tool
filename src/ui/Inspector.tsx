@@ -3,6 +3,7 @@ import type { Column, ColumnType, Frame } from '../core/types.js'
 import { filledCount, valueCounts } from '../core/frame/column.js'
 import { TYPE_LABELS, violatesType } from '../core/infer.js'
 import { formatCount } from '../core/locale/sv.js'
+import { VERKTYG, type Verktygsnamn } from './verktyg.jsx'
 
 const TYPER: ColumnType[] = ['text', 'number', 'date', 'email', 'bool']
 
@@ -59,6 +60,9 @@ export function Inspector(props: {
   onRename: () => void
   onDuplicate: () => void
   onDelete: () => void
+  onVerktyg: (namn: Verktygsnamn) => void
+  /** Klick på ett av de vanligaste värdena filtrerar fram just det. */
+  onFiltreraVarde: (varde: string) => void
 }) {
   const { column, frame } = props
   const stat = useMemo(
@@ -149,20 +153,38 @@ export function Inspector(props: {
             <span class="falt__etikett">Vanligaste värden</span>
             <div class="insp__topp" style={{ marginTop: 6 }}>
               {stat.topp.map((post) => (
-                <div class="insp__toppost" key={post.varde}>
-                  <span class="insp__vardetext" title={post.varde}>
-                    {post.varde}
-                  </span>
+                <button
+                  class="insp__toppost"
+                  key={post.varde}
+                  title={`Filtrera fram ${post.varde}`}
+                  onClick={() => props.onFiltreraVarde(post.varde)}
+                >
+                  <span class="insp__vardetext">{post.varde}</span>
                   <span class="insp__antal">{formatCount(post.antal)}</span>
                   <div
                     class="insp__stapel"
                     style={{ width: `${(post.antal / maxAntal) * 100}%` }}
                   />
-                </div>
+                </button>
               ))}
             </div>
           </div>
         )}
+
+        <div class="insp__grupp">
+          <span class="falt__etikett">Städa kolumnen</span>
+          <div class="insp__knappar" style={{ marginTop: 6 }}>
+            {VERKTYG.map((v) => (
+              <button
+                key={v.namn}
+                class={`knapp${v.foreslasFor.includes(column.type) ? ' knapp--primar' : ''}`}
+                onClick={() => props.onVerktyg(v.namn)}
+              >
+                {v.etikett}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div class="insp__grupp" style={{ borderBottom: 0 }}>
           <span class="falt__etikett">Åtgärder</span>

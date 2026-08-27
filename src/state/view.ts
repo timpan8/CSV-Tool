@@ -1,8 +1,12 @@
-import type { ColumnId, Frame } from '../core/types.js'
+import type { Frame } from '../core/types.js'
 import { getCell, matchDictionary } from '../core/frame/column.js'
-import { findColumn, identityView } from '../core/frame/frame.js'
-import { violatesType } from '../core/infer.js'
+import { findColumn } from '../core/frame/frame.js'
 import { normalizeAlways, stripDiacritics } from '../core/locale/sv.js'
+import { ANDRAD, PROBLEM, uppslag, type Forhandsvisning } from './preview.js'
+import { utgangslage, type Ordning } from './ordning.js'
+import type { Sorteringsniva } from '../core/ops/sort.js'
+import { aktivaRegler, tillampaFilter, TOMT_FILTER, type Filter } from '../core/ops/filter.js'
+import type { Dubblettnyckel } from '../core/ops/duplicates.js'
 
 /**
  * Beskrivningen av vad som visas.
@@ -15,14 +19,52 @@ import { normalizeAlways, stripDiacritics } from '../core/locale/sv.js'
 export interface ViewSpec {
   /** Fritextsökning över alla kolumner. Accentokänslig. */
   search?: string
-  /** Visa bara rader där den här kolumnen inte går att tolka som sin typ. */
-  invalidIn?: ColumnId
+  /**
+   * Begränsa till raderna en pågående förhandsvisning ändrar, eller till dem
+   * den har problem med. Gäller bara medan en förhandsvisning är öppen.
+   */
+  visaBara?: 'andrade' | 'problem'
+  /**
+   * Sorteringens *spec*. Den beräknade ordningen ligger på fliken, eftersom
+   * den är en cache och inte en beskrivning.
+   */
+  sortering?: Sorteringsniva[]
+  /** Regellistan. Reglerna ligger kvar även avslagna eller ofärdiga. */
+  filter?: Filter
+  /**
+   * Visa bara rader som ingår i en dubblettgrupp.
+   *
+   * Nyckeln bor här, men grupperna räknas i flikens `ordning` — medlemskapet
+   * och gruppordningen faller ur samma beräkning och måste frysas ihop.
+   */
+  dubbletter?: Dubblettnyckel
 }
 
 export const TOM_VY: ViewSpec = {}
 
-export function harBegransning(spec: ViewSpec): boolean {
-  return (spec.search ?? '').trim() !== '' || spec.invalidIn !== undefined
+/**
+ * Sant när något *döljer* rader.
+ *
+ * Sortering räknas inte hit. Den ändrar ordningen men gömmer ingenting, och
+ * att låta den tända "X av Y rader" eller exportdialogens filtervarning vore
+ * att varna för något som inte hänt.
+ */
+export function harBegransning(spec: ViewSpec, frame?: Frame): boolean {
+  const harFilter =
+    spec.filter !== undefined &&
+    (frame ? aktivaRegler(frame, spec.filter).length > 0 : spec.filter.regler.length > 0)
+  return (
+    (spec.search ?? '').trim() !== '' ||
+    spec.visaBara !== undefined ||
+    spec.dubbletter !== undefined ||
+    harFilter
+  )
+}
+
+/** Vy-inställningar som döljer rader. Sorteringen är inte en av dem. */
+export function utanBegransning(spec: ViewSpec): ViewSpec {
+  const { sortering } = spec
+  return sortering ? { sortering } : {}
 }
 
 /**
@@ -49,23 +91,98 @@ export interface ViewResult {
  * hundratusen rader och tre unika värden kostar tre strängjämförelser. Först
  * därefter går vi ett heltalssvep över raderna.
  */
-export function computeView(frame: Frame, spec: ViewSpec): ViewResult {
-  const fraga = (spec.search ?? '').trim()
+export function computeView(
+  frame: Frame,
+  spec: ViewSpec,
+  forh: Forhandsvisning | null = null,
+  ordning: Ordning | null = null,
+): ViewResult {
+  const grund = grundvy(frame, spec, ordning)
+  const filtrerad = begransaTillFilter(frame, grund, spec)
+  const dubbletter = begransaTillDubbletter(filtrerad, spec, ordning)
+  return begransaTillForhandsvisning(frame, dubbletter, spec, forh)
+}
 
-  if (spec.invalidIn !== undefined) {
-    const col = findColumn(frame, spec.invalidIn)
-    if (col) {
-      const mask = matchDictionary(col, (v) => v !== '' && violatesType(v, col.type))
-      const traffar: number[] = []
-      for (let r = 0; r < frame.rowCount; r++) {
-        if (mask[col.codes[r]!]! === 1) traffar.push(r)
-      }
-      return { view: Uint32Array.from(traffar), kolumnerMedTraff: traffar.length > 0 ? 1 : 0 }
-    }
+/**
+ * Filtrerar en färdig vy genom regellistan.
+ *
+ * Ett efterled, precis som förhandsvisningens: resultatet blir en delföljd av
+ * det som kom in, så sortering och sökning överlever filtret.
+ */
+function begransaTillFilter(frame: Frame, grund: ViewResult, spec: ViewSpec): ViewResult {
+  if (spec.filter === undefined || spec.filter.regler.length === 0) return grund
+  const { rader } = tillampaFilter(frame, spec.filter, grund.view)
+  return { ...grund, view: rader }
+}
+
+/** Begränsar till raderna som ingår i en dubblettgrupp. */
+function begransaTillDubbletter(
+  grund: ViewResult,
+  spec: ViewSpec,
+  ordning: Ordning | null,
+): ViewResult {
+  if (spec.dubbletter === undefined) return grund
+  const grupper = ordning?.grupper
+  if (!grupper) return { ...grund, view: new Uint32Array(0) }
+  const kvar: number[] = []
+  for (let i = 0; i < grund.view.length; i++) {
+    const r = grund.view[i]!
+    if (grupper.grupp[r]! !== 0) kvar.push(r)
   }
+  return { ...grund, view: Uint32Array.from(kvar) }
+}
+
+/** Regelfel att visa i gränssnittet, räknade på hela ramen. */
+export function filterfel(frame: Frame, spec: ViewSpec) {
+  return tillampaFilter(frame, spec.filter ?? TOMT_FILTER, identityRader(frame)).fel
+}
+
+function identityRader(frame: Frame): Uint32Array {
+  return Uint32Array.from({ length: frame.rowCount }, (_, i) => i)
+}
+
+/**
+ * Filtrerar en färdig vy till de rader en förhandsvisning ändrar.
+ *
+ * Att lägga det som ett efterled i stället för en egen gren gör att det
+ * komponerar: man kan söka efter ett namn och samtidigt se bara de av
+ * träffarna som datumomskrivningen inte klarar.
+ */
+function begransaTillForhandsvisning(
+  frame: Frame,
+  grund: ViewResult,
+  spec: ViewSpec,
+  forh: Forhandsvisning | null,
+): ViewResult {
+  if (spec.visaBara === undefined || forh === null) return grund
+  const col = findColumn(frame, forh.colId)
+  if (!col) return grund
+  const bit = spec.visaBara === 'problem' ? PROBLEM : ANDRAD
+  const kvar: number[] = []
+  for (let i = 0; i < grund.view.length; i++) {
+    const r = grund.view[i]!
+    if (((forh.status[uppslag(forh, col, r)] ?? 0) & bit) !== 0) kvar.push(r)
+  }
+  return { ...grund, view: Uint32Array.from(kvar) }
+}
+
+/**
+ * Vilka rader som visas, i vilken ordning.
+ *
+ * Sveper alltid **utgångsordningen** och aldrig `0..rowCount`. Det är den
+ * detaljen som gör att sorteringen överlever filtreringen: resultatet blir en
+ * delföljd av ordningen, aldrig en omsortering av den.
+ */
+function grundvy(frame: Frame, spec: ViewSpec, ordning: Ordning | null): ViewResult {
+  const fraga = (spec.search ?? '').trim()
+  const utgang = utgangslage(frame, ordning)
 
   if (fraga === '') {
-    return { view: identityView(frame.rowCount), kolumnerMedTraff: 0 }
+    // Utan filter *är* vyn ordningen, och de får dela array. Det bygger på
+    // att `frame.view` aldrig ändras på plats någonstans i kodbasen — den
+    // tilldelas alltid en ny array — så en delad referens kan inte förstöra
+    // den frusna ordningen.
+    return { view: utgang, kolumnerMedTraff: 0 }
   }
 
   const nyckel = sokNyckel(fraga)
@@ -88,7 +205,8 @@ export function computeView(frame: Frame, spec: ViewSpec): ViewResult {
   }
 
   const traffar: number[] = []
-  rader: for (let r = 0; r < frame.rowCount; r++) {
+  rader: for (let i = 0; i < utgang.length; i++) {
+    const r = utgang[i]!
     for (let c = 0; c < frame.columns.length; c++) {
       if (masker[c]![frame.columns[c]!.codes[r]!]! === 1) {
         traffar.push(r)

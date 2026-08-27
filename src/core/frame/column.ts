@@ -95,6 +95,19 @@ export function valueCounts(col: Column, rows: Uint32Array): Uint32Array {
   return counts
 }
 
+/**
+ * Antal celler per ordbokskod över hela kolumnen, oberoende av vyn.
+ *
+ * Används där ett verktyg räknar på kolumnen som helhet — en omskrivning
+ * träffar ordboken och därmed varje rad med samma värde, oavsett vilka rader
+ * som råkar visas.
+ */
+export function codeCounts(col: Column): Uint32Array {
+  const counts = new Uint32Array(col.dict.length)
+  for (let r = 0; r < col.codes.length; r++) counts[col.codes[r]!]! += 1
+  return counts
+}
+
 /** Antal icke-tomma celler över `rows`. */
 export function filledCount(col: Column, rows: Uint32Array): number {
   let n = 0

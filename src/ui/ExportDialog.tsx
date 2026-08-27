@@ -33,6 +33,8 @@ const STANDARD_CSV: ExportOptions = {
 export function ExportDialog(props: {
   frame: Frame
   harFilter: boolean
+  /** Flikens frusna sorteringsordning, så att "alla rader" följer den. */
+  ordning?: Uint32Array
   onStang: () => void
   onExporterad: () => void
 }) {
@@ -41,6 +43,10 @@ export function ExportDialog(props: {
     ...EXCEL_FRIENDLY,
     rows: props.harFilter ? 'view' : 'all',
   })
+  const medOrdning = useMemo<ExportOptions>(
+    () => ({ ...options, ordning: props.ordning }),
+    [options, props.ordning],
+  )
   const [filnamn, setFilnamn] = useState(() => foreslaFilnamn(props.frame.name))
   const arXlsx = profil === 'xlsx'
 
@@ -61,7 +67,7 @@ export function ExportDialog(props: {
     setOptions((o) => ({ ...o, ...delta }))
   }
 
-  const urval = useMemo(() => selectForExport(props.frame, options), [props.frame, options])
+  const urval = useMemo(() => selectForExport(props.frame, medOrdning), [props.frame, medOrdning])
 
   // Ett exempel på hur första raden faktiskt kommer se ut i filen, räknat på
   // riktigt i stället för beskrivet i ord.
@@ -84,10 +90,10 @@ export function ExportDialog(props: {
       // Skrivaren laddas först när någon faktiskt exporterar Excel, så den
       // kostar ingenting för alla som bara använder CSV.
       const { exportXlsx } = await import('../core/xlsx/write.js')
-      bytes = exportXlsx(props.frame, options)
+      bytes = exportXlsx(props.frame, medOrdning)
       typ = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     } else {
-      bytes = encodeExport(stringifyCsv(props.frame, options), options).bytes
+      bytes = encodeExport(stringifyCsv(props.frame, medOrdning), options).bytes
       typ = 'text/csv;charset=utf-8'
     }
     // Blob-URL i stället för data: — en stor fil får inte plats i en URL.

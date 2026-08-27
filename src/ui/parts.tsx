@@ -41,6 +41,8 @@ export interface MenyPost {
   etikett: string
   genvag?: string
   fara?: boolean
+  /** Markerar posten som det nuvarande valet, t.ex. sorteringens riktning. */
+  aktiv?: boolean
   kor: () => void
 }
 
@@ -81,8 +83,11 @@ export function Meny(props: {
         ) : (
           <button
             key={post.etikett}
-            class={`meny__post${post.fara ? ' meny__post--fara' : ''}`}
-            role="menuitem"
+            class={`meny__post${post.fara ? ' meny__post--fara' : ''}${
+              post.aktiv ? ' meny__post--aktiv' : ''
+            }`}
+            role={post.aktiv === undefined ? 'menuitem' : 'menuitemradio'}
+            aria-checked={post.aktiv === undefined ? undefined : post.aktiv}
             onClick={() => {
               post.kor()
               props.onStang()
@@ -133,9 +138,10 @@ export function Notis(props: {
   )
 }
 
+/** `valt: null` betyder att inget är valt — en fråga som ännu inte besvarats. */
 export function Val<T extends string>(props: {
   varden: readonly { varde: T; etikett: string; titel?: string }[]
-  valt: T
+  valt: T | null
   onValj: (v: T) => void
 }) {
   return (
