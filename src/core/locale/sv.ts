@@ -89,3 +89,31 @@ export const NUMBER_FORMAT = new Intl.NumberFormat('sv-SE')
 export function formatCount(n: number): string {
   return NUMBER_FORMAT.format(n)
 }
+
+/**
+ * Svensk pluralform.
+ *
+ * "1 celler" och "1 rader" läser fel och får verktyget att verka slarvigt
+ * precis i de ögonblick det rapporterar vad det gjort med användarens data.
+ */
+export function plural(n: number, ental: string, flertal: string): string {
+  return `${formatCount(n)} ${n === 1 ? ental : flertal}`
+}
+
+export const celler = (n: number) => plural(n, 'cell', 'celler')
+export const rader = (n: number) => plural(n, 'rad', 'rader')
+export const kolumner = (n: number) => plural(n, 'kolumn', 'kolumner')
+
+/**
+ * Tal i statusradens snabbsumma.
+ *
+ * Två decimaler när det finns en decimaldel, inga när summan är jämn. En
+ * beloppssumma som visas som "24 092,5" ser ut som ett avrundningsfel.
+ */
+export function formatSum(n: number): string {
+  const decimaler = Number.isInteger(n) ? 0 : 2
+  return n.toLocaleString('sv-SE', {
+    minimumFractionDigits: decimaler,
+    maximumFractionDigits: decimaler,
+  })
+}

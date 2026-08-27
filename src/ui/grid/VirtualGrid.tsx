@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Column, ColumnId, Frame } from '../../core/types.js'
 import { Flag } from '../../core/types.js'
-import { getCell, filledCount, flagCount } from '../../core/frame/column.js'
+import { getCell, filledCount, flagCount, matchDictionary } from '../../core/frame/column.js'
 import { TYPE_BADGES, TYPE_LABELS, violatesType } from '../../core/infer.js'
 import { formatCount } from '../../core/locale/sv.js'
+import { cellenMatchar, type ViewSpec } from '../../state/view.js'
+import { innehaller, rect, type Selection } from '../../state/selection.js'
 
 const DEFAULT_WIDTH = 168
 const MIN_WIDTH = 56
@@ -19,16 +21,25 @@ const TYPE_COLOR: Record<string, string> = {
   empty: 'var(--typ-text)',
 }
 
+export type Flytt = 'ned' | 'hoger' | 'ingen'
+
 export interface GridProps {
   frame: Frame
   /** Bumpas när ramen muterats, så komponenten vet att rita om. */
   revision: number
   activeColumnId: ColumnId | null
+  viewSpec: ViewSpec
+  markering: Selection | null
+  redigerar: { rad: number; kol: number } | null
   onSelectColumn: (id: ColumnId) => void
   onOpenColumnMenu: (id: ColumnId, anchor: DOMRect) => void
   onMoveColumn: (id: ColumnId, toIndex: number) => void
   onResizeColumn: (id: ColumnId, width: number) => void
   onCycleType: (id: ColumnId) => void
+  onSelect: (sel: Selection) => void
+  onStartEdit: (rad: number, kol: number) => void
+  onCommitEdit: (rad: number, kol: number, value: string, flytt: Flytt) => void
+  onCancelEdit: () => void
 }
 
 interface Quality {
@@ -43,12 +54,7 @@ function measure(col: Column, frame: Frame): Quality {
   const filled = filledCount(col, frame.view)
   let invalid = 0
   if (col.type !== 'text' && col.type !== 'empty') {
-    // Räkna på ordboken och multiplicera upp: en kolumn med tre unika värden
-    // kräver tre kontroller, inte hundratusen.
-    const bad = new Uint8Array(col.dict.length)
-    for (let d = 1; d < col.dict.length; d++) {
-      bad[d] = violatesType(col.dict[d]!, col.type) ? 1 : 0
-    }
+    const bad = matchDictionary(col, (v) => v !== '' && violatesType(v, col.type))
     for (let i = 0; i < frame.view.length; i++) {
       if (bad[col.codes[frame.view[i]!]!]! === 1) invalid += 1
     }
@@ -58,13 +64,14 @@ function measure(col: Column, frame: Frame): Quality {
 }
 
 export function VirtualGrid(props: GridProps) {
-  const { frame, activeColumnId } = props
+  const { frame, activeColumnId, markering, redigerar } = props
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [scrollTop, setScrollTop] = useState(0)
   const [viewportHeight, setViewportHeight] = useState(600)
   const [rowHeight, setRowHeight] = useState(30)
   const [dragging, setDragging] = useState<ColumnId | null>(null)
   const [dropIndex, setDropIndex] = useState<number | null>(null)
+  const drarMarkering = useRef(false)
 
   const columns = useMemo(
     () => frame.columns.filter((c) => !c.hidden),
@@ -88,21 +95,69 @@ export function VirtualGrid(props: GridProps) {
     return () => observer.disconnect()
   }, [])
 
+  // Håll fokuscellen i bild när markeringen flyttas med tangentbordet.
+  useEffect(() => {
+    const el = scrollerRef.current
+    if (!el || !markering) return
+    const top = markering.fokusRad * rowHeight
+    const rubrik = 46
+    if (top < el.scrollTop) el.scrollTop = top
+    else if (top + rowHeight > el.scrollTop + el.clientHeight - rubrik) {
+      el.scrollTop = top + rowHeight - el.clientHeight + rubrik
+    }
+  }, [markering?.fokusRad, rowHeight])
+
   const total = frame.view.length
   const first = Math.max(0, Math.floor(scrollTop / rowHeight) - OVERSCAN)
   const visibleCount = Math.ceil(viewportHeight / rowHeight) + OVERSCAN * 2
   const last = Math.min(total, first + visibleCount)
+  const markerat = markering ? rect(markering) : null
+
+  const valj = (rad: number, kol: number, utoka: boolean) => {
+    if (utoka && markering) props.onSelect({ ...markering, fokusRad: rad, fokusKol: kol })
+    else props.onSelect({ ankareRad: rad, ankareKol: kol, fokusRad: rad, fokusKol: kol })
+  }
 
   const rows: preact.JSX.Element[] = []
   for (let i = first; i < last; i++) {
     const physical = frame.view[i]!
+    const radMarkerad = markerat !== null && i >= markerat.r1 && i <= markerat.r2
+    const source = frame.sourceRow[physical] ?? 0
     rows.push(
-      <div class="rutnat__rad" key={physical} style={{ height: `${rowHeight}px` }}>
-        <div class="rutnat__radnr" title={`Rad ${frame.sourceRow[physical]} i filen`}>
-          {formatCount(frame.sourceRow[physical] ?? physical + 1)}
+      <div
+        class={`rutnat__rad${radMarkerad ? ' rutnat__rad--markerad' : ''}`}
+        key={physical}
+        role="row"
+        style={{ height: `${rowHeight}px` }}
+      >
+        <div
+          class={`rutnat__radnr${source === 0 ? ' rutnat__radnr--tillagd' : ''}`}
+          title={source === 0 ? 'Tillagd rad — fanns inte i filen' : `Rad ${source} i filen`}
+        >
+          {source === 0 ? '–' : formatCount(source)}
         </div>
-        {columns.map((col) => (
-          <Cell key={col.id} col={col} row={physical} />
+        {columns.map((col, kol) => (
+          <Cell
+            key={col.id}
+            col={col}
+            row={physical}
+            markerad={markering !== null && innehaller(markering, i, kol)}
+            fokus={markering?.fokusRad === i && markering.fokusKol === kol}
+            redigeras={redigerar?.rad === i && redigerar.kol === kol}
+            viewSpec={props.viewSpec}
+            onPointerDown={(utoka) => {
+              drarMarkering.current = true
+              valj(i, kol, utoka)
+            }}
+            onPointerEnter={() => {
+              if (drarMarkering.current && markering) {
+                props.onSelect({ ...markering, fokusRad: i, fokusKol: kol })
+              }
+            }}
+            onDoubleClick={() => props.onStartEdit(i, kol)}
+            onCommit={(value, flytt) => props.onCommitEdit(i, kol, value, flytt)}
+            onCancel={props.onCancelEdit}
+          />
         ))}
       </div>,
     )
@@ -116,21 +171,40 @@ export function VirtualGrid(props: GridProps) {
       aria-rowcount={total + 1}
       aria-colcount={columns.length + 1}
       onScroll={(e) => setScrollTop((e.currentTarget as HTMLDivElement).scrollTop)}
+      onPointerUp={() => {
+        drarMarkering.current = false
+      }}
+      onPointerLeave={() => {
+        drarMarkering.current = false
+      }}
     >
       <div class="rutnat__rubrikrad" role="row">
-        <div class="rutnat__radnr" title="Radens nummer i källfilen. Ändras inte av sortering eller filtrering.">
+        <div
+          class="rutnat__radnr"
+          title="Radens nummer i källfilen. Ändras inte av sortering eller filtrering."
+        >
           #
         </div>
         {columns.map((col, index) => (
           <Header
             key={col.id}
             col={col}
-            index={index}
             aktiv={col.id === activeColumnId}
+            markerad={markerat !== null && index >= markerat.k1 && index <= markerat.k2}
             kvalitet={quality.get(col.id)!}
             drar={dragging === col.id}
             slappmal={dropIndex === index}
-            onSelect={() => props.onSelectColumn(col.id)}
+            onSelect={() => {
+              props.onSelectColumn(col.id)
+              if (total > 0) {
+                props.onSelect({
+                  ankareRad: 0,
+                  ankareKol: index,
+                  fokusRad: total - 1,
+                  fokusKol: index,
+                })
+              }
+            }}
             onMenu={(rect) => props.onOpenColumnMenu(col.id, rect)}
             onCycleType={() => props.onCycleType(col.id)}
             onResize={(width) => props.onResizeColumn(col.id, width)}
@@ -168,10 +242,26 @@ export function VirtualGrid(props: GridProps) {
   )
 }
 
-function Cell({ col, row }: { col: Column; row: number }) {
+interface CellProps {
+  col: Column
+  row: number
+  markerad: boolean
+  fokus: boolean
+  redigeras: boolean
+  viewSpec: ViewSpec
+  onPointerDown: (utoka: boolean) => void
+  onPointerEnter: () => void
+  onDoubleClick: () => void
+  onCommit: (value: string, flytt: Flytt) => void
+  onCancel: () => void
+}
+
+function Cell(props: CellProps) {
+  const { col, row } = props
   const value = getCell(col, row)
   const flags = col.flags[row]!
   const invalid = value !== '' && violatesType(value, col.type)
+
   const classes = ['rutnat__cell']
   if (col.type === 'number') classes.push('rutnat__cell--tal')
   if (col.type === 'date') classes.push('rutnat__cell--datum')
@@ -179,27 +269,98 @@ function Cell({ col, row }: { col: Column; row: number }) {
   if ((flags & Flag.Padded) !== 0) classes.push('rutnat__cell--utfylld')
   if ((flags & Flag.UserEdited) !== 0) classes.push('rutnat__cell--redigerad')
   if (value === '') classes.push('rutnat__cell--tom')
+  if (props.markerad) classes.push('rutnat__cell--markerad')
+  if (props.fokus) classes.push('rutnat__cell--fokus')
+  if (!props.redigeras && cellenMatchar(value, props.viewSpec)) classes.push('rutnat__cell--traff')
 
   return (
     <div
       class={classes.join(' ')}
       role="gridcell"
+      aria-selected={props.markerad}
       style={{ width: `${col.width ?? DEFAULT_WIDTH}px` }}
       title={
         invalid
           ? `Kunde inte tolkas som ${TYPE_LABELS[col.type].toLowerCase()}. Värdet står kvar som det är.`
           : value
       }
+      onPointerDown={(e) => {
+        if (props.redigeras) return
+        props.onPointerDown(e.shiftKey)
+      }}
+      onPointerEnter={props.onPointerEnter}
+      onDblClick={props.onDoubleClick}
     >
-      <span>{value}</span>
+      {props.redigeras ? (
+        <CellEditor start={value} onCommit={props.onCommit} onCancel={props.onCancel} />
+      ) : (
+        <span>{value}</span>
+      )}
     </div>
+  )
+}
+
+function CellEditor(props: {
+  start: string
+  onCommit: (value: string, flytt: Flytt) => void
+  onCancel: () => void
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+  /**
+   * Escape stänger fältet, vilket i sin tur utlöser blur. Utan den här
+   * flaggan skulle blur-hanteraren skriva in värdet som användaren just
+   * ångrade — alltså raka motsatsen till vad Escape betyder.
+   */
+  const klar = useRef(false)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.focus()
+    el.select()
+  }, [])
+
+  return (
+    <input
+      ref={ref}
+      class="rutnat__redigering"
+      defaultValue={props.start}
+      onKeyDown={(e) => {
+        const el = e.currentTarget as HTMLInputElement
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          e.stopPropagation()
+          klar.current = true
+          props.onCommit(el.value, 'ned')
+        } else if (e.key === 'Tab') {
+          e.preventDefault()
+          e.stopPropagation()
+          klar.current = true
+          props.onCommit(el.value, 'hoger')
+        } else if (e.key === 'Escape') {
+          e.preventDefault()
+          e.stopPropagation()
+          klar.current = true
+          props.onCancel()
+        } else {
+          // Piltangenter och genvägar hör till rutnätet, men medan man skriver
+          // hör de till fältet. Utan det här flyttar markeringen medan man
+          // försöker rätta ett tecken.
+          e.stopPropagation()
+        }
+      }}
+      onBlur={(e) => {
+        if (klar.current) return
+        props.onCommit((e.currentTarget as HTMLInputElement).value, 'ingen')
+      }}
+    />
   )
 }
 
 interface HeaderProps {
   col: Column
-  index: number
   aktiv: boolean
+  markerad: boolean
   kvalitet: Quality
   drar: boolean
   slappmal: boolean
@@ -216,11 +377,11 @@ interface HeaderProps {
 function Header(props: HeaderProps) {
   const { col, kvalitet } = props
   const width = col.width ?? DEFAULT_WIDTH
-  const menuRef = useRef<HTMLButtonElement>(null)
   const total = Math.max(1, kvalitet.filled + kvalitet.empty + kvalitet.invalid)
 
   const classes = ['rubrik']
   if (props.aktiv) classes.push('rubrik--aktiv')
+  if (props.markerad) classes.push('rubrik--markerad')
   if (props.drar) classes.push('rubrik--drar')
   if (props.slappmal) classes.push('rubrik--slappmal')
 
@@ -262,7 +423,6 @@ function Header(props: HeaderProps) {
       <div class="rubrik__namn">
         <span>{col.name}</span>
         <button
-          ref={menuRef}
           class="rubrik__meny"
           aria-label={`Meny för kolumnen ${col.name}`}
           onClick={(e) => {
@@ -303,10 +463,3 @@ function Header(props: HeaderProps) {
 
 /** Används av kolumnpanelen så att bredder stämmer överens. */
 export const KOLUMNBREDD_STANDARD = DEFAULT_WIDTH
-
-export function useGridKeyboard(handler: (event: KeyboardEvent) => void): void {
-  useEffect(() => {
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [handler])
-}

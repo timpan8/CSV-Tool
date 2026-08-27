@@ -21,7 +21,8 @@ import {
 } from '../core/frame/frame.js'
 import { rect, type Selection } from './selection.js'
 import { runStep, type Tab } from './store.js'
-import { formatCount } from '../core/locale/sv.js'
+import { celler, kolumner, rader } from '../core/locale/sv.js'
+import type { Stadning } from '../core/ops/clean.js'
 
 /** Kolumner i den ordning markeringen räknar dem: synliga, i visningsordning. */
 export function selectableColumns(tab: Tab): Column[] {
@@ -108,24 +109,24 @@ function kort(value: string): string {
 
 /** Sätter alla markerade celler till samma värde. */
 export function sattMarkering(tab: Tab, sel: Selection, value: string): number {
-  const kolumner = selectedColumns(tab, sel)
-  const rader = selectedRows(tab, sel)
+  const valda = selectedColumns(tab, sel)
+  const radlista = selectedRows(tab, sel)
   let andrade = 0
-  for (const col of kolumner) {
-    for (const rad of rader) if (getCell(col, rad) !== value) andrade += 1
+  for (const col of valda) {
+    for (const rad of radlista) if (getCell(col, rad) !== value) andrade += 1
   }
   if (andrade === 0) return 0
 
   korOverKolumner(
     tab,
     value === ''
-      ? `Tömde ${formatCount(andrade)} celler`
-      : `Satte ${formatCount(andrade)} celler till ”${kort(value)}”`,
+      ? `Tömde ${celler(andrade)}`
+      : `Satte ${celler(andrade)} till ”${kort(value)}”`,
     'setRange',
-    kolumner,
+    valda,
     () => {
-      for (const col of kolumner) {
-        for (const rad of rader) setCell(col, rad, value)
+      for (const col of valda) {
+        for (const rad of radlista) setCell(col, rad, value)
       }
     },
   )
@@ -139,20 +140,20 @@ export function sattMarkering(tab: Tab, sel: Selection, value: string): number {
  * raden i varje grupp har ett värde.
  */
 export function fyllNedat(tab: Tab, sel: Selection): number {
-  const kolumner = selectedColumns(tab, sel)
-  const rader = selectedRows(tab, sel)
-  if (rader.length < 2 || kolumner.length === 0) return 0
+  const valda = selectedColumns(tab, sel)
+  const radlista = selectedRows(tab, sel)
+  if (radlista.length < 2 || valda.length === 0) return 0
 
-  const [forsta, ...resten] = rader as [number, ...number[]]
+  const [forsta, ...resten] = radlista as [number, ...number[]]
   let andrade = 0
-  for (const col of kolumner) {
+  for (const col of valda) {
     const kalla = getCell(col, forsta)
     for (const rad of resten) if (getCell(col, rad) !== kalla) andrade += 1
   }
   if (andrade === 0) return 0
 
-  korOverKolumner(tab, `Fyllde nedåt i ${formatCount(andrade)} celler`, 'fillDown', kolumner, () => {
-    for (const col of kolumner) {
+  korOverKolumner(tab, `Fyllde nedåt i ${celler(andrade)}`, 'fillDown', valda, () => {
+    for (const col of valda) {
       const kalla = getCell(col, forsta)
       for (const rad of resten) setCell(col, rad, kalla)
     }
@@ -200,7 +201,7 @@ export function klistraIn(tab: Tab, sel: Selection, plan: PasteRequest, utoka: b
   let andrade = 0
 
   runStep(tab, {
-    label: `Klistrade in ${formatCount(plan.rader.length)} rader`,
+    label: `Klistrade in ${rader(plan.rader.length)}`,
     kind: 'paste',
     apply: () => {
       if (utoka && plan.extraRader > 0) insertRows(frame, frame.rowCount, plan.extraRader)
@@ -242,14 +243,14 @@ export function klistraIn(tab: Tab, sel: Selection, plan: PasteRequest, utoka: b
 
 /* ---------- Rader ---------- */
 
-export function taBortRader(tab: Tab, rader: number[], etikett?: string): void {
-  if (rader.length === 0) return
+export function taBortRader(tab: Tab, radlista: number[], etikett?: string): void {
+  if (radlista.length === 0) return
   let sparade: SavedRow[] = []
   runStep(tab, {
-    label: etikett ?? `Tog bort ${formatCount(rader.length)} rader`,
+    label: etikett ?? `Tog bort ${rader(radlista.length)}`,
     kind: 'deleteRows',
     apply: () => {
-      sparade = deleteRows(tab.frame, rader)
+      sparade = deleteRows(tab.frame, radlista)
     },
     revert: () => restoreRows(tab.frame, sparade),
   })
@@ -259,7 +260,7 @@ export function infogaRader(tab: Tab, viewRow: number, antal: number, efter: boo
   const fysisk = tab.frame.view[viewRow]
   const at = fysisk === undefined ? tab.frame.rowCount : fysisk + (efter ? 1 : 0)
   runStep(tab, {
-    label: `Infogade ${formatCount(antal)} ${antal === 1 ? 'rad' : 'rader'}`,
+    label: `Infogade ${rader(antal)}`,
     kind: 'insertRows',
     apply: () => insertRows(tab.frame, at, antal),
     revert: () => {
@@ -268,11 +269,11 @@ export function infogaRader(tab: Tab, viewRow: number, antal: number, efter: boo
   })
 }
 
-export function dupliceraRader(tab: Tab, rader: number[]): void {
-  if (rader.length === 0) return
-  const sorterade = [...rader].sort((a, b) => a - b)
+export function dupliceraRader(tab: Tab, radlista: number[]): void {
+  if (radlista.length === 0) return
+  const sorterade = [...radlista].sort((a, b) => a - b)
   runStep(tab, {
-    label: `Dubblerade ${formatCount(rader.length)} ${rader.length === 1 ? 'rad' : 'rader'}`,
+    label: `Dubblerade ${rader(sorterade.length)}`,
     kind: 'duplicateRows',
     apply: () => duplicateRows(tab.frame, sorterade),
     revert: () => {
@@ -287,7 +288,7 @@ export function dupliceraRader(tab: Tab, rader: number[]): void {
 export function taBortTommaRader(tab: Tab): number {
   const tomma = findEmptyRows(tab.frame)
   if (tomma.length === 0) return 0
-  taBortRader(tab, tomma, `Tog bort ${formatCount(tomma.length)} tomma rader`)
+  taBortRader(tab, tomma, `Tog bort ${rader(tomma.length)} som var helt tomma`)
   return tomma.length
 }
 
@@ -302,7 +303,7 @@ export function taBortTommaKolumner(tab: Tab): number {
     .sort((a, b) => a.index - b.index)
 
   runStep(tab, {
-    label: `Tog bort ${formatCount(tomma.length)} tomma kolumner`,
+    label: `Tog bort ${kolumner(tomma.length)} som var helt tomma`,
     kind: 'dropEmptyColumns',
     apply: () => {
       tab.frame.columns = tab.frame.columns.filter((c) => !tomma.includes(c.id))
@@ -316,25 +317,18 @@ export function taBortTommaKolumner(tab: Tab): number {
 
 /* ---------- Städning ---------- */
 
-export interface Stadning {
-  id: string
-  etikett: string
-  beskrivning: string
-  fn: (value: string) => string
-}
-
-export function stadaKolumner(tab: Tab, kolumner: Column[], stadning: Stadning): number {
+export function stadaKolumner(tab: Tab, valda: Column[], stadning: Stadning): number {
   let andrade = 0
   korOverKolumner(
     tab,
     `${stadning.etikett} i ${
-      kolumner.length === 1 ? kolumner[0]!.name : `${formatCount(kolumner.length)} kolumner`
+      valda.length === 1 ? valda[0]!.name : kolumner(valda.length)
     }`,
     `clean:${stadning.id}`,
-    kolumner,
+    valda,
     () => {
       andrade = 0
-      for (const col of kolumner) andrade += mapColumnValues(col, stadning.fn)
+      for (const col of valda) andrade += mapColumnValues(col, stadning.fn)
     },
   )
   return andrade
