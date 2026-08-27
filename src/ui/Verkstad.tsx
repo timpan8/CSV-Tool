@@ -8,7 +8,10 @@ import {
   type Matchningspar,
   type Matchningstyp,
 } from '../core/ops/match.js'
+import { foreslaLuddigaPar, type Forslagsresultat } from '../core/ops/likhet.js'
 import {
+  arAvvisat,
+  avvisaForslag,
   flikarna,
   fullmatchning,
   grundmatchning,
@@ -29,6 +32,26 @@ import { formatCount, rader as raderText } from '../core/locale/sv.js'
 import { Notis } from './parts.js'
 import { Restlista } from './Restlista.js'
 import { Raddetalj } from './Raddetalj.js'
+import { Forslagslista } from './Forslagslista.js'
+
+/**
+ * Verkstadens jämförelser: matchningens ekvivalenstyper plus den luddiga.
+ *
+ * `MATCHNINGSTYPER` lämnas orörd med flit. Luddig likhet får aldrig bli ett
+ * val i dialogen — den kostar O(n·m) och hör hemma bara här, på en kort lista
+ * där varje förslag ändå granskas för hand.
+ */
+type Verkstadstyp = Matchningstyp | 'luddig'
+
+const VERKSTADSTYPER: { typ: Verkstadstyp; etikett: string; beskrivning: string }[] = [
+  ...MATCHNINGSTYPER,
+  {
+    typ: 'luddig',
+    etikett: 'Luddig',
+    beskrivning:
+      'Letar efter rader som liknar varandra. Ger förslag att godkänna, inte färdiga par — en gissning som ser rimlig ut är farligare än ingen gissning.',
+  },
+]
 
 /**
  * Matchningsverkstaden.
@@ -53,6 +76,10 @@ export function Verkstad(props: {
 
   const [valdVanster, setValdVanster] = useState<number | null>(null)
   const [valdHoger, setValdHoger] = useState<number | null>(null)
+  const [forslag, setForslag] = useState<Forslagsresultat | null>(null)
+  const [forslagskolumner, setForslagskolumner] = useState<{ v: ColumnId; h: ColumnId } | null>(
+    null,
+  )
 
   // Kontrollen skriver till signalen och får därför inte köras under ritning.
   useEffect(() => {
@@ -88,6 +115,36 @@ export function Verkstad(props: {
         atgard: { etikett: 'Ångra', kor: () => undo(tab) },
       })
     }
+  }
+
+  /*
+   * Förslagen räknas fram på begäran och filtreras sedan vid ritning, aldrig
+   * om. Ett godkänt förslag ändrar restlistorna, och skulle listan räknas om
+   * på den ändringen kostade varje klick en full indexombyggnad.
+   */
+  const restVanster = new Set(rest.vanster)
+  const restHoger = new Set(rest.hoger)
+  const synligaForslag = (forslag?.forslag ?? [])
+    .filter((x) => restVanster.has(x.v) && restHoger.has(x.h) && !arAvvisat(s, x.v, x.h))
+    .slice(0, 12)
+
+  const korSteg = (vansterColId: ColumnId, hogerColId: ColumnId, typ: Verkstadstyp) => {
+    if (typ === 'luddig') {
+      const vc = findColumn(vanster, vansterColId)
+      const hc = findColumn(hoger, hogerColId)
+      if (!vc || !hc) return
+      setForslagskolumner({ v: vansterColId, h: hogerColId })
+      setForslag(foreslaLuddigaPar(vc, rest.vanster, hc, rest.hoger))
+      return
+    }
+    const traffar = korRunda([{ vansterColId, hogerColId, typ }])
+    setForslag(null)
+    setForslagskolumner(null)
+    notify(
+      traffar === 0
+        ? 'Rundan hittade inga nya par. Prova en annan kolumn eller en annan jämförelse.'
+        : `Rundan parade ihop ${raderText(traffar)}.`,
+    )
   }
 
   const paraIhop = () => {
@@ -203,7 +260,35 @@ export function Verkstad(props: {
               Para ihop
             </button>
 
-            <Rundval vanster={vanster} hoger={hoger} rundor={s.rundor.length} />
+            <Nastasteg
+              vanster={vanster}
+              hoger={hoger}
+              rundor={s.rundor.length}
+              onKor={korSteg}
+            />
+
+            {forslag && forslagskolumner && (
+              <Forslagslista
+                forslag={synligaForslag}
+                hinder={forslag.hinder}
+                avkortat={forslag.avkortat}
+                vanster={vanster}
+                hoger={hoger}
+                vansterKolumner={[forslagskolumner.v]}
+                hogerKolumner={[forslagskolumner.h]}
+                restVanster={rest.vanster.length}
+                restHoger={rest.hoger.length}
+                onGodkann={(x) =>
+                  laggExtrapar(
+                    x.v,
+                    x.h,
+                    'forslag',
+                    `${Math.round(x.poang.poang * 100)} % lika`,
+                  )
+                }
+                onAvvisa={(x) => avvisaForslag(x.v, x.h)}
+              />
+            )}
 
             {s.extra.length > 0 && (
               <div class="falt">
@@ -283,25 +368,32 @@ export function Verkstad(props: {
 }
 
 /**
- * En ny runda: samma matchning igen, men på en annan kolumn och bara på det
- * som blivit över.
+ * Nästa steg på restlistan: samma kontroll för båda sätten att komma vidare.
  *
- * Träffarna läggs till direkt och inte som förslag att granska. De är
- * ekvivalensträffar precis som grundmatchningens — samma sorts svar på samma
- * sorts fråga, bara ställd om en annan kolumn.
+ * En ny runda och ett luddigt förslag ställer identiskt samma fråga — vilka
+ * två kolumner ska jämföras, och hur? Skillnaden ligger i vad svaret får göra.
+ * En ekvivalenstyp ger par som läggs till direkt, eftersom de är samma sorts
+ * svar som grundmatchningens, bara ställt om en annan kolumn. Luddig likhet
+ * ger förslag att godkänna ett i taget.
  */
-function Rundval(props: { vanster: Frame; hoger: Frame; rundor: number }) {
+function Nastasteg(props: {
+  vanster: Frame
+  hoger: Frame
+  rundor: number
+  onKor: (vansterColId: ColumnId, hogerColId: ColumnId, typ: Verkstadstyp) => void
+}) {
   const v = visibleColumns(props.vanster)
   const h = visibleColumns(props.hoger)
   const [vansterColId, setVansterColId] = useState(v[0]?.id ?? '')
   const [hogerColId, setHogerColId] = useState(h[0]?.id ?? '')
-  const [typ, setTyp] = useState<Matchningstyp>('oberoende')
+  const [typ, setTyp] = useState<Verkstadstyp>('oberoende')
 
   if (v.length === 0 || h.length === 0) return null
+  const post = VERKSTADSTYPER.find((t) => t.typ === typ)
 
   return (
     <div class="falt">
-      <span class="falt__etikett">Ny runda på en annan kolumn</span>
+      <span class="falt__etikett">Nytt försök på en annan kolumn</span>
       <div class="regel">
         <select
           class="nivarad__kolumn"
@@ -334,27 +426,19 @@ function Rundval(props: { vanster: Frame; hoger: Frame; rundor: number }) {
           class="nivarad__kolumn"
           aria-label="Så här jämförs värdena"
           value={typ}
-          onChange={(e) => setTyp((e.currentTarget as HTMLSelectElement).value as Matchningstyp)}
+          onChange={(e) => setTyp((e.currentTarget as HTMLSelectElement).value as Verkstadstyp)}
         >
-          {MATCHNINGSTYPER.map((t) => (
+          {VERKSTADSTYPER.map((t) => (
             <option key={t.typ} value={t.typ} title={t.beskrivning}>
               {t.etikett}
             </option>
           ))}
         </select>
       </div>
-      <button
-        class="knapp"
-        onClick={() => {
-          const traffar = korRunda([{ vansterColId, hogerColId, typ }])
-          notify(
-            traffar === 0
-              ? 'Rundan hittade inga nya par. Prova en annan kolumn eller en annan jämförelse.'
-              : `Rundan parade ihop ${raderText(traffar)}.`,
-          )
-        }}
-      >
-        Kör runda{props.rundor > 0 ? ` (${props.rundor} körda)` : ''}
+      <p class="verktyg__sammanfattning">{post?.beskrivning}</p>
+      <button class="knapp" onClick={() => props.onKor(vansterColId, hogerColId, typ)}>
+        {typ === 'luddig' ? 'Visa liknande rader' : 'Kör runda'}
+        {typ !== 'luddig' && props.rundor > 0 ? ` (${props.rundor} körda)` : ''}
       </button>
     </div>
   )

@@ -106,3 +106,50 @@ test('sammanslagningen tar med både de automatiska och de handgjorda paren', as
   await expect(page.getByRole('gridcell', { name: 'ORD-1001', exact: true })).toHaveCount(2)
   await expect(page.getByRole('gridcell', { name: 'ORD-1008', exact: true })).toHaveCount(1)
 })
+
+test('luddig likhet vägrar talkolumner men föreslår liknande namn', async ({ page }) => {
+  await oppnaVerkstaden(page)
+  await page.getByLabel('Så här jämförs värdena').selectOption({ label: 'Luddig' })
+
+  // Standardvalet är Kundnr ↔ Order. 10021 och 10024 liknar varandra som
+  // text, men är olika kunder — och det ska verktyget säga, inte gissa.
+  await page.getByRole('button', { name: 'Visa liknande rader' }).click()
+  await expect(page.locator('.verkstad__mitt')).toContainText('avstängd för talkolumner')
+
+  await page.getByLabel('Kolumn i vänsterfilen').selectOption({ label: 'Namn' })
+  await page.getByLabel('Kolumn i högerfilen').selectOption({ label: 'Name' })
+  await page.getByRole('button', { name: 'Visa liknande rader' }).click()
+
+  const forslag = page.locator('.forslag')
+  await expect(forslag.filter({ hasText: 'Zlatan Ekk' })).toBeVisible()
+  // Omkastad ordföljd får sitt tal av ordmängden, inte av teckenlikheten.
+  const ordfoljd = forslag.filter({ hasText: 'Ängström Ida' })
+  await expect(ordfoljd).toContainText('orden 1.00')
+})
+
+test('ett godkänt förslag blir ett par, ett avvisat lämnar raden kvar', async ({ page }) => {
+  await oppnaVerkstaden(page)
+  await page.getByLabel('Kolumn i vänsterfilen').selectOption({ label: 'Namn' })
+  await page.getByLabel('Kolumn i högerfilen').selectOption({ label: 'Name' })
+  await page.getByLabel('Så här jämförs värdena').selectOption({ label: 'Luddig' })
+  await page.getByRole('button', { name: 'Visa liknande rader' }).click()
+
+  // Nej på Nils Ödman: förslaget försvinner, men raden ligger kvar.
+  await page
+    .locator('.forslag')
+    .filter({ hasText: 'avliden' })
+    .getByRole('button', { name: 'Nej' })
+    .click()
+  await expect(page.locator('.forslag').filter({ hasText: 'avliden' })).toHaveCount(0)
+  await expect(hoger(page).getByText('Nils Ödman (avliden)')).toBeVisible()
+
+  // Godkänn Zlatan: raden lämnar båda listorna och paret bär sin poäng.
+  await page
+    .locator('.forslag')
+    .filter({ hasText: 'Zlatan Ekk' })
+    .getByRole('button', { name: 'Godkänn' })
+    .click()
+  await expect(hoger(page).getByText('Zlatan Ekk')).toHaveCount(0)
+  await expect(vanster(page).getByText('Zlatan Ek', { exact: true })).toHaveCount(0)
+  await expect(page.locator('.verkstad__par')).toContainText('% lika')
+})
