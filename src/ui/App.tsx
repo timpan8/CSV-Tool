@@ -675,9 +675,22 @@ export function App() {
         setPalettOppen((oppen) => !oppen)
         return
       }
-      // Paletten har egna tangenter: pilarna väljer i listan och Escape
-      // stänger. Rutnätets genvägar får inte gå igång bakom den.
-      if (palettOppen) return
+      /*
+       * Paletten har egna tangenter: pilarna väljer i listan och Escape
+       * stänger. Rutnätets genvägar får inte gå igång bakom den.
+       *
+       * Escape hanteras här och inte bara i palettens fält, eftersom fältet
+       * kan sakna fokus: under den korta stunden innan fokus landat, och
+       * efteråt om man klickat någon annanstans. En Escape som ibland inte
+       * stänger är värre än ingen Escape alls.
+       */
+      if (palettOppen) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          setPalettOppen(false)
+        }
+        return
+      }
 
       const nu = nuLage()
       if (!nu) return

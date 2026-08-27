@@ -20,7 +20,12 @@ test('Ctrl+K öppnar och stänger paletten', async ({ page }) => {
   await page.keyboard.press('Control+k')
   await expect(palett(page)).toHaveCount(0)
 
+  // Escape ska stänga även när fokus inte ligger i fältet — det gör det inte
+  // under den korta stunden innan fokus hunnit landa, och inte alls om man
+  // klickat någon annanstans.
   await page.keyboard.press('Control+k')
+  await expect(palett(page)).toBeVisible()
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
   await page.keyboard.press('Escape')
   await expect(palett(page)).toHaveCount(0)
 })
