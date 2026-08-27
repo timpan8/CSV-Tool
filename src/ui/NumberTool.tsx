@@ -69,6 +69,7 @@ export function NumberTool(props: {
       beraknaForhandsvisning(col, {
         etikett: `Städade tal i ”${col.name}”`,
         kind: 'numbers',
+        profil: { typ: 'tal', kolumn: col.name, inst },
         fn: talTransform(inst),
         arProblem: (v) => tolkaTal(v, inst).tal === null,
         nyTyp: 'number',

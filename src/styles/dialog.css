@@ -721,3 +721,181 @@
   color: var(--text-svag);
   font-size: 14px;
 }
+
+/* ---------- Profiler ---------- */
+
+.profilsteg {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 190px;
+  overflow-y: auto;
+  border: 1px solid var(--linje);
+  border-radius: var(--radie);
+  padding: 4px;
+}
+
+.profilsteg__rad {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 4px;
+  border-radius: var(--radie-liten);
+  font-size: 12px;
+}
+
+.profilsteg__rad:hover {
+  background: var(--yta-3);
+}
+
+.profilsteg__rad--av {
+  color: var(--text-svagast);
+}
+
+.profilsteg__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profilsteg__skal {
+  font-size: 11px;
+  color: var(--text-svagast);
+  white-space: nowrap;
+}
+
+.profil {
+  border: 1px solid var(--linje);
+  border-radius: var(--radie);
+  padding: 7px 9px;
+  margin-bottom: 6px;
+}
+
+.profil__rubrik {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profil__antal {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-svagast);
+}
+
+.profil__steg {
+  margin: 5px 0 0;
+  padding-left: 20px;
+  font-size: 12px;
+  color: var(--text-svag);
+}
+
+.profil__saknade {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--varning);
+}
+
+.profil .restrad__skriv {
+  opacity: 1;
+}
+
+/* ---------- Kommandopaletten ---------- */
+
+.overlagg--palett {
+  align-items: flex-start;
+  padding-top: 12vh;
+}
+
+.palett {
+  width: min(560px, 92vw);
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--yta);
+  border: 1px solid var(--linje-stark);
+  border-radius: var(--radie);
+  box-shadow: 0 18px 48px rgb(15 23 42 / 22%);
+  overflow: hidden;
+}
+
+.palett__falt {
+  border: 0;
+  border-bottom: 1px solid var(--linje);
+  border-radius: 0;
+  padding: 12px 14px;
+  font-size: 15px;
+  background: transparent;
+}
+
+.palett__falt:focus {
+  outline: 0;
+}
+
+.palett__lista {
+  overflow-y: auto;
+  padding: 5px;
+  min-height: 0;
+}
+
+.palett__grupp {
+  padding: 7px 9px 3px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-svagast);
+}
+
+.palett__post {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  width: 100%;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: var(--radie-liten);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.palett__post--vald {
+  background: var(--accent-svag);
+  color: var(--accent-text);
+}
+
+.palett__etikett {
+  white-space: nowrap;
+}
+
+.palett__text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-svag);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palett__post--vald .palett__text {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.palett__genvag {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-svagast);
+  font-variant-numeric: tabular-nums;
+}
+
+.palett__tomt {
+  margin: 10px;
+  font-size: 13px;
+  color: var(--text-svag);
+}

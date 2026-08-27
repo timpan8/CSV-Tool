@@ -40,6 +40,12 @@ export function MergeTool(props: {
         {
           etikett: `Slog ihop till ”${namn.trim() || 'Sammanslagen'}”`,
           kind: 'merge',
+          profil: {
+            typ: 'mall',
+            mall,
+            namn: namn.trim() === '' ? 'Sammanslagen' : namn.trim(),
+            stadaLuckor,
+          },
           rad: (f, row) => [korMall(f, row, tolkning.delar, { stadaLuckor })],
           nyaKolumner: [namn.trim() === '' ? 'Sammanslagen' : namn.trim()],
         },

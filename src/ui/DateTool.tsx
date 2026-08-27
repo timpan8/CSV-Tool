@@ -75,6 +75,7 @@ export function DateTool(props: {
       beraknaForhandsvisning(col, {
         etikett: `Datum i ”${col.name}” → ${MALFORMAT.find((m) => m.varde === mal)!.etikett}`,
         kind: 'dates',
+        profil: { typ: 'datum', kolumn: col.name, inst },
         fn: datumTransform(inst),
         arProblem: (v) => tolkaDatum(v, inst).datum === null,
         // Bara ett rent datum gör kolumnen till en datumkolumn. ÅÅÅÅ-MM och

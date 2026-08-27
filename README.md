@@ -48,6 +48,9 @@ Inga externa typsnitt, inget CDN, ingen analys, ingen felrapportering, ingen inl
   **Luddig likhet finns bara här** — aldrig som matchningstyp över hela filen, alltid på en kort lista och alltid granskad. Poängen visas som två tal, stavning och ordning, så att den säger *varför*: `Ängström Ida` mot `Ida Ängström` får sitt höga tal av ordmängden och inte av teckenlikheten. Talkolumner vägras rakt av — `10021` och `10024` liknar varandra som text men är olika kunder.
 - **Kombinera filer** genom att lägga dem på varandra. Tolv månadsfiler, tre säljares kundlistor, fyra kommuners deltagarlistor: samma sorts data, men rubrikerna heter olika. Aliaskartan visar en rad per målkolumn och en spalt per fil, och gissar ihop `Namn`, `Name` och `kundnamn`. Kolumner som bara finns i vissa filer **beslutas en och en före körningen** — att ta med dem ger tomma celler, att hoppa över dem tappar värden, och båda kan vara rätt. En kolumn med källfilens namn följer med som förval, eftersom radnumret börjar om för varje fil.
   Formen kan också komma ur en **mallfil**: ett dokument med bara rubriker, eventuellt med några exempelrader. Då bestämmer mallen vilka kolumner resultatet har, vad de heter och i vilken ordning de kommer. Exempelraderna följer aldrig med, men visas som ledtråd i kartan — det är hela skälet att en mall får innehålla exempeldata. Kolumner som finns i filerna men inte i mallen kastas inte i tysthet; de frågas om, precis som alla andra.
+- **Profiler** som sparar en hel arbetsgång och kör om den på nästa fil. Samma exportfil kommer varje månad, och samma tio handgrepp behöver göras om varje gång — en profil är listan över de handgreppen. Den sparas i din webbläsare och går att spara till fil om den ska följa med någon annanstans.
+  Bara det som faktiskt går att upprepa kommer med: en handredigerad cell, en inklistring eller en borttagen rad pekar på rader i just den filen och står därför gråmarkerad med sitt skäl i stället för att tyst utelämnas. Kolumner matchas på namn, eftersom ett kolumn-id inte betyder något i en annan fil — och hittar ett steg inte sin kolumn säger det ifrån i stället för att välja en granne. Efter körningen står det steg för steg vad som hände och hur många celler som ändrades, och `Ctrl+Z` backar ett steg i taget.
+- **Kommandopalett** med `Ctrl+K`. Verktyget har vuxit förbi vad en verktygsrad rymmer, och kolumnmenyn kräver att du först vet vilken kolumn åtgärden hör till — paletten är vägen för den som vet *vad* hen vill göra men inte var knappen sitter. Sökningen är bokstavlig och accentokänslig, och hittar även på engelska: `undo`, `join`, `makro`. Kolumnkommandona gäller den kolumn markören står i, och står med kolumnens namn i klartext, så att du ser vad du träffar innan du trycker Enter.
 - **Ångra och gör om** på allt, med en steglista där du kan backa till vilket steg som helst.
 - **Export** till Excel (`.xlsx`) eller CSV. Excel är förvalt, eftersom det är det enda formatet som både bevarar `01234` som `01234` och skriver talkolumner som riktiga tal så att `SUMMA` fungerar. CSV-exporten har val av avgränsare, teckenkodning, BOM och radslut, med en Excel-vänlig profil (semikolon, CRLF, UTF-8 med BOM) och ett riskbaserat formelskydd som inte rör negativa tal.
 - Mörkt läge, tomt läge med exempelfil, och en varning innan sidan lämnas med osparat arbete.
@@ -56,7 +59,7 @@ En Excel-fil innehåller typade värden i stället för text, så importen måst
 
 ## På gång
 
-Profiler som sparar en hel arbetsgång, kommandopalett och offlinebygge.
+Ett enfilsbygge som går att öppna direkt från disk.
 
 ## Utveckling
 
@@ -78,4 +81,4 @@ Filparsning körs i en Web Worker. Datamodellen är kolumnbaserad och ordbokskod
 
 ## Publicering
 
-GitHub Actions kör typkontroll, enhetstester, bygge och röktest på varje pull request och på varje push till `main`, och publicerar till GitHub Pages från `main`. En utvecklingsgren får alltså sina kontroller så snart den har en öppen PR — vilket också är det som gör att varje commit bara körs en gång. Bygget använder relativ bas, så det fungerar oavsett om sajten ligger under ett repo-namn, på ett eget domännamn eller öppnas direkt från disk.
+GitHub Actions kör typkontroll, enhetstester, bygge och röktest på varje pull request och på varje push till `main`, och publicerar till GitHub Pages från `main`. En utvecklingsgren får alltså sina kontroller så snart den har en öppen PR — vilket också är det som gör att varje commit bara körs en gång. Bygget använder relativ bas, så det fungerar oavsett om sajten ligger under ett repo-namn eller på ett eget domännamn. Att öppna `dist/index.html` direkt från disk fungerar däremot inte: koden laddas som ES-moduler, och från `file://` är sidans ursprung opakt, så webbläsaren blockerar både modulskriptet och bakgrundstråden som korsursprung.

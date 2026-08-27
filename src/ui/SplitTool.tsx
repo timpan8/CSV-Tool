@@ -65,6 +65,7 @@ export function SplitTool(props: {
       beraknaForhandsvisning(col, {
         etikett: `Delade ”${col.name}” i ${formatCount(antal)} kolumner`,
         kind: 'split',
+        profil: { typ: 'dela', kolumn: col.name, delning: inst, namn: malnamn },
         delar: (v) => delaVarde(v, inst),
         arProblem: (v) => delaVarde(v, inst).filter((d) => d !== '').length < 2,
         nyaKolumner: malnamn,

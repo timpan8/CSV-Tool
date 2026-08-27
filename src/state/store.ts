@@ -7,6 +7,7 @@ import type { Sorteringsniva } from '../core/ops/sort.js'
 import { aktivaRegler, TOMT_FILTER, type Filter } from '../core/ops/filter.js'
 import type { Dubblettnyckel } from '../core/ops/duplicates.js'
 import { cell, klamp, type Selection } from './selection.js'
+import type { Profilsteg } from '../core/ops/profil.js'
 
 let seq = 0
 const nextId = () => `t${(seq += 1).toString(36)}`
@@ -28,6 +29,16 @@ export interface AppliedStep {
   kind: string
   apply: () => void
   revert: () => void
+  /**
+   * Steget uttryckt som data, för profiler.
+   *
+   * `apply` och `revert` är stängningar över den här filens kolumner och går
+   * varken att spara eller köra någon annanstans. Beskrivningen är samma
+   * ändring uttryckt i inställningar och kolumnnamn. Steg utan beskrivning —
+   * en handredigerad cell, en inklistring, en borttagen rad — hör till just
+   * den här filen och tas inte med i en profil.
+   */
+  profil?: Profilsteg
 }
 
 export interface Tab {

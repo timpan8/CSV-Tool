@@ -1,4 +1,5 @@
 import type { Column, ColumnId, ColumnType, Frame } from '../core/types.js'
+import type { Profilsteg } from '../core/ops/profil.js'
 import { getCell } from '../core/frame/column.js'
 
 /**
@@ -46,6 +47,15 @@ export interface Forhandsvisning {
   /** Etiketten som hamnar i historiken när den tillämpas. */
   etikett: string
   kind: string
+  /**
+   * Steget beskrivet som data, för profiler.
+   *
+   * `fn` är en stängning och går inte att spara. Beskrivningen är samma
+   * ändring uttryckt i inställningar, och det är den som kan köras om på en
+   * annan fil. Saknas den räknas steget som ett handgrepp som inte går att
+   * upprepa — se `src/core/ops/profil.ts`.
+   */
+  profil?: Profilsteg
   /** Transformen, för omskrivning på plats. Null när nya kolumner skapas. */
   fn: ((value: string) => string) | null
   /**
@@ -81,6 +91,8 @@ export interface Forhandsspec {
   rad?: (frame: Frame, row: number) => string[]
   arProblem?: (value: string) => boolean
   nyTyp?: ColumnType
+  /** Steget som data, för profiler. Se `Forhandsvisning.profil`. */
+  profil?: Profilsteg
   /** Namn på de kolumner som ska skapas i stället för omskrivning på plats. */
   nyaKolumner?: string[]
 }
@@ -153,6 +165,7 @@ export function beraknaForhandsvisning(
     nyaKolumner,
     etikett: spec.etikett,
     kind: spec.kind,
+    profil: spec.profil,
     fn: nyaKolumner.length > 0 ? null : (spec.fn ?? null),
     nyTyp: spec.nyTyp,
     perRad,
