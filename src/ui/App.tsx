@@ -85,6 +85,9 @@ import { SortTool } from './SortTool.jsx'
 import { FilterTool } from './FilterTool.jsx'
 import { DuplicateTool } from './DuplicateTool.jsx'
 import { Filterrad } from './Filterrad.jsx'
+import { MergeDialog } from './MergeDialog.jsx'
+import { Verkstad } from './Verkstad.jsx'
+import { oppnaVerkstad, stangVerkstad, verkstad } from '../state/matchning.js'
 import { nyRegelId, TOMT_FILTER, type Filterregel } from '../core/ops/filter.js'
 import {
   hittaDubbletter,
@@ -94,7 +97,7 @@ import {
 import { beskrivSortering } from '../core/ops/sort.js'
 import type { Riktning } from '../core/ops/sort.js'
 import { Meny, Toastar, type MenyPost } from './parts.jsx'
-import { EXEMPELFIL } from './exempel.js'
+import { EXEMPELFIL, EXEMPELFIL_ORDER } from './exempel.js'
 
 const TYPCYKEL: ColumnType[] = ['text', 'number', 'date', 'email', 'bool']
 
@@ -113,6 +116,7 @@ interface PasteState {
 export function App() {
   const [kö, setKö] = useState<File[]>([])
   const [exportOppen, setExportOppen] = useState(false)
+  const [slaIhopOppen, setSlaIhopOppen] = useState(false)
   const [meny, setMeny] = useState<MenyLage | null>(null)
   const [laddar, setLaddar] = useState<string | null>(null)
   const [slappOver, setSlappOver] = useState(false)
@@ -181,9 +185,20 @@ export function App() {
     }
   }
 
+  const exempelfil = (text: string, namn: string) =>
+    new File([new Blob([text], { type: 'text/csv' })], namn, { type: 'text/csv' })
+
   const oppnaExempel = () => {
-    const blob = new Blob([EXEMPELFIL], { type: 'text/csv' })
-    setKö((current) => [...current, new File([blob], 'exempel-kunder.csv', { type: 'text/csv' })])
+    setKö((current) => [...current, exempelfil(EXEMPELFIL, 'exempel-kunder.csv')])
+  }
+
+  /** Båda exempelfilerna, så att sammanslagningen går att prova direkt. */
+  const oppnaExempelpar = () => {
+    setKö((current) => [
+      ...current,
+      exempelfil(EXEMPELFIL, 'exempel-kunder.csv'),
+      exempelfil(EXEMPELFIL_ORDER, 'exempel-order.csv'),
+    ])
   }
 
   /** Öppnar text från urklipp som en ny flik. */
@@ -591,6 +606,10 @@ export function App() {
       const mod = e.ctrlKey || e.metaKey
       const nu = nuLage()
       if (!nu) return
+      // Med verkstaden öppen är rutnätet inte det man tittar på. Ctrl+Z hade
+      // annars ångrat i den aktiva fliken medan rättningen gjordes i den
+      // andra, och piltangenterna hade flyttat en markering ingen ser.
+      if (verkstad.value) return
       const { tab, frame, kolumner: synligaKolumner, sel: markering } = nu
 
       if (mod) {
@@ -749,6 +768,10 @@ export function App() {
   // Kolumnen kan ha tagits bort medan verktyget stod öppet; då stängs det.
   const verktygKolumn = frame && verktyg ? (findColumn(frame, verktyg.colId) ?? null) : null
   const begransad = viewIsLimited(tab)
+  // Verkstaden lägger sig över arbetsytan. Rutnätets egna kontroller — sök,
+  // filterrad, statusrad och tabellverktygen — hör till en tabell man inte
+  // längre tittar på, och skulle visa tal som inte gäller.
+  const iVerkstaden = verkstad.value !== null
 
   return (
     <div class="app">
@@ -762,7 +785,7 @@ export function App() {
         <FilValjare onFiler={oppnaFiler} />
         <button
           class="knapp"
-          disabled={!frame}
+          disabled={!frame || iVerkstaden}
           onClick={(e) =>
             setMeny({
               x: (e.currentTarget as HTMLElement).getBoundingClientRect().left,
@@ -800,22 +823,25 @@ export function App() {
         </button>
         <button
           class={`knapp${harSortering(tab) ? ' knapp--primar' : ''}`}
-          disabled={!frame}
+          disabled={!frame || iVerkstaden}
           onClick={() => oppnaTabellverktyg('sortera')}
         >
           Sortera{harSortering(tab) ? ` (${tab!.viewSpec.sortering!.length})` : ''}
         </button>
         <button
           class={`knapp${harFilter(tab) ? ' knapp--primar' : ''}`}
-          disabled={!frame}
+          disabled={!frame || iVerkstaden}
           onClick={() => oppnaTabellverktyg('filter')}
         >
           Filter{harFilter(tab) ? ` (${tab!.viewSpec.filter!.regler.length})` : ''}
         </button>
-        <button class="knapp" disabled={!frame} onClick={() => oppnaTabellverktyg('dubbletter')}>
+        <button class="knapp" disabled={!frame || iVerkstaden} onClick={() => oppnaTabellverktyg('dubbletter')}>
           Dubbletter
         </button>
-        <button class="knapp" disabled={!frame} onClick={() => setExportOppen(true)}>
+        <button class="knapp" disabled={!frame || iVerkstaden} onClick={() => setSlaIhopOppen(true)}>
+          Slå ihop…
+        </button>
+        <button class="knapp" disabled={!frame || iVerkstaden} onClick={() => setExportOppen(true)}>
           Exportera
         </button>
         <div class="vaxel">
@@ -855,7 +881,7 @@ export function App() {
         </div>
       )}
 
-      {sokOppen && tab && frame && (
+      {sokOppen && tab && frame && !iVerkstaden && (
         <SearchBar
           varde={tab.viewSpec.search ?? ''}
           traffar={frame.view.length}
@@ -870,7 +896,7 @@ export function App() {
         />
       )}
 
-      {tab && frame && (
+      {tab && frame && !iVerkstaden && (
         <Filterrad
           frame={frame}
           filter={tab.viewSpec.filter ?? TOMT_FILTER}
@@ -901,7 +927,15 @@ export function App() {
         </div>
       )}
 
-      {frame && tab ? (
+      {iVerkstaden ? (
+        <Verkstad
+          onSlaIhop={(resultat, text) => {
+            openFrame(resultat)
+            notify(text)
+          }}
+          onStang={stangVerkstad}
+        />
+      ) : frame && tab ? (
         <div
           class={`arbetsyta arbetsyta--med-inspektor${
             verktygKolumn ? ' arbetsyta--med-verktyg' : ''
@@ -1032,9 +1066,14 @@ export function App() {
           )}
         </div>
       ) : (
-        <EmptyState onFiler={oppnaFiler} onExempel={oppnaExempel} />
+        <EmptyState
+          onFiler={oppnaFiler}
+          onExempel={oppnaExempel}
+          onExempelpar={oppnaExempelpar}
+        />
       )}
 
+      {!iVerkstaden && (
       <Statusrad
         tab={tab}
         begransad={begransad}
@@ -1060,6 +1099,7 @@ export function App() {
           })
         }
       />
+      )}
 
       {kö.length > 0 && (
         <ImportDialog
@@ -1095,6 +1135,27 @@ export function App() {
             notify(`Klistrade in ${celler(andrade)}.`, {
               atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) },
             })
+          }}
+        />
+      )}
+
+      {slaIhopOppen && tab && frame && (
+        <MergeDialog
+          vanster={frame}
+          andraFlikar={tabs.value
+            .filter((t) => t.id !== tab.id)
+            .map((t) => ({ id: t.id, frame: t.frame }))}
+          onStang={() => setSlaIhopOppen(false)}
+          onSlaIhop={(resultat, text) => {
+            setSlaIhopOppen(false)
+            openFrame(resultat)
+            notify(text)
+          }}
+          onVerkstad={(hogerTabId, par, val) => {
+            const hogerTab = tabs.value.find((t) => t.id === hogerTabId)
+            if (!hogerTab) return
+            setSlaIhopOppen(false)
+            oppnaVerkstad(tab, hogerTab, par, val)
           }}
         />
       )}

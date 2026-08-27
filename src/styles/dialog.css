@@ -714,3 +714,10 @@
   border: 1px solid var(--linje);
   border-radius: var(--radie-liten);
 }
+
+/* Pilen mellan kolumnerna i ett matchningspar. */
+.parpil {
+  flex: none;
+  color: var(--text-svag);
+  font-size: 14px;
+}

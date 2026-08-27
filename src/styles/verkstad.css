@@ -1,0 +1,351 @@
+/**
+ * Matchningsverkstaden.
+ *
+ * Tre kolumner som syns samtidigt, för att det är hela poängen: går det inte
+ * att se båda raderna och deras fält på en gång går det inte heller att avgöra
+ * om de är samma person. Därför en egen vy över arbetsytan och inte en modal.
+ */
+
+.verkstad {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--yta);
+}
+
+.verkstad__topp {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--linje);
+  background: var(--yta-2);
+}
+
+.verkstad__rubrik h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.verkstad__underrubrik {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-svag);
+}
+
+.verkstad__larm {
+  padding: 8px 14px 0;
+}
+
+.verkstad__listor {
+  display: grid;
+  grid-template-columns: 1fr minmax(300px, 380px) 1fr;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.verkstad__mitt {
+  border-left: 1px solid var(--linje);
+  border-right: 1px solid var(--linje);
+}
+
+.verkstad__mitt .panel__innehall {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.verkstad__para,
+.verkstad__skrivalla {
+  justify-content: center;
+}
+
+.verkstad__par {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: var(--radie-liten);
+  font-size: 12px;
+}
+
+.verkstad__par:hover {
+  background: var(--yta-3);
+}
+
+.verkstad__par__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.verkstad__par__notis {
+  color: var(--text-svagast);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.verkstad__fot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--linje);
+  background: var(--yta-2);
+}
+
+.verkstad__fot__text {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-svag);
+}
+
+/* ---------- Restlistan ---------- */
+
+.restlista {
+  border-right: 0;
+}
+
+.restlista__fil {
+  padding: 0 12px 6px;
+  font-size: 12px;
+  color: var(--text-svag);
+}
+
+.restlista__tom {
+  margin: 8px 4px;
+  font-size: 12px;
+  color: var(--text-svag);
+}
+
+.restlista__avskrivna {
+  padding: 6px 12px;
+  border-top: 1px solid var(--linje);
+  font-size: 11px;
+  color: var(--text-svagast);
+}
+
+.restrad {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  border-radius: var(--radie-liten);
+}
+
+.restrad:hover {
+  background: var(--yta-3);
+}
+
+.restrad--vald,
+.restrad--vald:hover {
+  background: var(--yta-aktiv);
+}
+
+.restrad__val {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.restrad__nummer {
+  min-width: 26px;
+  color: var(--text-svagast);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.restrad__celler {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.restrad__cell {
+  color: var(--text-svag);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.restrad__cell--forst {
+  color: var(--text);
+  font-weight: 550;
+  flex: 0 1 auto;
+}
+
+.restrad__tomt {
+  color: var(--text-svagast);
+}
+
+.restrad__skriv {
+  border: 0;
+  background: transparent;
+  color: var(--text-svagast);
+  padding: 0 7px;
+  border-radius: var(--radie-liten);
+  font: inherit;
+  opacity: 0;
+}
+
+.restrad:hover .restrad__skriv,
+.restrad__skriv:focus-visible {
+  opacity: 1;
+}
+
+.restrad__skriv:hover {
+  background: var(--fara-svag);
+  color: var(--fara);
+}
+
+/* ---------- Raddetaljen ---------- */
+
+.raddetalj {
+  border: 1px solid var(--linje);
+  border-radius: var(--radie);
+  padding: 7px 9px;
+  background: var(--yta);
+}
+
+.raddetalj--tom {
+  border-style: dashed;
+}
+
+.raddetalj__rubrik {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-svag);
+}
+
+.raddetalj__fil {
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-svagast);
+}
+
+.raddetalj__falt {
+  margin: 6px 0 0;
+}
+
+.raddetalj__rad {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.raddetalj__rad dt {
+  font-size: 11px;
+  color: var(--text-svag);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.raddetalj__rad dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.raddetalj__varde {
+  display: block;
+  width: 100%;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radie-liten);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.raddetalj__varde:hover {
+  border-color: var(--linje-stark);
+  background: var(--yta-2);
+}
+
+.raddetalj__input {
+  width: 100%;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+/* ---------- Luddiga förslag ---------- */
+
+.forslag {
+  display: grid;
+  gap: 5px;
+  padding: 7px 9px;
+  border: 1px solid var(--linje);
+  border-radius: var(--radie);
+  background: var(--yta);
+}
+
+.forslag__rader {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.forslag__rad {
+  font-size: 12px;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.forslag__rad + .forslag__rad {
+  font-weight: 500;
+  color: var(--text-svag);
+}
+
+.forslag__poang {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-svag);
+  font-variant-numeric: tabular-nums;
+}
+
+.forslag__omsesidigt {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--lyckat-svag);
+  color: var(--lyckat);
+  font-weight: 600;
+}
+
+.forslag__knappar {
+  display: flex;
+  gap: 6px;
+}

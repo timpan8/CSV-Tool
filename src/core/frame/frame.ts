@@ -143,32 +143,6 @@ export function findEmptyColumns(frame: Frame): ColumnId[] {
     .map((c) => c.id)
 }
 
-/**
- * Behåller endast de angivna fysiska raderna och packar om kolumnerna.
- *
- * Detta är den enda operation som faktiskt kastar rader. Filtrering gör det
- * aldrig — den skriver bara om `view`.
- */
-export function keepRows(frame: Frame, keep: Uint32Array): void {
-  const n = keep.length
-  for (const col of frame.columns) {
-    const codes = new Uint32Array(n)
-    const flags = new Uint8Array(n)
-    for (let i = 0; i < n; i++) {
-      const src = keep[i]!
-      codes[i] = col.codes[src]!
-      flags[i] = col.flags[src]!
-    }
-    col.codes = codes
-    col.flags = flags
-  }
-  const sourceRow = new Uint32Array(n)
-  for (let i = 0; i < n; i++) sourceRow[i] = frame.sourceRow[keep[i]!]!
-  frame.sourceRow = sourceRow
-  frame.rowCount = n
-  frame.view = identityView(n)
-}
-
 /* ---------- Radoperationer ---------- */
 
 /** En bortagen rad, sparad så att den kan komma tillbaka exakt som den var. */

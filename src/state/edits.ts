@@ -81,18 +81,34 @@ function korOverKolumner(
 
 /* ---------- Celler ---------- */
 
-/**
- * Skriver en cell.
- *
- * Ångra kostar två tal: den föregående ordbokskoden och flaggorna. Ingen
- * kolumnkopiering behövs för en enskild redigering.
- */
+/** Skriver en cell i vy-koordinater — rutnätets väg in. */
 export function redigeraCell(tab: Tab, viewRow: number, colIndex: number, value: string): void {
   const col = selectableColumns(tab)[colIndex]
   const fysisk = tab.frame.view[viewRow]
   if (!col || fysisk === undefined) return
+  redigeraCellFysisk(tab, col, fysisk, value)
+}
+
+/**
+ * Skriver en cell på ett fysiskt radindex.
+ *
+ * Verkstaden har inga vy-koordinater att gå via, och skulle inte kunna ha det:
+ * en restrad kan mycket väl vara bortfiltrerad i sin egen flik, och då ligger
+ * den inte i `view` alls. Kolumnen kommer som objekt av samma skäl — en dold
+ * kolumn har inget index i `selectableColumns`.
+ *
+ * Ångra kostar två tal: den föregående ordbokskoden och flaggorna. Ingen
+ * kolumnkopiering behövs för en enskild redigering.
+ */
+export function redigeraCellFysisk(
+  tab: Tab,
+  col: Column,
+  fysisk: number,
+  value: string,
+): boolean {
+  if (fysisk < 0 || fysisk >= tab.frame.rowCount) return false
   const foregaende = getCell(col, fysisk)
-  if (foregaende === value) return
+  if (foregaende === value) return false
   const flaggor = col.flags[fysisk]!
 
   let kod = 0
@@ -104,6 +120,7 @@ export function redigeraCell(tab: Tab, viewRow: number, colIndex: number, value:
     },
     revert: () => restoreCell(col, fysisk, kod, flaggor),
   })
+  return true
 }
 
 function kort(value: string): string {

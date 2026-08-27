@@ -28,3 +28,39 @@ export const EXEMPELFIL = [
   '10036;Greta Öhrn;greta.ohrn@acme.se;2026-08-19 08:30;93131;Skellefteå;875,00;Vilande',
   '',
 ].join('\r\n')
+
+/**
+ * Andra exempelfilen — order att slå ihop med kundfilen.
+ *
+ * Den är gjord för att matchningen ska ha något verkligt att bita i:
+ * rubrikerna heter `Name` och `mail` i stället för `Namn` och `E-post`, så
+ * namnförslaget får arbeta. Namnen är skrivna olika (gemener, VERSALER,
+ * dubbelt mellanslag), en kund har två order så kardinaliteten syns, två
+ * order tillhör personer som inte finns i kundfilen och blir restlista, och
+ * en rad saknar namn helt och kan därför aldrig matcha.
+ *
+ * De tre sista raderna finns för verkstaden, en per väg ut ur restlistan:
+ * ORD-1012 har rätt e-post men fel stavat namn och plockas upp av en ny runda
+ * på e-post; ORD-1013 har namnet i omvänd ordning och likaså rätt e-post;
+ * ORD-1014 har både skräp i namnet och ett stavfel i e-postadressen, så den
+ * hittar sin kund först när värdet rättas för hand. ORD-1011 utan namn är den
+ * naturliga kandidaten att para ihop för hand eller skriva av.
+ */
+export const EXEMPELFIL_ORDER = [
+  'Order;Name;mail;Summa;Levererad',
+  'ORD-1001;anna karlsson;anna.karlsson@nordbygg.se;2 400,00;Ja',
+  'ORD-1002;Erik Öberg;erik.oberg@nordbygg.se;1 150,00;Ja',
+  'ORD-1003;ERIK ÖBERG;erik.oberg@nordbygg.se;890,00;Nej',
+  'ORD-1004;Åsa Öhman;asa.ohman@vydata.se;3 200,00;Ja',
+  'ORD-1005;Björn  Åkesson;bjorn.akesson@vydata.se;450,00;Nej',
+  'ORD-1006;Maja Lind;maja.lind@vydata.se;1 900,00;Ja',
+  'ORD-1007;Ravi Patel;ravi.patel@nordbygg.se;760,00;Ja',
+  'ORD-1008;Petra Sund;petra.sund@okand.se;540,00;Ja',
+  'ORD-1009;Hans Vik;hans.vik@okand.se;1 020,00;Nej',
+  'ORD-1010;Ella Norén;ella.noren@acme.se;2 780,00;Ja',
+  'ORD-1011;;svea.ek@okand.se;310,00;Ja',
+  'ORD-1012;Zlatan Ekk;zlatan.ek@acme.se;1 340,00;Ja',
+  'ORD-1013;Ängström Ida;info@angstrom.se;2 250,00;Nej',
+  'ORD-1014;Nils Ödman (avliden);nils.odman@nordbyg.se;880,00;Ja',
+  '',
+].join('\r\n')
