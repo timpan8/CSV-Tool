@@ -8,7 +8,7 @@ import {
   parseNumber,
   violatesType,
 } from '../../src/core/infer.js'
-import { normalizeAlways, rankDictionary, sortCollator, stripDiacritics } from '../../src/core/locale/sv.js'
+import { normalizeAlways, sortCollator, stripDiacritics } from '../../src/core/locale/sv.js'
 import { createColumn, intern } from '../../src/core/frame/column.js'
 import type { Column } from '../../src/core/types.js'
 
@@ -150,13 +150,6 @@ describe('svensk sortering', () => {
     expect(['Kund 10', 'Kund 2', 'Kund 1'].sort(sortCollator.compare)).toEqual([
       'Kund 1', 'Kund 2', 'Kund 10',
     ])
-  })
-
-  it('rangordnar ordboken så att heltalssortering ger samma ordning', () => {
-    const dict = ['', 'Öberg', 'Åkesson', 'Bengtsson']
-    const rank = rankDictionary(dict)
-    const byRank = dict.slice().sort((a, b) => rank[dict.indexOf(a)]! - rank[dict.indexOf(b)]!)
-    expect(byRank).toEqual(dict.slice().sort(sortCollator.compare))
   })
 })
 

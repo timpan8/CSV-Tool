@@ -2,6 +2,8 @@ import { computed, signal } from '@preact/signals'
 import type { ColumnId, Frame } from '../core/types.js'
 import { computeView, harBegransning, TOM_VY, type ViewSpec } from './view.js'
 import type { Forhandsvisning } from './preview.js'
+import { synkaOrdning, type Ordning } from './ordning.js'
+import type { Sorteringsniva } from '../core/ops/sort.js'
 import { cell, klamp, type Selection } from './selection.js'
 
 let seq = 0
@@ -64,6 +66,13 @@ export interface Tab {
    * heller aldrig en dataändring och hamnar därför aldrig i historiken.
    */
   forhandsvisning: Forhandsvisning | null
+  /**
+   * Den frusna visningsordningen, eller null när filens ordning gäller.
+   *
+   * Den är en cache av `viewSpec.sortering` och inget annat — se
+   * `src/state/ordning.ts` för varför den aldrig får bli en sanning i sig.
+   */
+  ordning: Ordning | null
 }
 
 export const tabs = signal<Tab[]>([])
@@ -94,7 +103,8 @@ export function touch(): void {
  * falla ur en pågående sökning.
  */
 export function refreshView(tab: Tab): void {
-  const result = computeView(tab.frame, tab.viewSpec, tab.forhandsvisning)
+  synkaOrdning(tab, tab.viewSpec.sortering ?? [])
+  const result = computeView(tab.frame, tab.viewSpec, tab.forhandsvisning, tab.ordning)
   tab.frame.view = result.view
   tab.kolumnerMedTraff = result.kolumnerMedTraff
   if (tab.markering) {
@@ -123,6 +133,79 @@ export function viewIsLimited(tab: Tab | null): boolean {
   return tab !== null && harBegransning(tab.viewSpec)
 }
 
+/* ---------- Sortering ---------- */
+
+export function harSortering(tab: Tab | null): boolean {
+  return (tab?.viewSpec.sortering?.length ?? 0) > 0
+}
+
+export function sorteringenArInaktuell(tab: Tab | null): boolean {
+  return tab?.ordning?.inaktuell === true
+}
+
+/**
+ * Byter ordning och låter markeringen följa med sin rad.
+ *
+ * Markeringen ligger i vy-koordinater, vilket är rätt när urvalet ändras —
+ * då ska blicken stanna där den är. Men när *ordningen* byts förväntar man
+ * sig, som i Excel, att raden man tittade på fortfarande är markerad. Ett
+ * rektangulärt område över rader som inte längre ligger intill varandra är
+ * dessutom inte en markering någon har gjort, så det kollapsar till
+ * fokuscellen.
+ */
+function medOmforankring(tab: Tab, andra: () => void): void {
+  const fysisk = tab.markering ? (tab.frame.view[tab.markering.fokusRad] ?? null) : null
+  const kol = tab.markering?.fokusKol ?? 0
+  andra()
+  tab.redigerar = null
+  refreshView(tab)
+  if (fysisk === null) return
+  const ny = tab.frame.view.indexOf(fysisk)
+  // Föll raden ur vyn gäller klämningen som refreshView redan gjort.
+  if (ny !== -1) tab.markering = cell(ny, kol)
+  touch()
+}
+
+export function sattSortering(tab: Tab, nivaer: Sorteringsniva[]): void {
+  medOmforankring(tab, () => {
+    tab.viewSpec = { ...tab.viewSpec, sortering: nivaer.length > 0 ? nivaer : undefined }
+  })
+}
+
+/**
+ * Växlar sorteringen på en kolumn.
+ *
+ * Utan `lagg` ersätter den alla nivåer — det är vad ett klick på en rubrik
+ * betyder. Med `lagg` läggs kolumnen till som en ytterligare nivå, eller
+ * vänds om den redan finns.
+ */
+export function vaxlaSortering(tab: Tab, colId: ColumnId, lagg = false): void {
+  const nuvarande = tab.viewSpec.sortering ?? []
+  const index = nuvarande.findIndex((n) => n.colId === colId)
+  const riktning =
+    index !== -1 && nuvarande[index]!.riktning === 'stigande' ? 'fallande' : 'stigande'
+
+  if (!lagg) {
+    sattSortering(tab, [{ colId, riktning }])
+    return
+  }
+  const nya = nuvarande.map((n) => ({ ...n }))
+  if (index === -1) nya.push({ colId, riktning })
+  else nya[index]!.riktning = riktning
+  sattSortering(tab, nya)
+}
+
+/** Räknar om den frusna ordningen på nytt data. */
+export function sorteraOm(tab: Tab): void {
+  medOmforankring(tab, () => {
+    synkaOrdning(tab, tab.viewSpec.sortering ?? [], true)
+  })
+}
+
+export function rensaSortering(tab: Tab): void {
+  sattSortering(tab, [])
+}
+
 /**
  * Visar eller stänger en förhandsvisning.
  *
@@ -143,8 +226,15 @@ export function setSelection(tab: Tab, markering: Selection | null): void {
   touch()
 }
 
-export function openFrame(frame: Frame): Tab {
-  const tab: Tab = {
+/**
+ * En ny flik i utgångsläge.
+ *
+ * Formen bor här och ingen annanstans. Testfixturer som bygger en `Tab` för
+ * hand går sönder vid varje nytt fält, och det fältet är alltid något de
+ * inte bryr sig om.
+ */
+export function nyTab(frame: Frame): Tab {
+  return {
     id: nextId(),
     frame,
     history: [],
@@ -157,7 +247,12 @@ export function openFrame(frame: Frame): Tab {
     markering: frame.rowCount > 0 ? cell(0, 0) : null,
     redigerar: null,
     forhandsvisning: null,
+    ordning: null,
   }
+}
+
+export function openFrame(frame: Frame): Tab {
+  const tab = nyTab(frame)
   tabs.value = [...tabs.value, tab]
   activeTabId.value = tab.id
   return tab

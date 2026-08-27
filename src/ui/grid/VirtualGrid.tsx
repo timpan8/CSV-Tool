@@ -6,6 +6,7 @@ import { TYPE_BADGES, TYPE_LABELS, violatesType } from '../../core/infer.js'
 import { formatCount } from '../../core/locale/sv.js'
 import { cellenMatchar, type ViewSpec } from '../../state/view.js'
 import { forCell, spokvarde, uppslag, PROBLEM, type Forhandsvisning } from '../../state/preview.js'
+import type { Riktning, Sorteringsniva } from '../../core/ops/sort.js'
 import { innehaller, rect, type Selection } from '../../state/selection.js'
 
 const DEFAULT_WIDTH = 168
@@ -32,6 +33,8 @@ export interface GridProps {
   viewSpec: ViewSpec
   /** Omskrivning som visas men ännu inte är gjord. Ritas som före → efter. */
   forhandsvisning: Forhandsvisning | null
+  /** Aktiva sorteringsnivåer, för pilen i rubriken. */
+  sortering: readonly Sorteringsniva[]
   markering: Selection | null
   redigerar: { rad: number; kol: number } | null
   onSelectColumn: (id: ColumnId) => void
@@ -39,6 +42,8 @@ export interface GridProps {
   onMoveColumn: (id: ColumnId, toIndex: number) => void
   onResizeColumn: (id: ColumnId, width: number) => void
   onCycleType: (id: ColumnId) => void
+  /** Klick på sortpilen. `lagg` när skift hölls nere: bygg en nivå till. */
+  onSortera: (id: ColumnId, lagg: boolean) => void
   onSelect: (sel: Selection) => void
   onStartEdit: (rad: number, kol: number) => void
   onCommitEdit: (rad: number, kol: number, value: string, flytt: Flytt) => void
@@ -215,6 +220,10 @@ export function VirtualGrid(props: GridProps) {
             aktiv={col.id === activeColumnId}
             markerad={markerat !== null && index >= markerat.k1 && index <= markerat.k2}
             kvalitet={quality.get(col.id)!}
+            sortniva={props.sortering.findIndex((n) => n.colId === col.id)}
+            sortriktning={props.sortering.find((n) => n.colId === col.id)?.riktning ?? null}
+            flerniva={props.sortering.length > 1}
+            onSortera={(lagg) => props.onSortera(col.id, lagg)}
             drar={dragging === col.id}
             slappmal={dropIndex === index}
             onSelect={() => {
@@ -443,6 +452,11 @@ interface HeaderProps {
   aktiv: boolean
   markerad: boolean
   kvalitet: Quality
+  /** Nollbaserat index i sorteringen, eller -1 när kolumnen inte ingår. */
+  sortniva: number
+  sortriktning: Riktning | null
+  flerniva: boolean
+  onSortera: (lagg: boolean) => void
   drar: boolean
   slappmal: boolean
   onSelect: () => void
@@ -503,6 +517,24 @@ function Header(props: HeaderProps) {
     >
       <div class="rubrik__namn">
         <span>{col.name}</span>
+        <button
+          class={`rubrik__sort${props.sortriktning ? ' rubrik__sort--aktiv' : ''}`}
+          aria-label={
+            props.sortriktning
+              ? `Sorterat på ${col.name}, ${props.sortriktning}. Klicka för att vända.`
+              : `Sortera på ${col.name}`
+          }
+          title="Klicka för att sortera. Skift-klick lägger till en nivå."
+          onClick={(e) => {
+            e.stopPropagation()
+            props.onSortera(e.shiftKey)
+          }}
+        >
+          {props.sortriktning === 'fallande' ? '↓' : '↑'}
+          {props.sortniva !== -1 && props.flerniva && (
+            <span class="rubrik__sortniva">{props.sortniva + 1}</span>
+          )}
+        </button>
         <button
           class="rubrik__meny"
           aria-label={`Meny för kolumnen ${col.name}`}

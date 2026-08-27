@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createColumn, codeCounts, getCell, intern } from '../../src/core/frame/column.js'
 import { createFrame } from '../../src/core/frame/frame.js'
 import type { Frame } from '../../src/core/types.js'
-import { cell } from '../../src/state/selection.js'
-import { redo, undo, type Tab } from '../../src/state/store.js'
+import { nyTab, redo, undo, type Tab } from '../../src/state/store.js'
 import { tillampaForhandsvisning } from '../../src/state/edits.js'
 import {
   ANDRAD,
@@ -26,21 +25,7 @@ function frameOf(headers: string[], rows: string[][]): Frame {
 }
 
 function tabOf(headers: string[], rows: string[][]): Tab {
-  const frame = frameOf(headers, rows)
-  return {
-    id: 't1',
-    frame,
-    history: [],
-    cursor: 0,
-    dataRevision: 0,
-    activeColumnId: frame.columns[0]?.id ?? null,
-    smutsig: false,
-    viewSpec: {},
-    kolumnerMedTraff: 0,
-    markering: cell(0, 0),
-    redigerar: null,
-    forhandsvisning: null,
-  }
+  return nyTab(frameOf(headers, rows))
 }
 
 const versaler = { etikett: 'Versaler', kind: 'test', fn: (v: string) => v.toUpperCase() }

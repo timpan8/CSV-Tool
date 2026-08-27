@@ -41,6 +41,8 @@ export interface MenyPost {
   etikett: string
   genvag?: string
   fara?: boolean
+  /** Markerar posten som det nuvarande valet, t.ex. sorteringens riktning. */
+  aktiv?: boolean
   kor: () => void
 }
 
@@ -81,8 +83,11 @@ export function Meny(props: {
         ) : (
           <button
             key={post.etikett}
-            class={`meny__post${post.fara ? ' meny__post--fara' : ''}`}
-            role="menuitem"
+            class={`meny__post${post.fara ? ' meny__post--fara' : ''}${
+              post.aktiv ? ' meny__post--aktiv' : ''
+            }`}
+            role={post.aktiv === undefined ? 'menuitem' : 'menuitemradio'}
+            aria-checked={post.aktiv === undefined ? undefined : post.aktiv}
             onClick={() => {
               post.kor()
               props.onStang()

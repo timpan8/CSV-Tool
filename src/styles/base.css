@@ -413,3 +413,61 @@ input[type='radio'] {
 .inventering--okant .inventering__exempel {
   color: color-mix(in srgb, var(--varning) 75%, var(--text-svag));
 }
+
+/* ---------- Sorteringschip i statusraden ---------- */
+
+.sortchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 3px 1px 7px;
+  border: 1px solid var(--linje-stark);
+  border-radius: 999px;
+  background: var(--yta);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/*
+ * En inaktuell ordning är inte ett fel — raderna ligger med flit kvar där de
+ * var. Varningstonen säger att siffrorna på skärmen är äldre än datat, inte
+ * att något gått sönder.
+ */
+.sortchip--inaktuell {
+  border-color: var(--varning);
+  background: var(--varning-svag);
+}
+
+.sortchip__text {
+  color: var(--text-svag);
+}
+
+.sortchip--inaktuell .sortchip__text {
+  color: var(--text);
+}
+
+.sortchip__knapp {
+  border: 0;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--varning);
+  color: var(--text-invers);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sortchip__stang {
+  border: 0;
+  background: transparent;
+  color: var(--text-svag);
+  cursor: pointer;
+  padding: 0 3px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.sortchip__stang:hover {
+  color: var(--fara);
+}

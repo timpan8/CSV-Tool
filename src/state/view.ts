@@ -1,9 +1,11 @@
 import type { ColumnId, Frame } from '../core/types.js'
 import { getCell, matchDictionary } from '../core/frame/column.js'
-import { findColumn, identityView } from '../core/frame/frame.js'
+import { findColumn } from '../core/frame/frame.js'
 import { violatesType } from '../core/infer.js'
 import { normalizeAlways, stripDiacritics } from '../core/locale/sv.js'
 import { ANDRAD, PROBLEM, uppslag, type Forhandsvisning } from './preview.js'
+import { utgangslage, type Ordning } from './ordning.js'
+import type { Sorteringsniva } from '../core/ops/sort.js'
 
 /**
  * Beskrivningen av vad som visas.
@@ -23,10 +25,22 @@ export interface ViewSpec {
    * den har problem med. Gäller bara medan en förhandsvisning är öppen.
    */
   visaBara?: 'andrade' | 'problem'
+  /**
+   * Sorteringens *spec*. Den beräknade ordningen ligger på fliken, eftersom
+   * den är en cache och inte en beskrivning.
+   */
+  sortering?: Sorteringsniva[]
 }
 
 export const TOM_VY: ViewSpec = {}
 
+/**
+ * Sant när något *döljer* rader.
+ *
+ * Sortering räknas inte hit. Den ändrar ordningen men gömmer ingenting, och
+ * att låta den tända "X av Y rader" eller exportdialogens filtervarning vore
+ * att varna för något som inte hänt.
+ */
 export function harBegransning(spec: ViewSpec): boolean {
   return (
     (spec.search ?? '').trim() !== '' ||
@@ -63,8 +77,9 @@ export function computeView(
   frame: Frame,
   spec: ViewSpec,
   forh: Forhandsvisning | null = null,
+  ordning: Ordning | null = null,
 ): ViewResult {
-  return begransaTillForhandsvisning(frame, grundvy(frame, spec), spec, forh)
+  return begransaTillForhandsvisning(frame, grundvy(frame, spec, ordning), spec, forh)
 }
 
 /**
@@ -92,15 +107,24 @@ function begransaTillForhandsvisning(
   return { ...grund, view: Uint32Array.from(kvar) }
 }
 
-function grundvy(frame: Frame, spec: ViewSpec): ViewResult {
+/**
+ * Vilka rader som visas, i vilken ordning.
+ *
+ * Sveper alltid **utgångsordningen** och aldrig `0..rowCount`. Det är den
+ * detaljen som gör att sorteringen överlever filtreringen: resultatet blir en
+ * delföljd av ordningen, aldrig en omsortering av den.
+ */
+function grundvy(frame: Frame, spec: ViewSpec, ordning: Ordning | null): ViewResult {
   const fraga = (spec.search ?? '').trim()
+  const utgang = utgangslage(frame, ordning)
 
   if (spec.invalidIn !== undefined) {
     const col = findColumn(frame, spec.invalidIn)
     if (col) {
       const mask = matchDictionary(col, (v) => v !== '' && violatesType(v, col.type))
       const traffar: number[] = []
-      for (let r = 0; r < frame.rowCount; r++) {
+      for (let i = 0; i < utgang.length; i++) {
+        const r = utgang[i]!
         if (mask[col.codes[r]!]! === 1) traffar.push(r)
       }
       return { view: Uint32Array.from(traffar), kolumnerMedTraff: traffar.length > 0 ? 1 : 0 }
@@ -108,7 +132,11 @@ function grundvy(frame: Frame, spec: ViewSpec): ViewResult {
   }
 
   if (fraga === '') {
-    return { view: identityView(frame.rowCount), kolumnerMedTraff: 0 }
+    // Utan filter *är* vyn ordningen, och de får dela array. Det bygger på
+    // att `frame.view` aldrig ändras på plats någonstans i kodbasen — den
+    // tilldelas alltid en ny array — så en delad referens kan inte förstöra
+    // den frusna ordningen.
+    return { view: utgang, kolumnerMedTraff: 0 }
   }
 
   const nyckel = sokNyckel(fraga)
@@ -131,7 +159,8 @@ function grundvy(frame: Frame, spec: ViewSpec): ViewResult {
   }
 
   const traffar: number[] = []
-  rader: for (let r = 0; r < frame.rowCount; r++) {
+  rader: for (let i = 0; i < utgang.length; i++) {
+    const r = utgang[i]!
     for (let c = 0; c < frame.columns.length; c++) {
       if (masker[c]![frame.columns[c]!.codes[r]!]! === 1) {
         traffar.push(r)

@@ -25,25 +25,11 @@ export const looseCollator = new Intl.Collator('sv-SE', {
   sensitivity: 'base',
 })
 
-/**
- * Rangordnar en ordbok med collator och returnerar rang per ordbokspost.
- *
- * Det här är hela knepet bakom snabb sortering: en collator-jämförelse kostar
- * ungefär en mikrosekund, och 100 000 rader kräver runt 1,7 miljoner
- * jämförelser. Genom att i stället rangordna de unika värdena — ofta några
- * hundra — och sedan sortera heltal blir samma sortering millisekunder i
- * stället för sekunder.
- *
- * Rangen måste räknas om när ordboken växer, vilket den gör vid
- * cellredigering. Se `Column.dict`.
+/*
+ * Rangordningen av en ordbok bor i `src/core/frame/rank.ts`, eftersom den
+ * behöver kolumnens typ för att veta om `1000` ska hamna före eller efter
+ * `99`. Kollatorn ovan är den textordning den faller tillbaka på.
  */
-export function rankDictionary(dict: readonly string[], collator = sortCollator): Uint32Array {
-  const order = Array.from({ length: dict.length }, (_, i) => i)
-  order.sort((a, b) => collator.compare(dict[a]!, dict[b]!))
-  const rank = new Uint32Array(dict.length)
-  for (let i = 0; i < order.length; i++) rank[order[i]!] = i
-  return rank
-}
 
 /** Månadsnamn, fulla och förkortade, för datumtolkning. */
 export const MONTH_NAMES: ReadonlyMap<string, number> = new Map([

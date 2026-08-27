@@ -20,6 +20,15 @@ export interface ExportOptions {
   rows: 'view' | 'all'
   /** Vilka kolumner som ska med. */
   columns: 'visible' | 'all'
+  /**
+   * Radordningen att använda när `rows` är `'all'`.
+   *
+   * Utan den skulle "alla rader" betyda filens ordning, så den som sorterat
+   * och sedan exporterar allt skulle få tillbaka osorterat utan att något
+   * sagt till. Vyn bär sin egen ordning; det här är samma sak för de rader
+   * ett filter döljer.
+   */
+  ordning?: Uint32Array
 }
 
 /**
@@ -83,7 +92,9 @@ export function selectForExport(frame: Frame, options: ExportOptions): ExportSel
     options.columns === 'all' ? frame.columns : frame.columns.filter((c) => !c.hidden)
   const rows =
     options.rows === 'all'
-      ? Uint32Array.from({ length: frame.rowCount }, (_, i) => i)
+      ? (options.ordning?.length === frame.rowCount
+          ? options.ordning
+          : Uint32Array.from({ length: frame.rowCount }, (_, i) => i))
       : frame.view
   return { columns, rows }
 }

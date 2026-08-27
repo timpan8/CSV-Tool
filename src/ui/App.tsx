@@ -11,11 +11,9 @@ import {
 import {
   celler,
   formatCount,
-  formatSum,
   kolumner as kolumnerText,
   rader as raderText,
 } from '../core/locale/sv.js'
-import { DELIMITER_NAMES } from '../core/csv/sniff.js'
 import { parseDelimitedText } from '../core/csv/parse.js'
 import { toDelimited } from '../core/csv/stringify.js'
 import { STADNINGAR } from '../core/ops/clean.js'
@@ -33,8 +31,14 @@ import {
   redo,
   revision,
   runStep,
+  harSortering,
+  rensaSortering,
+  sattSortering,
   setActiveColumn,
   setForhandsvisning,
+  sorteraOm,
+  sorteringenArInaktuell,
+  vaxlaSortering,
   setSelection,
   setViewSpec,
   tabs,
@@ -63,7 +67,7 @@ import {
   tillampaForhandsvisning,
   type PasteRequest,
 } from '../state/edits.js'
-import { aggregera, cell, klamp, rect, type Selection } from '../state/selection.js'
+import { cell, klamp, rect, type Selection } from '../state/selection.js'
 import { VirtualGrid, type Flytt } from './grid/VirtualGrid.jsx'
 import { ColumnPanel } from './ColumnPanel.jsx'
 import { Inspector } from './Inspector.jsx'
@@ -73,6 +77,10 @@ import { ExportDialog } from './ExportDialog.jsx'
 import { SearchBar } from './SearchBar.jsx'
 import { PasteDialog } from './PasteDialog.jsx'
 import { VERKTYG, Verktyg, type Verktygsnamn } from './verktyg.jsx'
+import { Statusrad } from './Statusrad.jsx'
+import { SortTool } from './SortTool.jsx'
+import { beskrivSortering } from '../core/ops/sort.js'
+import type { Riktning } from '../core/ops/sort.js'
 import { Meny, Toastar, type MenyPost } from './parts.jsx'
 import { EXEMPELFIL } from './exempel.js'
 
@@ -100,6 +108,11 @@ export function App() {
   const [inklistring, setInklistring] = useState<PasteState | null>(null)
   /** Vilket städverktyg som är öppet, och på vilken kolumn. */
   const [verktyg, setVerktyg] = useState<{ id: Verktygsnamn; colId: ColumnId } | null>(null)
+  /**
+   * Tabellverktyg i högerpanelen — de som inte hör till en enskild kolumn.
+   * Sortering, och i nästa steg filter och dubbletter.
+   */
+  const [tabellverktyg, setTabellverktyg] = useState<'sortera' | null>(null)
 
   const tab = activeTab.value
   const frame = tab?.frame ?? null
@@ -475,6 +488,7 @@ export function App() {
 
   const oppnaVerktyg = (namn: Verktygsnamn, colId: ColumnId) => {
     setActiveColumn(colId)
+    setTabellverktyg(null)
     setVerktyg({ id: namn, colId })
   }
 
@@ -482,6 +496,15 @@ export function App() {
     const nu = nuLage()
     if (nu) setForhandsvisning(nu.tab, null)
     setVerktyg(null)
+  }
+
+  // Högerpanelen rymmer ett verktyg i taget: att öppna sorteringen stänger
+  // ett öppet kolumnverktyg, och därmed också dess förhandsvisning.
+  const oppnaSortering = () => {
+    const nu = nuLage()
+    if (nu) setForhandsvisning(nu.tab, null)
+    setVerktyg(null)
+    setTabellverktyg('sortera')
   }
 
   // Ett öppet verktyg hör till sin flik. Byter man flik städas både panelen
@@ -494,6 +517,7 @@ export function App() {
     return () => {
       setForhandsvisning(lamnad, null)
       setVerktyg(null)
+      setTabellverktyg(null)
     }
   }, [tab?.id])
 
@@ -713,6 +737,13 @@ export function App() {
         >
           Städa ▾
         </button>
+        <button
+          class={`knapp${harSortering(tab) ? ' knapp--primar' : ''}`}
+          disabled={!frame}
+          onClick={oppnaSortering}
+        >
+          Sortera{harSortering(tab) ? ` (${tab!.viewSpec.sortering!.length})` : ''}
+        </button>
         <button class="knapp" disabled={!frame} onClick={() => setExportOppen(true)}>
           Exportera
         </button>
@@ -796,6 +827,7 @@ export function App() {
             activeColumnId={tab.activeColumnId}
             viewSpec={tab.viewSpec}
             forhandsvisning={tab.forhandsvisning}
+            sortering={tab.viewSpec.sortering ?? []}
             markering={markering}
             redigerar={tab.redigerar}
             onSelectColumn={setActiveColumn}
@@ -813,6 +845,11 @@ export function App() {
                   flyttaSist: (i) => flyttaKolumn(i, frame.columns.length - 1),
                   visaOgiltiga,
                   verktyg: oppnaVerktyg,
+                  sortera: (i, riktning) =>
+                    sattSortering(tab, [{ colId: i, riktning }]),
+                  laggSortering: (i) => vaxlaSortering(tab, i, true),
+                  sortriktning:
+                    tab.viewSpec.sortering?.find((n) => n.colId === id)?.riktning ?? null,
                   taBort: taBortKolumn,
                   dold: findColumn(frame, id)?.hidden ?? false,
                 }),
@@ -821,6 +858,7 @@ export function App() {
             onMoveColumn={flyttaKolumn}
             onResizeColumn={andraBredd}
             onCycleType={cyklaTyp}
+            onSortera={(id, lagg) => vaxlaSortering(tab, id, lagg)}
             onSelect={(sel) => setSelection(tab, sel)}
             onStartEdit={startaRedigering}
             onCommitEdit={avslutaRedigering}
@@ -829,7 +867,16 @@ export function App() {
               touch()
             }}
           />
-          {verktygKolumn && verktyg ? (
+          {tabellverktyg === 'sortera' ? (
+            <SortTool
+              frame={frame}
+              nivaer={tab.viewSpec.sortering ?? []}
+              inaktuell={sorteringenArInaktuell(tab)}
+              onNivaer={(nivaer) => sattSortering(tab, nivaer)}
+              onSorteraOm={() => sorteraOm(tab)}
+              onStang={() => setTabellverktyg(null)}
+            />
+          ) : verktygKolumn && verktyg ? (
             <Verktyg
               namn={verktyg.id}
               col={verktygKolumn}
@@ -871,6 +918,10 @@ export function App() {
       <Statusrad
         tab={tab}
         begransad={begransad}
+        sorterat={tab && frame ? beskrivSortering(frame, tab.viewSpec.sortering ?? []) : ''}
+        sorteringInaktuell={sorteringenArInaktuell(tab)}
+        onSorteraOm={() => tab && sorteraOm(tab)}
+        onRensaSortering={() => tab && rensaSortering(tab)}
         onRensaVy={() => {
           if (!tab) return
           setSokOppen(false)
@@ -902,6 +953,7 @@ export function App() {
         <ExportDialog
           frame={frame}
           harFilter={begransad}
+          ordning={tab?.ordning?.rader}
           onStang={() => setExportOppen(false)}
           onExporterad={() => {
             setExportOppen(false)
@@ -979,6 +1031,9 @@ function kolumnMeny(
     flyttaSist: (id: ColumnId) => void
     visaOgiltiga: (id: ColumnId) => void
     verktyg: (namn: Verktygsnamn, id: ColumnId) => void
+    sortera: (id: ColumnId, riktning: Riktning) => void
+    laggSortering: (id: ColumnId) => void
+    sortriktning: Riktning | null
     taBort: (id: ColumnId) => void
     dold: boolean
   },
@@ -996,6 +1051,18 @@ function kolumnMeny(
     'avdelare',
     { etikett: 'Flytta först', kor: () => handlers.flyttaForst(id) },
     { etikett: 'Flytta sist', kor: () => handlers.flyttaSist(id) },
+    'avdelare',
+    {
+      etikett: 'Sortera A→Ö',
+      aktiv: handlers.sortriktning === 'stigande',
+      kor: () => handlers.sortera(id, 'stigande'),
+    },
+    {
+      etikett: 'Sortera Ö→A',
+      aktiv: handlers.sortriktning === 'fallande',
+      kor: () => handlers.sortera(id, 'fallande'),
+    },
+    { etikett: 'Lägg till som sorteringsnivå', kor: () => handlers.laggSortering(id) },
     'avdelare',
     ...VERKTYG.map((v): MenyPost => ({
       etikett: v.etikett,
@@ -1065,65 +1132,3 @@ function FlikKnapp({ tab, aktiv }: { tab: Tab; aktiv: boolean }) {
   )
 }
 
-function Statusrad(props: {
-  tab: Tab | null
-  begransad: boolean
-  onRensaVy: () => void
-  onRadmeny: (x: number, y: number) => void
-}) {
-  const tab = props.tab
-  if (!tab) {
-    return (
-      <div class="statusrad">
-        <span>Ingen fil öppen</span>
-        <span class="statusrad__lokal">● Allt lokalt</span>
-      </div>
-    )
-  }
-  const frame: Frame = tab.frame
-  const parse = frame.meta.parse
-  const kolumner = selectableColumns(tab)
-  const agg = tab.markering ? aggregera(frame, kolumner, tab.markering) : null
-
-  return (
-    <div class="statusrad">
-      <span>
-        {props.begransad
-          ? `${formatCount(frame.view.length)} av ${formatCount(frame.rowCount)} rader`
-          : `${formatCount(frame.rowCount)} rader`}
-      </span>
-      <span>{formatCount(kolumner.length)} kolumner</span>
-      {parse && (
-        <span>
-          {parse.encoding.toUpperCase()}
-          {parse.hadBom && ' med BOM'} · {DELIMITER_NAMES[parse.delimiter].toLowerCase()}
-        </span>
-      )}
-      {agg && agg.celler > 1 && (
-        <span title="Snabbsumma för markeringen">
-          {formatCount(agg.celler)} markerade
-          {agg.tal > 0 && ` · Σ ${formatSum(agg.summa)}`}
-          {agg.tal > 1 && ` · ø ${formatSum(agg.medel)}`}
-          {agg.tal === 0 && agg.ifyllda > 0 && ` · ${formatCount(agg.unika)} unika`}
-        </span>
-      )}
-      {props.begransad && (
-        <button class="statusrad__knapp" onClick={props.onRensaVy}>
-          Visa alla rader
-        </button>
-      )}
-      <button
-        class="statusrad__knapp"
-        onClick={(e) => {
-          const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
-          props.onRadmeny(r.left, r.top - 150)
-        }}
-      >
-        Rader ▾
-      </button>
-      <span class="statusrad__lokal" title="Verktyget kan inte skicka data någonstans.">
-        ● Allt lokalt
-      </span>
-    </div>
-  )
-}

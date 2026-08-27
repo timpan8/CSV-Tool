@@ -37,6 +37,8 @@ Inga externa typsnitt, inget CDN, ingen analys, ingen felrapportering, ingen inl
   - **Dela kolumn** — vid varje, första eller sista förekomsten av ett tecken, eller på en fast position. Det som inte får plats hamnar i sista kolumnen i stället för att försvinna.
   - **Slå ihop kolumner** — en mall som `{Förnamn} {Efternamn}`. Kolumnnamn som inte finns rapporteras i stället för att tyst bli tomma.
   - **Sök och ersätt** — bokstavligt eller reguljärt uttryck, med felet visat medan du skriver. Bokstavlig sökning är bokstavlig: `1.5` matchar inte `125`.
+- **Flernivåsortering** med svensk kollation, så att `Öberg` hamnar efter `Zetterlund` och `Kund 2` före `Kund 10`. Klicka på pilen i en rubrik, skift-klicka för att lägga till en nivå till. Talkolumner sorteras numeriskt och datumkolumner som datum oavsett hur de är skrivna; tomma celler hamnar alltid sist, i båda riktningarna — en tom cell är inte det minsta värdet, den saknas.
+  **Ordningen fryses.** Rättar du en cell efter att ha sorterat ligger raden kvar under markören, och statusraden erbjuder *Sortera om*. Att raden hoppar iväg just när du rättat den är annars det som gör en sorterad lista omöjlig att arbeta sig igenom. Verktyget säger bara till när ändringen faktiskt rör en kolumn du sorterat på.
 - **Ångra och gör om** på allt, med en steglista där du kan backa till vilket steg som helst.
 - **Export** till Excel (`.xlsx`) eller CSV. Excel är förvalt, eftersom det är det enda formatet som både bevarar `01234` som `01234` och skriver talkolumner som riktiga tal så att `SUMMA` fungerar. CSV-exporten har val av avgränsare, teckenkodning, BOM och radslut, med en Excel-vänlig profil (semikolon, CRLF, UTF-8 med BOM) och ett riskbaserat formelskydd som inte rör negativa tal.
 - Mörkt läge, tomt läge med exempelfil, och en varning innan sidan lämnas med osparat arbete.
@@ -45,7 +47,7 @@ En Excel-fil innehåller typade värden i stället för text, så importen måst
 
 ## På gång
 
-Flernivåsortering, filterbyggare, dubbletthantering, matchning av två filer med restlistor, samt Combine, Template och profiler.
+Filterbyggare, dubbletthantering, matchning av två filer med restlistor, samt Combine, Template och profiler.
 
 ## Utveckling
 
