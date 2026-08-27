@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   EPOSTFALT,
   delaEpost,
+  epostNamndelar,
   epostTransform,
   inventeraEpost,
   lasFalt,
@@ -105,6 +106,7 @@ describe('epostTransform', () => {
   const forvantat: Record<Epostfalt, string> = {
     fornamn: 'Anna',
     efternamn: 'Karlsson',
+    'bada-namnen': 'Anna Karlsson',
     'helt-namn': 'Anna Karlsson',
     lokal: 'anna.karlsson',
     doman: 'nordbygg.se',
@@ -120,8 +122,23 @@ describe('epostTransform', () => {
   it('varje fält i listan har ett exempel som stämmer med sin egen utläsning', () => {
     const d = del(adress)!
     for (const f of EPOSTFALT) {
+      // Tvåkolumnsfältet läses av epostNamndelar och inte av lasFalt, som
+      // per definition ger ett värde.
+      if (f.varde === 'bada-namnen') {
+        expect(epostNamndelar()(adress).join(' · ')).toBe(f.exempel)
+        continue
+      }
       expect(lasFalt(d, f.varde)).toBe(f.exempel)
     }
+  })
+
+  it('bada-namnen ger två värden, och tomma när adressen inte går att tolka', () => {
+    expect(epostNamndelar()(adress)).toEqual(['Anna', 'Karlsson'])
+    expect(epostNamndelar()('Anna Karlsson')).toEqual(['', ''])
+    expect(epostNamndelar({ efternamnForst: true })('karlsson.anna@x.se')).toEqual([
+      'Anna',
+      'Karlsson',
+    ])
   })
 
   it('ger tomt i stället för skräp när adressen inte går att tolka', () => {

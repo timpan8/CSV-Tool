@@ -6,6 +6,7 @@ import {
   findColumn,
   insertColumn,
   moveColumn,
+  sammaInnehall,
   uniqueColumnName,
 } from '../core/frame/frame.js'
 import {
@@ -199,6 +200,20 @@ export function App() {
           ? { sheet: settings.sheet, decimal: settings.decimal }
           : undefined,
       )
+      /*
+       * Samma fil två gånger är ett vanligt misstag när man hämtar exporter
+       * ur flera system. Det sägs som en varning och inte som en fråga —
+       * ibland *vill* man ha två kopior att jämföra, och en dialog som står
+       * i vägen för det är värre än en mening som går att strunta i.
+       * `duplicate-file` fanns redan som varningstyp.
+       */
+      const dubblett = tabs.value.find((t) => sammaInnehall(t.frame, parsed))
+      if (dubblett) {
+        parsed.meta.warnings.push({
+          kind: 'duplicate-file',
+          message: `Innehållet är identiskt med den redan öppna fliken ”${dubblett.frame.name}”.`,
+        })
+      }
       const flik = openFrame(parsed)
       // Filen öppnades från kombineringsvyns "Öppna mallfil…". Den gick samma
       // väg som alla andra filer, genom importdialogen — en mall som lästs med
@@ -210,7 +225,8 @@ export function App() {
       const varningar = parsed.meta.warnings.filter((w) => w.kind !== 'encoding-uncertain')
       notify(
         `${file.name} öppnad — ${formatCount(parsed.rowCount)} rader, ${formatCount(parsed.columns.length)} kolumner.` +
-          (varningar.length > 0
+          (dubblett ? ` Identisk med ”${dubblett.frame.name}”.` : '') +
+          (varningar.length > (dubblett ? 1 : 0)
             ? ` ${varningar.length} sak${varningar.length === 1 ? '' : 'er'} att titta på.`
             : ''),
         { ton: varningar.length > 0 ? 'varning' : 'info' },

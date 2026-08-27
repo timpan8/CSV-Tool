@@ -6,7 +6,7 @@ import { stadningarEfterId } from '../core/ops/clean.js'
 import { delaVarde } from '../core/ops/columns.js'
 import { korMall, tolkaMall } from '../core/ops/columns.js'
 import { datumTransform, tolkaDatum } from '../core/ops/dates.js'
-import { epostTransform } from '../core/ops/email.js'
+import { epostNamndelar, epostTransform } from '../core/ops/email.js'
 import { talTransform, tolkaTal } from '../core/ops/numbers.js'
 import { telefonTransform, tolkaTelefon } from '../core/ops/phone.js'
 import { byggErsattare } from '../core/ops/replace.js'
@@ -221,14 +221,25 @@ function spec(steg: Profilsteg): Forhandsspec | null {
         fn: telefonTransform(steg.inst),
         arProblem: (v) => tolkaTelefon(v, steg.inst).siffror === null,
       }
-    case 'epost':
+    case 'epost': {
+      const namn = Array.isArray(steg.namn) ? steg.namn : [steg.namn]
+      if (steg.falt === 'bada-namnen') {
+        return {
+          etikett,
+          kind: 'email',
+          profil: steg,
+          delar: epostNamndelar(steg.val),
+          nyaKolumner: [namn[0] ?? 'Förnamn', namn[1] ?? 'Efternamn'],
+        }
+      }
       return {
         etikett,
         kind: 'email',
         profil: steg,
         fn: epostTransform(steg.falt, steg.val),
-        nyaKolumner: [steg.namn],
+        nyaKolumner: [namn[0] ?? 'Ny kolumn'],
       }
+    }
     case 'ersatt': {
       const ersattare = byggErsattare(steg.inst)
       if (!ersattare.fn) return null

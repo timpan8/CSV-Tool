@@ -193,6 +193,24 @@ export function toDelimited(
   return parts.join(newline)
 }
 
+/**
+ * Ett godtyckligt radurval som CSV **med rubrikrad**.
+ *
+ * `stringifyCsv` skriver alltid hela ramen eller hela vyn. Restlistorna i
+ * matchningsverkstaden är varken — de är en lista över just de rader som blev
+ * över, och en delexport utan rubriker är svår att göra något med.
+ */
+export function urvalTillCsv(
+  columns: readonly Column[],
+  rows: Uint32Array | readonly number[],
+  delimiter: string,
+  newline: '\r\n' | '\n' = '\r\n',
+): string {
+  const rubriker = columns.map((c) => quoteField(c.name, delimiter, 'minimal')).join(delimiter)
+  const kropp = toDelimited(columns, rows, delimiter, newline)
+  return kropp === '' ? rubriker : `${rubriker}${newline}${kropp}`
+}
+
 /** TSV till urklipp — klistras rakt in i Excel med kolumnerna intakta. */
 export function toTsv(frame: Frame, options: Partial<ExportOptions> = {}): string {
   return stringifyCsv(frame, {

@@ -34,7 +34,11 @@ export type Profilsteg =
   | { typ: 'datum'; kolumn: string; inst: Datuminstallning }
   | { typ: 'tal'; kolumn: string; inst: Talinstallning }
   | { typ: 'telefon'; kolumn: string; inst: Telefoninstallning }
-  | { typ: 'epost'; kolumn: string; falt: Epostfalt; val: Epostval; namn: string }
+  /**
+   * `namn` är en lista, eftersom `bada-namnen` skapar två kolumner. Äldre
+   * profiler bar en enkel sträng och läses fortfarande.
+   */
+  | { typ: 'epost'; kolumn: string; falt: Epostfalt; val: Epostval; namn: string | string[] }
   | { typ: 'ersatt'; kolumn: string; inst: Ersattning }
   | { typ: 'dela'; kolumn: string; delning: Delning; namn: string[] }
   | { typ: 'mall'; mall: string; namn: string; stadaLuckor: boolean }
@@ -112,8 +116,10 @@ export function beskrivSteg(steg: Profilsteg): string {
       return `Städa tal i ${steg.kolumn}`
     case 'telefon':
       return `Normalisera telefonnummer i ${steg.kolumn}`
-    case 'epost':
-      return `Läs ${steg.falt} ur ${steg.kolumn} till ”${steg.namn}”`
+    case 'epost': {
+      const namn = Array.isArray(steg.namn) ? steg.namn : [steg.namn]
+      return `Läs ${steg.falt} ur ${steg.kolumn} till ”${namn.join('” och ”')}”`
+    }
     case 'ersatt':
       return `Ersätt ”${steg.inst.sok}” i ${steg.kolumn}`
     case 'dela':

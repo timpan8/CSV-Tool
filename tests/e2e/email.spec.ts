@@ -102,3 +102,20 @@ test('kan läsa efternamnet först när adresserna är skrivna så', async ({ pa
   await page.getByRole('radio', { name: 'Efternamnet' }).click()
   await expect(page.locator('.rutnat__cell--spoke').first()).toHaveText('Karlsson')
 })
+
+test('förnamn och efternamn i ett svep ger två kolumner', async ({ page }) => {
+  await oppnaExempel(page)
+  await page.locator('.rubrik[title="E-post"]').click({ button: 'right' })
+  await page.getByRole('menuitem', { name: /E-post → namn/ }).click()
+
+  await page.getByRole('radio', { name: 'Förnamn och Efternamn, var sin kolumn' }).click()
+  await expect(page.getByLabel('Namn på förnamnskolumnen')).toHaveValue('Förnamn')
+  await expect(page.getByLabel('Namn på efternamnskolumnen')).toHaveValue('Efternamn')
+  // Två spökkolumner ritas intill källan.
+  await expect(page.locator('.rubrik--spoke')).toHaveCount(2)
+
+  await page.getByRole('button', { name: 'Skapa kolumnerna' }).click()
+  await expect(page.locator('.statusrad')).toContainText('10 kolumner')
+  await expect(page.getByRole('gridcell', { name: 'Anna', exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('gridcell', { name: 'Karlsson', exact: true }).first()).toBeVisible()
+})

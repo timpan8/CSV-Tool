@@ -5,6 +5,7 @@ import type { Column } from '../core/types.js'
 import { codeCounts } from '../core/frame/column.js'
 import {
   EPOSTFALT,
+  epostNamndelar,
   epostTransform,
   inventeraEpost,
   type Epostfalt,
@@ -33,6 +34,8 @@ export function EmailTool(props: {
   const [falt, setFalt] = useState<Epostfalt>('fornamn')
   const [efternamnForst, setEfternamnForst] = useState(false)
   const [namn, setNamn] = useState('Förnamn')
+  /** Namnet på den andra kolumnen — bara `bada-namnen` skapar två. */
+  const [namn2, setNamn2] = useState('Efternamn')
   // Sant tills användaren själv skrivit i namnfältet; då slutar det följa med.
   const [namnFoljer, setNamnFoljer] = useState(true)
 
@@ -42,31 +45,44 @@ export function EmailTool(props: {
     [col, props.dataRevision, antal, efternamnForst],
   )
 
+  const tva = falt === 'bada-namnen'
+
   const valjFalt = (v: Epostfalt) => {
     setFalt(v)
-    if (namnFoljer) setNamn(EPOSTFALT.find((f) => f.varde === v)!.etikett)
+    if (!namnFoljer) return
+    if (v === 'bada-namnen') {
+      setNamn('Förnamn')
+      setNamn2('Efternamn')
+    } else {
+      setNamn(EPOSTFALT.find((f) => f.varde === v)!.etikett)
+    }
   }
 
-  const forh = useMemo(
-    () =>
-      beraknaForhandsvisning(col, {
-        etikett: `${EPOSTFALT.find((f) => f.varde === falt)!.etikett} ur ”${col.name}”`,
-        kind: 'email',
-        profil: {
-          typ: 'epost',
-          kolumn: col.name,
-          falt,
-          val: { efternamnForst },
-          namn: namn.trim() === '' ? 'Ny kolumn' : namn.trim(),
-        },
-        fn: epostTransform(falt, { efternamnForst }),
-        // Ett problem är en cell som inte ger något värde alls: adressen går
-        // inte att tolka, eller saknar den del man bett om.
-        arProblem: (v) => epostTransform(falt, { efternamnForst })(v) === '',
-        nyaKolumner: [namn.trim() === '' ? 'Ny kolumn' : namn.trim()],
-      }),
-    [col, props.dataRevision, falt, efternamnForst, namn],
-  )
+  const rent = (v: string, reserv: string) => (v.trim() === '' ? reserv : v.trim())
+
+  const forh = useMemo(() => {
+    const namnen = tva
+      ? [rent(namn, 'Förnamn'), rent(namn2, 'Efternamn')]
+      : [rent(namn, 'Ny kolumn')]
+    const en = epostTransform(falt, { efternamnForst })
+    const bada = epostNamndelar({ efternamnForst })
+    return beraknaForhandsvisning(col, {
+      etikett: `${EPOSTFALT.find((f) => f.varde === falt)!.etikett} ur ”${col.name}”`,
+      kind: 'email',
+      profil: {
+        typ: 'epost',
+        kolumn: col.name,
+        falt,
+        val: { efternamnForst },
+        namn: namnen,
+      },
+      ...(tva ? { delar: bada } : { fn: en }),
+      // Ett problem är en cell som inte ger något värde alls: adressen går
+      // inte att tolka, eller saknar den del man bett om.
+      arProblem: (v) => (tva ? bada(v).every((d) => d === '') : en(v) === ''),
+      nyaKolumner: namnen,
+    })
+  }, [col, props.dataRevision, falt, efternamnForst, namn, namn2, tva])
 
   useEffect(() => {
     props.onForhandsvisning(forh)
@@ -76,7 +92,7 @@ export function EmailTool(props: {
     return () => props.onForhandsvisning(null)
   }, [])
 
-  const namnfalt = falt === 'fornamn' || falt === 'efternamn' || falt === 'helt-namn'
+  const namnfalt = falt === 'fornamn' || falt === 'efternamn' || falt === 'helt-namn' || tva
   const exempel = inv.exempelNamn
 
   return (
@@ -95,7 +111,7 @@ export function EmailTool(props: {
             title={forh.andrade === 0 ? 'Kolumnen skulle bli tom.' : undefined}
             onClick={() => props.onTillampa(forh)}
           >
-            Skapa kolumnen
+            {tva ? 'Skapa kolumnerna' : 'Skapa kolumnen'}
           </button>
         </>
       }
@@ -174,14 +190,29 @@ export function EmailTool(props: {
       )}
 
       <div class="falt">
-        <span class="falt__etikett">Namn på den nya kolumnen</span>
-        <input
-          value={namn}
-          onInput={(e) => {
-            setNamnFoljer(false)
-            setNamn((e.currentTarget as HTMLInputElement).value)
-          }}
-        />
+        <span class="falt__etikett">
+          {tva ? 'Namn på de nya kolumnerna' : 'Namn på den nya kolumnen'}
+        </span>
+        <div class={tva ? 'faltrad' : undefined}>
+          <input
+            value={namn}
+            aria-label={tva ? 'Namn på förnamnskolumnen' : 'Namn på den nya kolumnen'}
+            onInput={(e) => {
+              setNamnFoljer(false)
+              setNamn((e.currentTarget as HTMLInputElement).value)
+            }}
+          />
+          {tva && (
+            <input
+              value={namn2}
+              aria-label="Namn på efternamnskolumnen"
+              onInput={(e) => {
+                setNamnFoljer(false)
+                setNamn2((e.currentTarget as HTMLInputElement).value)
+              }}
+            />
+          )}
+        </div>
       </div>
 
       <div class="falt">

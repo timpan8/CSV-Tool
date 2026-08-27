@@ -23,12 +23,20 @@ import { delaEpost } from './email.js'
  * att matchningen lyckats.
  */
 
-export type Matchningstyp = 'exakt' | 'oberoende' | 'accentoberoende' | 'epostNamn' | 'siffror'
+export type Matchningstyp =
+  | 'exakt'
+  | 'oberoende'
+  | 'accentoberoende'
+  | 'epostNamn'
+  | 'siffror'
+  | 'namndelar'
 
 export interface Matchningstypspost {
   typ: Matchningstyp
   etikett: string
   beskrivning: string
+  /** Typen läser två kolumner på högersidan i stället för en. */
+  tvaHoger?: boolean
 }
 
 export const MATCHNINGSTYPER: Matchningstypspost[] = [
@@ -53,6 +61,13 @@ export const MATCHNINGSTYPER: Matchningstypspost[] = [
     beskrivning: 'Allt utom siffror skalas bort. Passar telefonnummer och organisationsnummer.',
   },
   {
+    typ: 'namndelar',
+    etikett: 'Namn mot förnamn + efternamn',
+    tvaHoger: true,
+    beskrivning:
+      'Jämför en kolumn med hela namnet mot två kolumner som har förnamn och efternamn var för sig. Orden sorteras, så Karlsson Anna matchar Anna Karlsson. Båda delarna måste vara ifyllda.',
+  },
+  {
     typ: 'epostNamn',
     etikett: 'E-post mot namn',
     beskrivning:
@@ -63,7 +78,20 @@ export const MATCHNINGSTYPER: Matchningstypspost[] = [
 export interface Matchningspar {
   vansterColId: ColumnId
   hogerColId: ColumnId
+  /**
+   * Andra högerkolumnen, för typer som läser två.
+   *
+   * Bara `namndelar` använder den. Att lägga den som ett valfritt fält i
+   * stället för en egen partyp håller resten av kedjan orörd: matchningen är
+   * fortfarande en ekvivalensrelation, och hashjoinen vet inte om skillnaden.
+   */
+  hogerColId2?: ColumnId
   typ: Matchningstyp
+}
+
+/** Typer som kräver en andra högerkolumn. */
+export function kraverTvaHoger(typ: Matchningstyp): boolean {
+  return MATCHNINGSTYPER.find((t) => t.typ === typ)?.tvaHoger === true
 }
 
 /** Nyckeldelarna sammanfogas med ett tecken som inte kan förekomma i data. */
@@ -84,6 +112,11 @@ function normalisera(value: string, typ: Matchningstyp): string {
       const siffror = v.replace(/\D/g, '')
       return siffror
     }
+    case 'namndelar':
+      // Orden sorteras så att ordningen inte spelar roll: ”Karlsson Anna”
+      // och ”Anna Karlsson” är samma namn. Prickarna behålls — Öberg och
+      // Oberg är två namn, och den som vill slå ihop dem har `Utan å ä ö`.
+      return v.replace(/\s+/g, ' ').toLocaleLowerCase('sv').split(' ').sort().join(' ')
     case 'epostNamn': {
       // En e-postkolumn ger namnet ur adressen; en namnkolumn ger sig själv.
       // Båda sidor stryks på prickar, eftersom adressen aldrig kan bära dem.
@@ -107,15 +140,27 @@ export function byggNycklar(
 ): string[] {
   const kolumner = par.map((p) => ({
     col: findColumn(frame, sida === 'vanster' ? p.vansterColId : p.hogerColId),
+    // Andra kolumnen finns bara på högersidan och bara för de typer som
+    // läser två. Vänstersidan har alltid en kolumn per par.
+    col2:
+      sida === 'hoger' && kraverTvaHoger(p.typ) && p.hogerColId2 !== undefined
+        ? findColumn(frame, p.hogerColId2)
+        : undefined,
+    tvaKravs: sida === 'hoger' && kraverTvaHoger(p.typ),
     typ: p.typ,
   }))
 
   // En tabell per kolumn: ordbokskod → normaliserad nyckeldel.
-  const tabeller = kolumner.map(({ col, typ }) => {
+  const tabeller = kolumner.map(({ col, col2, tvaKravs, typ }) => {
     if (!col) return null
+    // Kräver typen två kolumner och den andra saknas är paret obrukbart.
+    if (tvaKravs && !col2) return null
     const ut = new Array<string>(col.dict.length)
     for (let kod = 0; kod < col.dict.length; kod++) ut[kod] = normalisera(col.dict[kod]!, typ)
-    return { col, ut }
+    if (!col2) return { col, ut, col2: undefined, ut2: undefined }
+    const ut2 = new Array<string>(col2.dict.length)
+    for (let kod = 0; kod < col2.dict.length; kod++) ut2[kod] = normalisera(col2.dict[kod]!, typ)
+    return { col, ut, col2, ut2 }
   })
 
   const nycklar = new Array<string>(frame.rowCount)
@@ -128,7 +173,20 @@ export function byggNycklar(
         anvandbar = false
         break
       }
-      const del = t.ut[t.col.codes[r]!]!
+      let del = t.ut[t.col.codes[r]!]!
+      if (t.col2 && t.ut2) {
+        const del2 = t.ut2[t.col2.codes[r]!]!
+        // Båda delarna måste finnas. Ett efternamn som saknas skulle annars
+        // låta ”Anna” matcha vilken Anna som helst — samma fel som en tom
+        // nyckel, bara svårare att se.
+        if (del === '' || del2 === '') {
+          anvandbar = false
+          break
+        }
+        // Delarna är redan normaliserade var för sig; hopslagningen sorterar
+        // om orden så att resultatet blir detsamma som för hela namnet.
+        del = `${del} ${del2}`.split(' ').sort().join(' ')
+      }
       if (del === '') {
         anvandbar = false
         break
