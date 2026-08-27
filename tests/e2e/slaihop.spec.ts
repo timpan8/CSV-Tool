@@ -12,8 +12,14 @@ async function oppnaParet(page: Page) {
   await expect(page.locator('.statusrad')).toContainText('16 rader')
 }
 
+/** Öppnar en post ur verktygsradens meny "Flera filer". */
+async function oppnaFlerfilsmenyn(page: Page, post: string) {
+  await page.getByRole('button', { name: 'Flera filer ▾' }).click()
+  await page.getByRole('menuitem', { name: post }).click()
+}
+
 const oppnaDialogen = async (page: Page) => {
-  await page.getByRole('button', { name: 'Slå ihop…' }).click()
+  await oppnaFlerfilsmenyn(page, 'Slå ihop…')
   await expect(page.getByRole('dialog')).toBeVisible()
 }
 

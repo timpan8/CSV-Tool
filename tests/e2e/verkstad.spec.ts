@@ -8,7 +8,8 @@ async function oppnaVerkstaden(page: Page) {
   await page.getByRole('button', { name: 'Öppna filen' }).click()
   await expect(page.locator('.flik')).toHaveCount(2)
   await page.locator('.flik__namn', { hasText: 'exempel-kunder.csv' }).click()
-  await page.getByRole('button', { name: 'Slå ihop…' }).click()
+  await page.getByRole('button', { name: 'Flera filer ▾' }).click()
+  await page.getByRole('menuitem', { name: 'Slå ihop…' }).click()
   await page.getByRole('button', { name: 'Beta av resten…' }).click()
   await expect(page.locator('.verkstad')).toBeVisible()
 }

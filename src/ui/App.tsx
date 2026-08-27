@@ -1262,9 +1262,43 @@ export function App() {
           CSV-verkstan
         </span>
         <FilValjare onFiler={oppnaFiler} />
+
+        {/*
+          Raden är grupperad efter vad knapparna gör, inte efter när de
+          byggdes. Först vad du ser — sortering, filter och dubbletter ändrar
+          bara vyn. Sedan vad som ändrar data. Sist vägen ut.
+        */}
+        <span class="verktygsrad__avdelare" aria-hidden="true" />
+        <button
+          class={`knapp${harSortering(tab) ? ' knapp--primar' : ''}`}
+          disabled={!frame || egenVy}
+          title="Flernivåsortering med svensk bokstavsordning. Ändrar bara ordningen, aldrig värdena."
+          onClick={() => oppnaTabellverktyg('sortera')}
+        >
+          Sortera{harSortering(tab) ? ` (${tab!.viewSpec.sortering!.length})` : ''}
+        </button>
+        <button
+          class={`knapp${harFilter(tab) ? ' knapp--primar' : ''}`}
+          disabled={!frame || egenVy}
+          title="Visa bara de rader som stämmer med dina regler. Raderna finns kvar."
+          onClick={() => oppnaTabellverktyg('filter')}
+        >
+          Filter{harFilter(tab) ? ` (${tab!.viewSpec.filter!.regler.length})` : ''}
+        </button>
+        <button
+          class={`knapp${tab?.viewSpec.dubbletter ? ' knapp--primar' : ''}`}
+          disabled={!frame || egenVy}
+          title="Hitta rader som är lika i de kolumner du väljer, och visa dem grupperade."
+          onClick={() => oppnaTabellverktyg('dubbletter')}
+        >
+          Dubbletter{dubblettgrupper ? ` (${formatCount(dubblettgrupper.antalGrupper)})` : ''}
+        </button>
+
+        <span class="verktygsrad__avdelare" aria-hidden="true" />
         <button
           class="knapp"
           disabled={!frame || egenVy}
+          title="Trimma blanksteg, ändra skiftläge och städa bort det osynliga i markeringen."
           onClick={(e) =>
             setMeny({
               x: (e.currentTarget as HTMLElement).getBoundingClientRect().left,
@@ -1276,33 +1310,25 @@ export function App() {
           Städa ▾
         </button>
         <button
-          class={`knapp${harSortering(tab) ? ' knapp--primar' : ''}`}
-          disabled={!frame || egenVy}
-          onClick={() => oppnaTabellverktyg('sortera')}
-        >
-          Sortera{harSortering(tab) ? ` (${tab!.viewSpec.sortering!.length})` : ''}
-        </button>
-        <button
-          class={`knapp${harFilter(tab) ? ' knapp--primar' : ''}`}
-          disabled={!frame || egenVy}
-          onClick={() => oppnaTabellverktyg('filter')}
-        >
-          Filter{harFilter(tab) ? ` (${tab!.viewSpec.filter!.regler.length})` : ''}
-        </button>
-        <button class="knapp" disabled={!frame || egenVy} onClick={() => oppnaTabellverktyg('dubbletter')}>
-          Dubbletter
-        </button>
-        <button class="knapp" disabled={!frame || egenVy} onClick={() => setSlaIhopOppen(true)}>
-          Slå ihop…
-        </button>
-        <button
           class="knapp"
           disabled={!frame || egenVy}
-          title="Lägg flera filer på varandra, med kolumner som betyder samma sak i samma spalt."
-          onClick={oppnaKombinera}
+          title="Sätt ihop data ur flera filer — bredvid varandra, ovanpå varandra, eller in i en mall."
+          onClick={(e) =>
+            setMeny({
+              x: (e.currentTarget as HTMLElement).getBoundingClientRect().left,
+              y: (e.currentTarget as HTMLElement).getBoundingClientRect().bottom + 4,
+              poster: flerfilsmeny({
+                slaIhop: () => setSlaIhopOppen(true),
+                kombinera: () => oppnaKombinera(),
+                mall: () => oppnaKombinera(true),
+              }),
+            })
+          }
         >
-          Kombinera…
+          Flera filer ▾
         </button>
+
+        <span class="verktygsrad__avdelare" aria-hidden="true" />
         <button
           class="knapp"
           disabled={!frame || egenVy}
@@ -1311,7 +1337,12 @@ export function App() {
         >
           Profiler…
         </button>
-        <button class="knapp" disabled={!frame || egenVy} onClick={() => setExportOppen(true)}>
+        <button
+          class="knapp"
+          disabled={!frame || egenVy}
+          title="Skriv ut filen som Excel eller CSV."
+          onClick={() => setExportOppen(true)}
+        >
           Exportera
         </button>
         <div class="vaxel">
@@ -1614,7 +1645,8 @@ export function App() {
               filter: () => oppnaTabellverktyg('filter'),
               dubbletter: () => oppnaTabellverktyg('dubbletter'),
               slaIhop: () => setSlaIhopOppen(true),
-              kombinera: oppnaKombinera,
+              kombinera: () => oppnaKombinera(),
+              mall: () => oppnaKombinera(true),
               oversikt: () => setOversiktOppen(true),
               visaAllaRader: () => {
                 if (!tab) return
@@ -1748,6 +1780,39 @@ function stadMeny(
     'avdelare',
     { etikett: 'Ta bort helt tomma rader', kor: rader.tommaRader },
     { etikett: 'Ta bort helt tomma kolumner', kor: rader.tommaKolumner },
+  ]
+}
+
+/**
+ * De tre sätten att sätta ihop flera filer.
+ *
+ * De låg tidigare som två knappar i verktygsraden — *Slå ihop* och
+ * *Kombinera* — två ord för nästan samma sak och omöjliga att skilja åt utan
+ * att prova. Här står de under varandra med en rad som säger vad som händer
+ * med raderna, och mallen får en egen ingång i stället för att gömma sig i en
+ * väljare inne i kombineringsvyn.
+ */
+function flerfilsmeny(handlers: {
+  slaIhop: () => void
+  kombinera: () => void
+  mall: () => void
+}): (MenyPost | 'avdelare')[] {
+  return [
+    {
+      etikett: 'Slå ihop…',
+      skal: 'rader som hör ihop läggs sida vid sida, matchat på en nyckel',
+      kor: handlers.slaIhop,
+    },
+    {
+      etikett: 'Kombinera…',
+      skal: 'filerna läggs på varandra, kolumner som betyder samma sak i samma spalt',
+      kor: handlers.kombinera,
+    },
+    {
+      etikett: 'Fyll en mall med data…',
+      skal: 'en fil med bara rubriker bestämmer formen, data hämtas ur de filer du väljer',
+      kor: handlers.mall,
+    },
   ]
 }
 

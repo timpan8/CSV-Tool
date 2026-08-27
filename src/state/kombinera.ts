@@ -24,13 +24,24 @@ export const mallTabId = signal<string | null>(null)
 /** Sant medan en fil öppnas som ska bli mall när den landat. */
 export const vantarPaMall = signal(false)
 
-export function oppnaKombinera(): void {
+/**
+ * Sant när vyn öppnades via *Fyll en mall med data…*.
+ *
+ * Vyn kan nås två vägar med samma innehåll men olika ärende. Flaggan låter
+ * målformsväljaren ta fokus när ärendet är mallen, så att man landar på den
+ * fråga man kom för — i stället för att leta efter den.
+ */
+export const begarMall = signal(false)
+
+export function oppnaKombinera(medMall = false): void {
   mallTabId.value = null
   vantarPaMall.value = false
+  begarMall.value = medMall
   kombineraOppen.value = true
 }
 
 export function stangKombinera(): void {
   kombineraOppen.value = false
   vantarPaMall.value = false
+  begarMall.value = false
 }

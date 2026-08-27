@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Frame } from '../core/types.js'
 import { getCell } from '../core/frame/column.js'
 import { identityView, visibleColumns } from '../core/frame/frame.js'
@@ -14,7 +14,7 @@ import {
   type Malkolumn,
 } from '../core/ops/stapla.js'
 import { tabs, type Tab } from '../state/store.js'
-import { mallTabId, stangKombinera, vantarPaMall } from '../state/kombinera.js'
+import { begarMall, mallTabId, stangKombinera, vantarPaMall } from '../state/kombinera.js'
 import { formatCount, kolumner as kolumnerText, rader as raderText } from '../core/locale/sv.js'
 import { Notis, Val } from './parts.js'
 import { Aliaskarta } from './Aliaskarta.js'
@@ -55,6 +55,7 @@ export function Kombinera(props: {
   const [egnaKolumner, setEgnaKolumner] = useState<Malkolumn[] | null>(null)
   const [signaturVidRedigering, setSignaturVidRedigering] = useState('')
   const filinput = useRef<HTMLInputElement>(null)
+  const malformRef = useRef<HTMLSelectElement>(null)
 
   // Flikar kan stängas medan vyn är öppen, och mallen är aldrig sin egen källa.
   const kallflikar = valda
@@ -147,6 +148,17 @@ export function Kombinera(props: {
     filinput.current?.click()
   }
 
+  /*
+   * Kom man hit via *Fyll en mall med data…* är målformen ärendet, inte en
+   * inställning bland andra. Då tar väljaren fokus, så att man landar på den
+   * fråga man kom för.
+   */
+  useEffect(() => {
+    if (!begarMall.value) return
+    begarMall.value = false
+    malformRef.current?.focus()
+  }, [])
+
   return (
     <div class="kombinera">
       <div class="kombinera__topp">
@@ -185,46 +197,16 @@ export function Kombinera(props: {
       <div class="kombinera__kropp">
         <div class="panel">
           <div class="panel__rubrik">
-            Filer att stapla
+            {mallFlik ? 'Filer att hämta data ur' : 'Filer att stapla'}
             <span class="panel__rubrik__antal">{formatCount(kallflikar.length)}</span>
           </div>
           <div class="panel__innehall">
-            <div class="kollista kollista--kryss">
-              {oppna.map((t) => {
-                const begransad = t.frame.view.length < t.frame.rowCount
-                return (
-                  <label class="kryss" key={t.id}>
-                    <input
-                      type="checkbox"
-                      disabled={t.id === mallId}
-                      checked={valda.includes(t.id) && t.id !== mallId}
-                      onChange={(e) =>
-                        setValda(
-                          (e.currentTarget as HTMLInputElement).checked
-                            ? [...valda, t.id]
-                            : valda.filter((x) => x !== t.id),
-                        )
-                      }
-                    />
-                    {t.frame.name}
-                    <span class="verktyg__sammanfattning">
-                      {' '}
-                      {t.id === mallId
-                        ? 'mall'
-                        : `${formatCount(t.frame.rowCount)}${
-                            begransad ? ` · ${formatCount(t.frame.view.length)} visas` : ''
-                          }`}
-                    </span>
-                  </label>
-                )
-              })}
-            </div>
-
             <div class="falt">
               <span class="falt__etikett">Målform</span>
               <select
                 class="nivarad__kolumn"
                 aria-label="Målform"
+                ref={malformRef}
                 value={mallId ?? ''}
                 onChange={(e) => {
                   const varde = (e.currentTarget as HTMLSelectElement).value
@@ -266,6 +248,37 @@ export function Kombinera(props: {
                     : 'Mallen bestämmer kolumnerna, deras namn och deras ordning.'
                   : 'En mall är en fil med bara rubriker. Den bestämmer resultatets form.'}
               </p>
+            </div>
+
+            <div class="kollista kollista--kryss">
+              {oppna.map((t) => {
+                const begransad = t.frame.view.length < t.frame.rowCount
+                return (
+                  <label class="kryss" key={t.id}>
+                    <input
+                      type="checkbox"
+                      disabled={t.id === mallId}
+                      checked={valda.includes(t.id) && t.id !== mallId}
+                      onChange={(e) =>
+                        setValda(
+                          (e.currentTarget as HTMLInputElement).checked
+                            ? [...valda, t.id]
+                            : valda.filter((x) => x !== t.id),
+                        )
+                      }
+                    />
+                    {t.frame.name}
+                    <span class="verktyg__sammanfattning">
+                      {' '}
+                      {t.id === mallId
+                        ? 'mall'
+                        : `${formatCount(t.frame.rowCount)}${
+                            begransad ? ` · ${formatCount(t.frame.view.length)} visas` : ''
+                          }`}
+                    </span>
+                  </label>
+                )
+              })}
             </div>
 
             <div class="falt">
