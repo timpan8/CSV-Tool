@@ -2,7 +2,9 @@ name: Kontrollera och publicera
 
 on:
   push:
-    branches: [main]
+    # Kontrollerna körs på utvecklingsgrenar också, så att fel syns direkt.
+    # Publiceringen nedan är ändå låst till main.
+    branches: [main, 'claude/**']
   pull_request:
   workflow_dispatch:
 

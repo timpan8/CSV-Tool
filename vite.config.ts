@@ -19,7 +19,8 @@ const CSP_PRODUCTION = [
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
-  "frame-ancestors 'none'",
+  // frame-ancestors kan bara levereras som HTTP-header och ignoreras i en
+  // meta-tagg — den skulle bara ge en konsolvarning för varje besökare.
 ].join('; ')
 
 function contentSecurityPolicy(): Plugin {
