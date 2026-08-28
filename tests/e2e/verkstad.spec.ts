@@ -217,3 +217,114 @@ test('en rättning i bänken går till källfliken och är ångrabar', async ({ 
     'Rättade Name i exempel-order.csv',
   )
 })
+
+test('arbetet ligger kvar efter en körning och går att fortsätta med', async ({ page }) => {
+  await oppnaVerkstaden(page)
+
+  // Ett par för hand, så att det finns arbete som skulle kunna gå förlorat.
+  await vanster(page).locator('.restrad', { hasText: 'Carl-Johan Nilsson' }).click()
+  await hoger(page).locator('.restrad', { hasText: 'Petra Sund' }).click()
+  await page.getByRole('button', { name: 'Para ihop' }).click()
+  await expect(page.locator('.verkstad__par')).toHaveCount(1)
+
+  await page.getByRole('button', { name: 'Slå ihop', exact: true }).click()
+  await expect(page.locator('.flik')).toHaveCount(3)
+  // Notisen säger att resten inte är borta.
+  await expect(page.locator('.toast', { hasText: 'ligger kvar att beta av' })).toBeVisible()
+
+  // Vägen tillbaka in, utan att börja om.
+  await page.getByRole('button', { name: 'Flera filer ▾' }).click()
+  await page.getByRole('menuitem', { name: 'Fortsätt beta av resten…' }).click()
+  await expect(page.locator('.verkstad')).toBeVisible()
+  await expect(page.locator('.verkstad__par')).toHaveCount(1)
+
+  // En andra omgång blir en egen flik — den första rörs aldrig.
+  await expect(page.getByRole('button', { name: 'Slå ihop igen' })).toBeVisible()
+  await page.getByRole('button', { name: 'Slå ihop igen' }).click()
+  await expect(page.locator('.flik')).toHaveCount(4)
+  await expect(page.locator('.flik__namn', { hasText: 'omgång 2' })).toBeVisible()
+})
+
+test('att stänga verkstaden kastar inte arbetet, men Kasta arbetet gör det', async ({ page }) => {
+  await oppnaVerkstaden(page)
+  await vanster(page).locator('.restrad', { hasText: 'Carl-Johan Nilsson' }).click()
+  await hoger(page).locator('.restrad', { hasText: 'Petra Sund' }).click()
+  await page.getByRole('button', { name: 'Para ihop' }).click()
+
+  // Escape stänger vyn. Förut nollade den sessionen utan att fråga.
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.verkstad')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Flera filer ▾' }).click()
+  await page.getByRole('menuitem', { name: 'Fortsätt beta av resten…' }).click()
+  await expect(page.locator('.verkstad__par')).toHaveCount(1)
+
+  // Att kasta är en egen handling, och den frågar när det finns något att kasta.
+  page.on('dialog', (d) => d.accept())
+  await page.getByRole('button', { name: 'Kasta arbetet' }).click()
+  await expect(page.locator('.verkstad')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Flera filer ▾' }).click()
+  await expect(page.getByRole('menuitem', { name: 'Fortsätt beta av resten…' })).toBeDisabled()
+})
+
+test('arbetet överlever en omladdning och går att fortsätta med', async ({ page }) => {
+  await oppnaVerkstaden(page)
+  await vanster(page).locator('.restrad', { hasText: 'Carl-Johan Nilsson' }).click()
+  await hoger(page).locator('.restrad', { hasText: 'Petra Sund' }).click()
+  await page.getByRole('button', { name: 'Para ihop' }).click()
+  await expect(page.locator('.verkstad__par')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Slå ihop', exact: true }).click()
+  await expect(page.locator('.flik')).toHaveCount(3)
+
+  // Både flikarna och sessionen skrivs fördröjt. Vänta ut båda.
+  await page.waitForTimeout(2500)
+  await page.reload()
+  await expect(page.locator('.flik')).toHaveCount(3)
+  // Sessionen säger ifrån av sig själv — utan den syns ingenting på skärmen.
+  await expect(page.locator('.toast', { hasText: 'påbörjad sammanslagning' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Flera filer ▾' }).click()
+  await page.getByRole('menuitem', { name: 'Fortsätt beta av resten…' }).click()
+  await expect(page.locator('.verkstad')).toBeVisible()
+  // Paret från förra besöket är kvar, och radindexen betyder samma sak.
+  await expect(page.locator('.verkstad__par')).toHaveCount(1)
+  await expect(page.locator('.verkstad__par')).toContainText('Carl-Johan Nilsson')
+
+  // Och man kan fortsätta: ett par till, och en ny omgång.
+  await vanster(page).locator('.restrad').first().click()
+  await hoger(page).locator('.restrad').first().click()
+  await page.getByRole('button', { name: 'Para ihop' }).click()
+  await expect(page.locator('.verkstad__par')).toHaveCount(2)
+  await page.getByRole('button', { name: 'Slå ihop igen' }).click()
+  await expect(page.locator('.flik__namn', { hasText: 'omgång 2' })).toBeVisible()
+})
+
+test('en stängd källfil tar verkstaden med sig, och säger det', async ({ page }) => {
+  await oppnaVerkstaden(page)
+  await vanster(page).locator('.restrad', { hasText: 'Carl-Johan Nilsson' }).click()
+  await hoger(page).locator('.restrad', { hasText: 'Petra Sund' }).click()
+  await page.getByRole('button', { name: 'Para ihop' }).click()
+  await page.keyboard.press('Escape')
+
+  // Utan frågan låg sessionen kvar som en zombie med två döda flik-id.
+  page.on('dialog', (d) => d.accept())
+  await page.getByRole('button', { name: 'Stäng exempel-order.csv' }).click()
+  await page.getByRole('button', { name: 'Flera filer ▾' }).click()
+  await expect(page.getByRole('menuitem', { name: 'Fortsätt beta av resten…' })).toBeDisabled()
+})
+
+test('Escape stänger den vy som syns, inte den som ligger under', async ({ page }) => {
+  await oppnaVerkstaden(page)
+
+  // Paletten går att öppna ovanpå en egen vy, och därifrån öppnas en annan.
+  // Förut valde Escape efter en egen lista i omvänd ordning mot ritningen, så
+  // den osynliga verkstaden åt tangenttrycket och Slå ihop krävde ett andra.
+  await page.keyboard.press('Control+k')
+  await page.getByPlaceholder('Vad vill du göra?').fill('Slå ihop med')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.slaihop')).toBeVisible()
+
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.slaihop')).toHaveCount(0)
+  // Verkstaden var aldrig uppe på skärmen och ska inte ha stängts.
+  await expect(page.locator('.verkstad')).toBeVisible()
+})

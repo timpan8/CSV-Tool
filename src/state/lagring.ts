@@ -33,8 +33,24 @@ import type { Frame } from '../core/types.js'
 const DB = 'csv-verkstan'
 const RAMAR = 'ramar'
 const FLIKAR = 'flikar'
-/** Höjs när formen ändras. En äldre form kastas hellre än tolkas fel. */
-const VERSION = 1
+const SESSIONER = 'sessioner'
+
+/**
+ * Databasens version. Höjs när en **butik** tillkommer.
+ *
+ * Skilt från radversionerna nedan, och det är inte en formalitet: förut var
+ * det en enda konstant som gjorde båda jobben, och `onupgradeneeded` raderade
+ * dessutom alla butiker. Att lägga till en butik hade alltså kastat varje
+ * användares sparade filer — dubbelt, först genom raderingen och sedan genom
+ * radfiltret.
+ */
+const DBVERSION = 2
+
+/** Höjs när ramens eller flikens form ändras. En äldre form kastas hellre än tolkas fel. */
+const RADVERSION = 1
+
+/** Samma sak för den sparade verkstaden, som ändras oberoende av ramarna. */
+const SESSIONSVERSION = 1
 
 interface Ramrad {
   id: string
@@ -57,22 +73,44 @@ function oppna(): Promise<IDBDatabase | null> {
   return new Promise((klar) => {
     let begaran: IDBOpenDBRequest
     try {
-      begaran = indexedDB.open(DB, VERSION)
+      begaran = indexedDB.open(DB, DBVERSION)
     } catch {
       // Privat läge eller blockerad lagring. Verktyget fungerar ändå.
       klar(null)
       return
     }
+    /*
+     * Additiv uppgradering: skapa det som saknas, radera ingenting.
+     *
+     * Radversionen är det som skyddar mot en form vi inte längre förstår, och
+     * den gör det utan att kasta det vi fortfarande förstår. Samma kod tar
+     * hand om en tom profil (0 → 2) och en befintlig (1 → 2).
+     */
     begaran.onupgradeneeded = () => {
       const db = begaran.result
-      for (const namn of [RAMAR, FLIKAR]) {
-        if (db.objectStoreNames.contains(namn)) db.deleteObjectStore(namn)
-        db.createObjectStore(namn, { keyPath: 'id' })
+      for (const namn of [RAMAR, FLIKAR, SESSIONER]) {
+        if (!db.objectStoreNames.contains(namn)) db.createObjectStore(namn, { keyPath: 'id' })
       }
     }
-    begaran.onsuccess = () => klar(begaran.result)
-    begaran.onerror = () => klar(null)
-    begaran.onblocked = () => klar(null)
+    let avgjort = false
+    const avgor = (db: IDBDatabase | null) => {
+      if (avgjort) {
+        // Löftet är redan avgjort — men anslutningen är öppen och skulle
+        // blockera nästa uppgradering om den lämnades kvar.
+        db?.close()
+        return
+      }
+      avgjort = true
+      klar(db)
+    }
+    begaran.onsuccess = () => avgor(begaran.result)
+    begaran.onerror = () => avgor(null)
+    begaran.onblocked = () => {
+      // En annan flik håller den gamla versionen öppen. Att bara ge upp tyst
+      // hade sett ut som att lagringen fungerade och inget sparats.
+      stang(new Error('blocked'))
+      avgor(null)
+    }
   })
 }
 
@@ -101,7 +139,9 @@ function stang(e: unknown): void {
   felmeddelande =
     (e as Error)?.name === 'QuotaExceededError'
       ? 'Webbläsarens utrymme tog slut, så filerna sparas inte längre. Det du ser är orört.'
-      : 'Filerna gick inte att spara i webbläsaren. Det du ser är orört.'
+      : (e as Error)?.message === 'blocked'
+        ? 'En annan flik med verktyget håller lagringen öppen, så inget sparas. Stäng den och ladda om.'
+        : 'Filerna gick inte att spara i webbläsaren. Det du ser är orört.'
 }
 
 export interface Sparbar {
@@ -146,12 +186,12 @@ export async function sparaFlikar(flikar: readonly Sparbar[]): Promise<boolean> 
 
       flikar.forEach((f, i) => {
         if (f.ramenAndrad) {
-          const rad: Ramrad = { id: f.id, version: VERSION, frame: serializeFrame(f.frame).frame }
+          const rad: Ramrad = { id: f.id, version: RADVERSION, frame: serializeFrame(f.frame).frame }
           ramar.put(rad)
         }
         const lat: Flikrad = {
           id: f.id,
-          version: VERSION,
+          version: RADVERSION,
           ordning: i,
           viewSpec: f.viewSpec,
           activeColumnId: f.activeColumnId,
@@ -199,9 +239,9 @@ export async function laddaFlikar(): Promise<LaddadFlik[]> {
       tx.onabort = () => klar([[], []])
     })
 
-    const ramPerId = new Map(ramar.filter((r) => r.version === VERSION).map((r) => [r.id, r]))
+    const ramPerId = new Map(ramar.filter((r) => r.version === RADVERSION).map((r) => [r.id, r]))
     return rader
-      .filter((f) => f.version === VERSION && ramPerId.has(f.id))
+      .filter((f) => f.version === RADVERSION && ramPerId.has(f.id))
       .sort((a, b) => a.ordning - b.ordning)
       .map((f) => ({
         id: f.id,
@@ -225,15 +265,82 @@ export async function rensaLagring(): Promise<void> {
   if (!db) return
   try {
     await new Promise<void>((klar) => {
-      const tx = db.transaction([RAMAR, FLIKAR], 'readwrite')
+      const tx = db.transaction([RAMAR, FLIKAR, SESSIONER], 'readwrite')
       tx.objectStore(RAMAR).clear()
       tx.objectStore(FLIKAR).clear()
+      // Den parkerade verkstaden hör till det sparade. Utan den här raden
+      // överlevde den "Glöm sparade filer" och kom tillbaka mot filer som
+      // inte längre fanns.
+      tx.objectStore(SESSIONER).clear()
       tx.oncomplete = () => klar()
       tx.onabort = () => klar()
       tx.onerror = () => klar()
     })
     stangd = false
     felmeddelande = null
+  } finally {
+    db.close()
+  }
+}
+
+/* ---------- Den parkerade verkstaden ---------- */
+
+/**
+ * Sessionen ligger i en egen butik med en enda rad.
+ *
+ * Egen butik och egen transaktion, av två skäl. Den skrivs vid helt andra
+ * tillfällen än ramarna — ett handgjort par ändrar varken `dataRevision` eller
+ * flikens lätta signatur, så `skrivFlikar` hade hoppat över skrivningen helt.
+ * Och en avbruten sessionsskrivning ska inte rulla tillbaka flikarna.
+ */
+const SESSIONSNYCKEL = 'verkstad'
+
+interface Sessionsrad {
+  id: string
+  version: number
+  data: unknown
+}
+
+export async function sparaSession(data: unknown | null): Promise<boolean> {
+  if (stangd) return false
+  const db = await oppna()
+  if (!db) return false
+  try {
+    await new Promise<void>((klar, fel) => {
+      const tx = db.transaction([SESSIONER], 'readwrite')
+      const butik = tx.objectStore(SESSIONER)
+      if (data === null) butik.delete(SESSIONSNYCKEL)
+      else {
+        const rad: Sessionsrad = { id: SESSIONSNYCKEL, version: SESSIONSVERSION, data }
+        butik.put(rad)
+      }
+      tx.oncomplete = () => klar()
+      tx.onabort = () => fel(tx.error ?? new Error('avbruten'))
+      tx.onerror = () => fel(tx.error ?? new Error('fel'))
+    })
+    return true
+  } catch (e) {
+    stang(e)
+    return false
+  } finally {
+    db.close()
+  }
+}
+
+export async function laddaSession(): Promise<unknown | null> {
+  const db = await oppna()
+  if (!db) return null
+  try {
+    const rad = await new Promise<Sessionsrad | undefined>((klar) => {
+      const tx = db.transaction([SESSIONER], 'readonly')
+      const a = tx.objectStore(SESSIONER).get(SESSIONSNYCKEL)
+      tx.oncomplete = () => klar(a.result as Sessionsrad | undefined)
+      tx.onerror = () => klar(undefined)
+      tx.onabort = () => klar(undefined)
+    })
+    return rad && rad.version === SESSIONSVERSION ? rad.data : null
+  } catch {
+    return null
   } finally {
     db.close()
   }

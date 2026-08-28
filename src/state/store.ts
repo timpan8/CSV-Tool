@@ -7,6 +7,7 @@ import type { Sorteringsniva } from '../core/ops/sort.js'
 import { aktivaRegler, TOMT_FILTER, type Filter } from '../core/ops/filter.js'
 import type { Dubblettnyckel } from '../core/ops/duplicates.js'
 import { cell, klamp, type Selection } from './selection.js'
+import { reserveraFrameId } from '../core/frame/frame.js'
 import type { Profilsteg } from '../core/ops/profil.js'
 import { laddaFlikar, lagringsfel, rensaLagring, sparaFlikar } from './lagring.js'
 
@@ -224,6 +225,26 @@ export async function aterstallFlikar(): Promise<number> {
     })
     return { tab, aktiv: s.aktiv }
   })
+  /*
+   * Flytta fram räknarna förbi de återställda id:na.
+   *
+   * `seq` delas med steg- och notis-id och klättrar alltså långt förbi antalet
+   * flikar under ett besök — men den börjar om på noll vid nästa. De sparade
+   * id:na gör inte det. Utan det här fick en fil som öppnades efter en
+   * återställning förr eller senare samma id som en återställd flik, och då
+   * skrev `sparaFlikar` två flikar på samma nyckel så att den enas ram
+   * försvann vid omladdningen därpå. `closeTab` stängde dessutom båda.
+   */
+  for (const n of nya) {
+    // Samma stränghet som `reserveraFrameId`: hela svansen ska vara bas 36,
+    // annars läser `parseInt` så långt den kommer och hoppar fram räknaren.
+    if (/^t[0-9a-z]+$/.test(n.tab.id)) {
+      const tal = Number.parseInt(n.tab.id.slice(1), 36)
+      if (Number.isFinite(tal) && tal > seq) seq = tal
+    }
+    reserveraFrameId(n.tab.frame.id)
+  }
+
   tabs.value = nya.map((n) => n.tab)
   activeTabId.value = (nya.find((n) => n.aktiv) ?? nya[0])!.tab.id
   touch()

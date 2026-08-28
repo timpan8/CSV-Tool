@@ -71,3 +71,65 @@ test('glöm sparade filer tömmer lagringen men rör inte flikarna', async ({ pa
   await page.reload()
   await expect(page.locator('.tomt')).toBeVisible()
 })
+
+test('en uppgradering av databasen kastar inte det som redan är sparat', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Öppna exempelfil' }).click()
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await expect(page.locator('.statusrad')).toContainText('16 rader')
+  await page.waitForTimeout(2000)
+
+  /*
+   * Bygg om databasen som den såg ut i version 1 — två butiker, samma rader.
+   * Det är den profil varje användare som redan kört verktyget har, och den
+   * som en oaktsam versionshöjning hade tömt: `onupgradeneeded` raderade förut
+   * alla butiker, och radfiltret hade dessutom kastat resten.
+   */
+  const byggd = await page.evaluate(async () => {
+    const las = <T,>(r: IDBRequest<T>) =>
+      new Promise<T>((ok, no) => {
+        r.onsuccess = () => ok(r.result)
+        r.onerror = () => no(r.error)
+      })
+    const v2 = await new Promise<IDBDatabase>((ok) => {
+      const b = indexedDB.open('csv-verkstan')
+      b.onsuccess = () => ok(b.result)
+    })
+    const tx = v2.transaction(['ramar', 'flikar'], 'readonly')
+    const ramar = await las(tx.objectStore('ramar').getAll())
+    const flikar = await las(tx.objectStore('flikar').getAll())
+    v2.close()
+    if (ramar.length === 0) return 0
+
+    await new Promise<void>((ok) => {
+      const d = indexedDB.deleteDatabase('csv-verkstan')
+      d.onsuccess = () => ok()
+      d.onerror = () => ok()
+      d.onblocked = () => ok()
+    })
+    const v1 = await new Promise<IDBDatabase>((ok) => {
+      const b = indexedDB.open('csv-verkstan', 1)
+      b.onupgradeneeded = () => {
+        b.result.createObjectStore('ramar', { keyPath: 'id' })
+        b.result.createObjectStore('flikar', { keyPath: 'id' })
+      }
+      b.onsuccess = () => ok(b.result)
+    })
+    await new Promise<void>((ok) => {
+      const t = v1.transaction(['ramar', 'flikar'], 'readwrite')
+      for (const r of ramar) t.objectStore('ramar').put(r)
+      for (const f of flikar) t.objectStore('flikar').put(f)
+      t.oncomplete = () => ok()
+    })
+    v1.close()
+    return ramar.length
+  })
+  expect(byggd).toBe(1)
+
+  // Nu öppnar appen samma databas på version 2 och måste lägga till sin nya
+  // butik utan att röra de två som redan fanns.
+  await page.reload()
+  await expect(page.locator('.flik')).toHaveCount(1)
+  await expect(page.locator('.statusrad')).toContainText('16 rader')
+  await expect(page.getByRole('gridcell', { name: 'Anna Karlsson', exact: true }).first()).toBeVisible()
+})

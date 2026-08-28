@@ -27,6 +27,7 @@ const LAGE = {
   kanAngra: true,
   kanGoraOm: false,
   begransadVy: false,
+  parkerad: null,
 }
 
 describe('byggKommandon', () => {

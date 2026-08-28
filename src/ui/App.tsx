@@ -94,7 +94,19 @@ import { DuplicateTool } from './DuplicateTool.jsx'
 import { Filterrad } from './Filterrad.jsx'
 import { Verkstad } from './Verkstad.jsx'
 import { Oversikt } from './Oversikt.jsx'
-import { oppnaVerkstad, stangVerkstad, verkstad } from '../state/matchning.js'
+import {
+  antecknaOmgang,
+  aterstallVerkstad,
+  aterupptaVerkstad,
+  kastaVerkstad,
+  lamnaVerkstad,
+  ogjortArbete,
+  oppnaVerkstad,
+  sessionslage,
+  verkstad,
+  verkstadOppen,
+  type Sessionslage,
+} from '../state/matchning.js'
 import type { Profilsteg } from '../core/ops/profil.js'
 import { Kombinera } from './Kombinera.jsx'
 import { GrupperaDialog } from './GrupperaDialog.jsx'
@@ -510,6 +522,32 @@ export function App() {
   }
 
   /* ---------- Vy ---------- */
+
+  /**
+   * Tar upp den parkerade verkstaden igen.
+   *
+   * Ett ställe, tre ingångar: menyposten, palettkommandot och åtgärden i
+   * notisen efter en körning. Synkningen sker inne i `aterupptaVerkstad` — det
+   * är den enda punkt som körs när vyn varit stängd, och alltså den enda som
+   * kan upptäcka att filerna ändrats under tiden.
+   */
+  const aterta = () => {
+    // Paletten går att öppna ovanpå vilken vy som helst, så den här kan nås
+    // med en annan vy uppe. En osynlig verkstad som äger tangentbordet är
+    // precis det felet den härledda Escape-kedjan finns för att undvika.
+    stangSlaIhop()
+    stangKombinera()
+    setOversiktOppen(false)
+    const svar = aterupptaVerkstad()
+    if (svar === 'omnumrerad') {
+      notify(
+        'Rader har lagts till eller tagits bort sedan sist, så verkstadens par pekade inte längre på rätt rader. De har kastats.',
+        { ton: 'varning' },
+      )
+    } else if (svar === 'stangd') {
+      notify('En av filerna är stängd, så det finns inga rader att beta av.', { ton: 'varning' })
+    }
+  }
 
   const visaOgiltiga = (id: ColumnId) => {
     if (!tab || !frame) return
@@ -1038,7 +1076,14 @@ export function App() {
    * paletten syns. Samma resonemang gäller översikten och sökraden: de har
    * inte visat felet, men de bygger på samma antagande.
    */
-  const lagen = useRef({ palett: false, meny: false, oversikt: false, sok: false })
+  const lagen = useRef<{
+    palett: boolean
+    meny: boolean
+    oversikt: boolean
+    sok: boolean
+    /** Stänger den vy som faktiskt ritas överst, eller null när ingen gör det. */
+    stangEgenVy: (() => void) | null
+  }>({ palett: false, meny: false, oversikt: false, sok: false, stangEgenVy: null })
   lagen.current.palett = palettOppen
   lagen.current.meny = meny !== null
   lagen.current.oversikt = oversiktOppen
@@ -1098,21 +1143,17 @@ export function App() {
        * på Enter tog knapparna i vyn deras aktivering — vyn gick alltså inte
        * att köra med tangentbordet.
        *
+       * Vilken vy som är överst avgörs under ritningen och läses ur `lagen`,
+       * så att den här kedjan inte kan hamna i en annan ordning än den som
+       * faktiskt ritas.
+       *
        * Escape hanteras här och inte med en lyssnare i varje vy. En lyssnare
        * registrerad i en effekt finns först efter ritningen, och två lyssnare
        * på samma fönster betyder att ett Escape stänger både paletten och vyn
        * under den. Kedjan här har redan gjort `return` för paletten och menyn,
        * så det kan inte hända.
        */
-      const stangEgenVy = verkstad.value
-        ? stangVerkstad
-        : kombineraOppen.value
-          ? stangKombinera
-          : slaIhopOppen.value
-            ? stangSlaIhop
-            : lagen.current.oversikt
-              ? () => setOversiktOppen(false)
-              : null
+      const stangEgenVy = lagen.current.stangEgenVy
       if (stangEgenVy) {
         // Escape i ett textfält betyder "lämna fältet", inte "riv vyn".
         // Aliaskartans namnfält skriver igenom vid varje tecken, så det finns
@@ -1304,12 +1345,25 @@ export function App() {
    */
   useEffect(() => {
     let avbruten = false
-    void aterstallFlikar().then((antal) => {
-      if (avbruten || antal === 0) return
-      notify(
-        `${filerText(antal)} från förra besöket är tillbaka. Ångra-historiken börjar om.`,
-        { atgard: { etikett: 'Glöm sparade filer', kor: () => void glomSparat() } },
-      )
+    void aterstallFlikar().then(async (antal) => {
+      if (avbruten) return
+      if (antal > 0) {
+        notify(
+          `${filerText(antal)} från förra besöket är tillbaka. Ångra-historiken börjar om.`,
+          { atgard: { etikett: 'Glöm sparade filer', kor: () => void glomSparat() } },
+        )
+      }
+      // Efter flikarna, aldrig före: sessionen slår upp sina flik-id i `tabs`,
+      // och en uppslagning som misslyckas skulle se ut som en stängd fil.
+      if (await aterstallVerkstad()) {
+        if (avbruten) return
+        const l = sessionslage()
+        if (l.lage === 'redo' && l.ogjort > 0) {
+          notify(`En påbörjad sammanslagning ${l.namn} finns kvar med ${l.ogjort} beslut.`, {
+            atgard: { etikett: 'Beta av resten', kor: () => aterta() },
+          })
+        }
+      }
     })
     return () => {
       avbruten = true
@@ -1340,10 +1394,29 @@ export function App() {
   // Verkstaden och kombineringen lägger sig över arbetsytan. Rutnätets egna
   // kontroller — sök, filterrad, statusrad och tabellverktygen — hör till en
   // tabell man inte längre tittar på, och skulle visa tal som inte gäller.
-  const iVerkstaden = verkstad.value !== null
+  const iVerkstaden = verkstadOppen.value
   const iKombinera = kombineraOppen.value
   const iSlaIhop = slaIhopOppen.value
   const egenVy = iVerkstaden || iKombinera || iSlaIhop || oversiktOppen
+
+  /*
+   * Vilken vy som ligger överst — härlett en gång, läst på två ställen.
+   *
+   * Ordningen här måste vara densamma som i if/else-kedjan nedan, och det är
+   * hela skälet att den bor på ett ställe: förut fanns två oberoende listor i
+   * omvänd ordning, och då kunde Escape stänga en vy som inte syntes medan
+   * den som syntes krävde ett andra tryck. Sedan sessionen får leva vidare med
+   * vyn stängd är det fönstret inte längre kort — det är obegränsat.
+   */
+  lagen.current.stangEgenVy = iSlaIhop
+    ? stangSlaIhop
+    : iKombinera
+      ? stangKombinera
+      : oversiktOppen
+        ? () => setOversiktOppen(false)
+        : iVerkstaden
+          ? lamnaVerkstad
+          : null
 
   return (
     <div class="app">
@@ -1414,6 +1487,8 @@ export function App() {
                 slaIhop: () => oppnaSlaIhop(),
                 kombinera: () => oppnaKombinera(),
                 mall: () => oppnaKombinera(true),
+                session: sessionslage(),
+                aterta,
               }),
             })
           }
@@ -1543,6 +1618,22 @@ export function App() {
             const vansterTab = tabs.value.find((t) => t.id === vansterTabId)
             const hogerTab = tabs.value.find((t) => t.id === hogerTabId)
             if (!vansterTab || !hogerTab) return
+            /*
+             * En ny sammanslagning skriver över den parkerade sessionen, och
+             * det finns bara en. Utan frågan här hade precis den förlust som
+             * `lamnaVerkstad` infördes för att stoppa kommit tillbaka genom en
+             * annan dörr — efter att foten uttryckligen lovat motsatsen.
+             */
+            const gamla = verkstad.value
+            const ogjort = gamla ? ogjortArbete(gamla) : 0
+            if (
+              ogjort > 0 &&
+              !window.confirm(
+                `Den påbörjade sammanslagningen ${gamla!.vansterNamn} ↔ ${gamla!.hogerNamn} har ${ogjort} beslut som inte finns någon annanstans. Börja om ändå?`,
+              )
+            ) {
+              return
+            }
             stangSlaIhop()
             oppnaVerkstad(vansterTab, hogerTab, par, val)
           }}
@@ -1569,10 +1660,21 @@ export function App() {
       ) : iVerkstaden ? (
         <Verkstad
           onSlaIhop={(resultat, text) => {
+            // Alltid en ny flik, aldrig en skrivning i en befintlig. Det är
+            // det som gör att sessionen får leva vidare utan att en färdig
+            // resultatflik kan ändras under händerna på den som tittar.
             openFrame(resultat)
-            notify(text)
+            antecknaOmgang()
+            notify(text, {
+              // Notisen är enda platsen som säger att resten finns kvar, och
+              // den försvinner. Med en åtgärd lever den dubbelt så länge och
+              // blir dessutom vägen tillbaka i stället för bara ett besked.
+              atgard: verkstad.value
+                ? { etikett: 'Beta av resten', kor: () => aterta() }
+                : undefined,
+            })
           }}
-          onStang={stangVerkstad}
+          onStang={lamnaVerkstad}
         />
       ) : frame && tab ? (
         <div
@@ -1754,8 +1856,13 @@ export function App() {
               kanAngra: canUndo(tab),
               kanGoraOm: canRedo(tab),
               begransadVy: begransad,
+              parkerad: (() => {
+                const l = sessionslage()
+                return l.lage === 'redo' ? l.namn : null
+              })(),
             },
             {
+              fortsattVerkstad: aterta,
               oppnaFil: () => palettFil.current?.click(),
               glomSparat: () => {
                 void glomSparat().then(() =>
@@ -1913,6 +2020,8 @@ function flerfilsmeny(handlers: {
   slaIhop: () => void
   kombinera: () => void
   mall: () => void
+  session: Sessionslage
+  aterta: () => void
 }): (MenyPost | 'avdelare')[] {
   return [
     {
@@ -1929,6 +2038,28 @@ function flerfilsmeny(handlers: {
       etikett: 'Fyll en mall med data…',
       skal: 'en fil med bara rubriker bestämmer formen, data hämtas ur de filer du väljer',
       kor: handlers.mall,
+    },
+    'avdelare',
+    {
+      etikett: 'Fortsätt beta av resten…',
+      /*
+       * Filnamnen och inte antalet kvar. Att räkna fram antalet kräver en hel
+       * grundmatchning över båda filerna — `byggNycklar` normaliserar varje
+       * kolumns hela ordbok, och det gäller även med urval — och det är inte
+       * ett svep man lägger i vägen för en nedfälld meny. Siffran står inne i
+       * verkstaden, där man ändå ska titta.
+       *
+       * Tre lägen och inte två: att ingen session finns och att sessionens fil
+       * är stängd är olika saker, och det andra kostar användaren arbete.
+       */
+      skal: handlers.session.lage === 'ingen' ? undefined : handlers.session.namn,
+      inaktiv:
+        handlers.session.lage === 'ingen'
+          ? 'Ingen påbörjad sammanslagning att gå tillbaka till.'
+          : handlers.session.lage === 'stangd'
+            ? `Filerna är stängda, så det finns inga rader att beta av. ${handlers.session.ogjort} beslut väntar på att de öppnas igen.`
+            : undefined,
+      kor: handlers.aterta,
     },
   ]
 }
@@ -2062,6 +2193,29 @@ function FlikKnapp({ tab, aktiv }: { tab: Tab; aktiv: boolean }) {
             !window.confirm(`${tab.frame.name} har ändringar som inte exporterats. Stänga ändå?`)
           ) {
             return
+          }
+          /*
+           * En stängd källfil tar verkstaden med sig.
+           *
+           * Sessionen bär fysiska radindex in i just den här ramen; utan den
+           * finns inget att para ihop. Förut låg sessionen kvar som en zombie
+           * med två döda flik-id och gick varken att nå eller städa, och
+           * menyraden sa "ingen påbörjad sammanslagning" fast det fanns en.
+           */
+          const s = verkstad.value
+          const iSession =
+            s !== null && (s.vansterTabId === tab.id || s.hogerTabId === tab.id)
+          if (iSession) {
+            const ogjort = ogjortArbete(s)
+            if (
+              ogjort > 0 &&
+              !window.confirm(
+                `${tab.frame.name} används av en påbörjad sammanslagning med ${ogjort} beslut. Stänger du fliken går de förlorade.`,
+              )
+            ) {
+              return
+            }
+            kastaVerkstad()
           }
           closeTab(tab.id)
         }}

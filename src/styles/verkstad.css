@@ -637,3 +637,11 @@
 .restrad--tom .restrad__nummer {
   color: var(--varning);
 }
+
+/* Svaret på "varför står de inte som i min sorterade flik?", vid listan. */
+.restlista__ordning {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-svagast);
+}
