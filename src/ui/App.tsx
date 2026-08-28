@@ -98,6 +98,7 @@ import { Oversikt } from './Oversikt.jsx'
 import { oppnaVerkstad, stangVerkstad, verkstad } from '../state/matchning.js'
 import type { Profilsteg } from '../core/ops/profil.js'
 import { Kombinera } from './Kombinera.jsx'
+import { GrupperaDialog } from './GrupperaDialog.jsx'
 import { ProfilDialog } from './ProfilDialog.jsx'
 import { Kommandopalett } from './Kommandopalett.jsx'
 import { byggKommandon } from './kommandon.js'
@@ -149,6 +150,13 @@ export function App() {
   const [profilerOppna, setProfilerOppna] = useState(false)
   const [palettOppen, setPalettOppen] = useState(false)
   const [oversiktOppen, setOversiktOppen] = useState(false)
+  /**
+   * Grupperingsdialogen, med kolumnen man öppnade den från.
+   *
+   * `null` betyder stängd; `{ startkolumn: null }` betyder öppnad utan att
+   * någon kolumn pekats ut, alltså från verktygsraden eller paletten.
+   */
+  const [sammanfatta, setSammanfatta] = useState<{ startkolumn: ColumnId | null } | null>(null)
   /**
    * Vilken rad i varje dubblettgrupp som stannar.
    *
@@ -864,6 +872,8 @@ export function App() {
       visaOgiltiga,
       verktyg: verktygsposter([col]),
       filtrera: (i) => filtreraKolumn(i),
+      namn: col.name,
+      sammanfatta: (i) => setSammanfatta({ startkolumn: i }),
       sortera: (i, riktning) => sattSortering(tab, [{ colId: i, riktning }]),
       laggSortering: (i) => vaxlaSortering(tab, i, true),
       sortriktning: tab.viewSpec.sortering?.find((n) => n.colId === id)?.riktning ?? null,
@@ -921,6 +931,11 @@ export function App() {
         kor: () => filtreraKolumn(col.id, { operator: 'iLista', varden: [varde] }),
       },
       { etikett: `Sortera på ${col.name}`, kor: () => vaxlaSortering(nu.tab, col.id, false) },
+      {
+        etikett: `Gruppera på ${col.name}…`,
+        skal: 'en rad per värde, med summa och antal för resten av kolumnerna',
+        kor: () => setSammanfatta({ startkolumn: col.id }),
+      },
       'avdelare',
       ...verktygsposter(verktygskolumner, col),
       'avdelare',
@@ -1290,7 +1305,7 @@ export function App() {
         {/*
           Raden är grupperad efter vad knapparna gör, inte efter när de
           byggdes. Först vad du ser — sortering, filter och dubbletter ändrar
-          bara vyn. Sedan vad som ändrar data. Sist vägen ut.
+          bara vyn. Sedan vad som skapar eller ändrar data. Sist vägen ut.
         */}
         <span class="verktygsrad__avdelare" aria-hidden="true" />
         <button
@@ -1350,6 +1365,14 @@ export function App() {
           }
         >
           Flera filer ▾
+        </button>
+        <button
+          class="knapp"
+          disabled={!frame || egenVy}
+          title="En rad per grupp: summa Belopp per Ort, antal ordrar per kund. Resultatet blir en ny flik."
+          onClick={() => setSammanfatta({ startkolumn: null })}
+        >
+          Sammanfatta…
         </button>
 
         <span class="verktygsrad__avdelare" aria-hidden="true" />
@@ -1676,6 +1699,7 @@ export function App() {
               slaIhop: () => setSlaIhopOppen(true),
               kombinera: () => oppnaKombinera(),
               mall: () => oppnaKombinera(true),
+              sammanfatta: () => setSammanfatta({ startkolumn: palettKolumn?.id ?? null }),
               oversikt: () => setOversiktOppen(true),
               visaAllaRader: () => {
                 if (!tab) return
@@ -1721,6 +1745,19 @@ export function App() {
 
       {profilerOppna && tab && (
         <ProfilDialog tab={tab} onStang={() => setProfilerOppna(false)} />
+      )}
+
+      {sammanfatta && frame && (
+        <GrupperaDialog
+          frame={frame}
+          startkolumn={sammanfatta.startkolumn}
+          onStang={() => setSammanfatta(null)}
+          onSkapa={(resultat, text) => {
+            setSammanfatta(null)
+            openFrame(resultat)
+            notify(text)
+          }}
+        />
       )}
 
       {exportOppen && frame && (
@@ -1875,6 +1912,9 @@ function kolumnMeny(
     /** Verktygen, färdigsorterade efter vad kolumnen innehåller. */
     verktyg: (MenyPost | 'avdelare')[]
     filtrera: (id: ColumnId) => void
+    /** Kolumnens namn, för de poster som nämner den. */
+    namn: string
+    sammanfatta: (id: ColumnId) => void
     sortera: (id: ColumnId, riktning: Riktning) => void
     laggSortering: (id: ColumnId) => void
     sortriktning: Riktning | null
@@ -1910,6 +1950,11 @@ function kolumnMeny(
     { etikett: 'Lägg till som sorteringsnivå', kor: () => handlers.laggSortering(id) },
     'avdelare',
     { etikett: 'Filtrera på kolumnen…', kor: () => handlers.filtrera(id) },
+    {
+      etikett: `Gruppera på ${handlers.namn}…`,
+      skal: 'en rad per värde, med summa och antal för resten av kolumnerna',
+      kor: () => handlers.sammanfatta(id),
+    },
     { etikett: 'Visa rader som inte går att tolka', kor: () => handlers.visaOgiltiga(id) },
     'avdelare',
     ...handlers.verktyg,

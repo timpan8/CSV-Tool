@@ -50,6 +50,7 @@ export interface Kommandohandlare {
   slaIhop: () => void
   kombinera: () => void
   mall: () => void
+  sammanfatta: () => void
   oversikt: () => void
   visaAllaRader: () => void
   stada: (id: string) => void
@@ -123,6 +124,14 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
       ord: 'matcha merge join koppla',
       beskrivning: 'Rader som hör ihop läggs sida vid sida, matchat på en nyckel.',
       kor: h.slaIhop,
+    })
+    lagg({
+      id: 'sammanfatta',
+      grupp: 'Tabell',
+      etikett: 'Gruppera och summera…',
+      ord: 'summa summera antal snitt medel pivot grupp group by aggregera sammanfatta total',
+      beskrivning: 'En rad per grupp: summa Belopp per Ort, antal ordrar per kund.',
+      kor: h.sammanfatta,
     })
     lagg({
       id: 'oversikt',
