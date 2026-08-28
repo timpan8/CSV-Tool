@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import { createColumn, getCell, intern } from '../../src/core/frame/column.js'
-import { createFrame, identityView } from '../../src/core/frame/frame.js'
+import { createFrame, deleteRows, identityView, uniqueColumnName } from '../../src/core/frame/frame.js'
 import { Flag, type Frame } from '../../src/core/types.js'
 import {
   antalKallor,
   kallnamn,
   malformAvKallor,
   malformAvMall,
+  krockandeKallor,
+  medBevaradeBeslut,
   obeslutade,
+  ofylldaFore,
+  slaIhopMal,
   stapla,
   TOMT,
   type Kalla,
@@ -118,7 +122,7 @@ describe('stapla', () => {
   })
 
   it('en målkolumn ingen fil fyller rapporteras', () => {
-    const form: Malkolumn[] = [{ namn: 'Land', hamtning: [TOMT, TOMT], med: true }]
+    const form: Malkolumn[] = [{ namn: 'Land', forslagsnamn: 'Land', hamtning: [TOMT, TOMT], med: true }]
     const { frame, ofyllda } = stapla([alla(KUNDER), alla(ORDER)], plan(form))
     expect(ofyllda).toEqual(['Land'])
     expect(getCell(frame.columns[0]!, 0)).toBe('')
@@ -149,8 +153,8 @@ describe('stapla', () => {
 
   it('målkolumner med samma namn görs unika', () => {
     const form: Malkolumn[] = [
-      { namn: 'Namn', hamtning: [{ fran: 'kolumn', colId: KUNDER.columns[0]!.id }], med: true },
-      { namn: 'Namn', hamtning: [{ fran: 'kolumn', colId: KUNDER.columns[1]!.id }], med: true },
+      { namn: 'Namn', forslagsnamn: 'Namn', hamtning: [{ fran: 'kolumn', colId: KUNDER.columns[0]!.id }], med: true },
+      { namn: 'Namn', forslagsnamn: 'Namn', hamtning: [{ fran: 'kolumn', colId: KUNDER.columns[1]!.id }], med: true },
     ]
     const { frame } = stapla([alla(KUNDER)], plan(form))
     expect(frame.columns.map((c) => c.name)).toEqual(['Namn', 'Namn (2)'])
@@ -206,7 +210,7 @@ describe('stapla', () => {
   it('en hämtningslista som är för kort glider inte', () => {
     // Vore listan positionellt fel skulle värden ur fil 2 hamna under fil 1.
     const form: Malkolumn[] = [
-      { namn: 'Namn', hamtning: [{ fran: 'kolumn', colId: KUNDER.columns[0]!.id }], med: true },
+      { namn: 'Namn', forslagsnamn: 'Namn', hamtning: [{ fran: 'kolumn', colId: KUNDER.columns[0]!.id }], med: true },
     ]
     const { frame } = stapla([alla(KUNDER), alla(ORDER)], plan(form))
     expect([0, 1, 2].map((r) => getCell(frame.columns[0]!, r))).toEqual(['Anna', 'Bo', ''])
@@ -285,6 +289,402 @@ describe('egenskaper', () => {
       ),
       { numRuns: 200 },
     )
+  })
+})
+
+describe('standardvärde', () => {
+  // Kunderna har Ort, ordrarna har den inte. Det är precis den lucka ett
+  // standardvärde är till för.
+  const form = () =>
+    beslutade(malformAvKallor([KUNDER, ORDER])).map((k) =>
+      k.namn === 'Ort' ? { ...k, standard: 'Okänd' } : k,
+    )
+
+  it('fyller cellerna i filerna som saknar kolumnen', () => {
+    const { frame } = stapla([alla(KUNDER), alla(ORDER)], plan(form()))
+    const ort = frame.columns.find((c) => c.name === 'Ort')!
+    // Två kundrader med riktig ort, tre orderrader utan.
+    expect([0, 1, 2, 3, 4].map((r) => getCell(ort, r))).toEqual([
+      'Malmö',
+      'Lund',
+      'Okänd',
+      'Okänd',
+      'Okänd',
+    ])
+  })
+
+  it('rör aldrig en cell som finns men är tom', () => {
+    // Tomt betyder okänt. Att skriva över det vore att hitta på data.
+    const a = frameOf('a', ['Ort'], [['Malmö'], ['']])
+    const b = frameOf('b', ['Namn'], [['Bo']])
+    const kolumner: Malkolumn[] = [
+      { namn: 'Ort', forslagsnamn: 'Ort', hamtning: [{ fran: 'kolumn', colId: a.columns[0]!.id }, TOMT], med: true, standard: 'Okänd' },
+    ]
+    const { frame } = stapla([alla(a), alla(b)], plan(kolumner))
+    expect([0, 1, 2].map((r) => getCell(frame.columns[0]!, r))).toEqual(['Malmö', '', 'Okänd'])
+  })
+
+  it('behåller utfylld-flaggan — värdet står fortfarande inte i filen', () => {
+    const { frame } = stapla([alla(KUNDER), alla(ORDER)], plan(form()))
+    const ort = frame.columns.find((c) => c.name === 'Ort')!
+    expect(ort.flags[0]).toBe(0)
+    expect(ort.flags[2]).toBe(Flag.Padded)
+  })
+
+  it('gör kolumnen ifylld, så den inte längre rapporteras som tom', () => {
+    const a = frameOf('a', ['Land'], [['']])
+    const b = frameOf('b', ['Namn'], [['Bo']])
+    const kolumner: Malkolumn[] = [
+      { namn: 'Land', forslagsnamn: 'Land', hamtning: [{ fran: 'kolumn', colId: a.columns[0]!.id }, TOMT], med: true, standard: 'SE' },
+    ]
+    expect(stapla([alla(a), alla(b)], plan(kolumner)).ofyllda).toEqual([])
+  })
+
+  it('bryter arvet av en typlåsning källorna var eniga om', () => {
+    // Källorna är eniga om att Postnr är text. Men `Okänd` är varken text
+    // efter användarens beslut eller ett postnummer — låsningen är inte längre
+    // användarens, så den ärvs inte.
+    const a = frameOf('a', ['Postnr'], [['01234']])
+    a.columns[0]!.type = 'text'
+    a.columns[0]!.typeLocked = true
+    const b = frameOf('b', ['Namn'], [['Bo']])
+    const kolumner: Malkolumn[] = [
+      { namn: 'Postnr', forslagsnamn: 'Postnr', hamtning: [{ fran: 'kolumn', colId: a.columns[0]!.id }, TOMT], med: true, standard: 'Okänd' },
+    ]
+    expect(stapla([alla(a), alla(b)], plan(kolumner)).frame.columns[0]!.typeLocked).toBe(false)
+  })
+
+  it('ett tomt standardvärde är samma sak som inget', () => {
+    const kolumner = beslutade(malformAvKallor([KUNDER, ORDER])).map((k) => ({ ...k, standard: '' }))
+    const { frame } = stapla([alla(KUNDER), alla(ORDER)], plan(kolumner))
+    const ort = frame.columns.find((c) => c.name === 'Ort')!
+    expect(getCell(ort, 2)).toBe('')
+    expect(ort.flags[2]).toBe(Flag.Padded)
+  })
+})
+
+describe('ursprung', () => {
+  it('pekar tillbaka på planens kolumner, även när namnen krockar', () => {
+    // Två målkolumner som båda heter Namn blir Namn och Namn (2). Namnet kan
+    // alltså inte vara svaret på vilken planpost en kolumn kom ur.
+    const kolumner: Malkolumn[] = [
+      { namn: 'Namn', forslagsnamn: 'Namn', hamtning: [{ fran: 'kolumn', colId: KUNDER.columns[0]!.id }], med: false },
+      { namn: 'Namn', forslagsnamn: 'Namn', hamtning: [{ fran: 'kolumn', colId: KUNDER.columns[1]!.id }], med: true },
+      { namn: 'Namn', forslagsnamn: 'Namn', hamtning: [{ fran: 'kolumn', colId: KUNDER.columns[2]!.id }], med: true },
+    ]
+    const { frame, ursprung } = stapla([alla(KUNDER)], plan(kolumner, { kallkolumn: 'Källa' }))
+    expect(frame.columns.map((c) => c.name)).toEqual(['Namn', 'Namn (2)', 'Källa'])
+    // Den första planposten hoppades över, så spalterna kom ur post 1 och 2.
+    expect(ursprung).toEqual([1, 2, -1])
+  })
+
+  it('källkolumnen har ingen planpost', () => {
+    const { ursprung } = stapla(
+      [alla(KUNDER)],
+      plan(beslutade(malformAvKallor([KUNDER])), { kallkolumn: 'Källa' }),
+    )
+    expect(ursprung[ursprung.length - 1]).toBe(-1)
+  })
+})
+
+describe('ofylldaFore', () => {
+  /**
+   * Samma fråga, ställd före och efter.
+   *
+   * `ofylldaFore` svarar per planpost och bryr sig inte om `med`; `stapla`
+   * svarar med de unikgjorda namnen på de kolumner som faktiskt byggdes. Att
+   * översätta det ena till det andra är hela likhetsbeviset.
+   */
+  const namnen = (kallor: Kalla[], kolumner: Malkolumn[]): string[] => {
+    const flaggor = ofylldaFore(kallor, kolumner)
+    const tagna: string[] = []
+    const ut: string[] = []
+    kolumner.forEach((k, i) => {
+      if (k.med !== true) return
+      const namn = uniqueColumnName(tagna, k.namn)
+      tagna.push(namn)
+      if (flaggor[i]) ut.push(namn)
+    })
+    return ut
+  }
+  const badaVagarna = (kallor: Kalla[], kolumner: Malkolumn[]) => ({
+    fore: namnen(kallor, kolumner),
+    efter: stapla(kallor, plan(kolumner)).ofyllda,
+  })
+
+  it('säger samma sak som körningen om en tom kolumn', () => {
+    const f = frameOf('f', ['Land', 'Namn'], [['', 'Anna'], ['', 'Bo']])
+    const { fore, efter } = badaVagarna([alla(f)], beslutade(malformAvKallor([f])))
+    expect(fore).toEqual(['Land'])
+    expect(fore).toEqual(efter)
+  })
+
+  it('säger samma sak när ingen fil fyller kolumnen', () => {
+    const kolumner: Malkolumn[] = [{ namn: 'Land', forslagsnamn: 'Land', hamtning: [TOMT], med: true }]
+    const { fore, efter } = badaVagarna([alla(KUNDER)], kolumner)
+    expect(fore).toEqual(['Land'])
+    expect(fore).toEqual(efter)
+  })
+
+  it('ett standardvärde gör kolumnen ifylld, i båda svaren', () => {
+    const kolumner: Malkolumn[] = [{ namn: 'Land', forslagsnamn: 'Land', hamtning: [TOMT], med: true, standard: 'SE' }]
+    const { fore, efter } = badaVagarna([alla(KUNDER)], kolumner)
+    expect(fore).toEqual([])
+    expect(fore).toEqual(efter)
+  })
+
+  it('ser bara till de rader som faktiskt tas med', () => {
+    // Rad 0 är tom, rad 1 har ett värde. Väljer man bara rad 0 blir kolumnen
+    // tom i resultatet, hur full filen än är.
+    const f = frameOf('f', ['Ort'], [[''], ['Lund']])
+    const kolumner: Malkolumn[] = [
+      { namn: 'Ort', forslagsnamn: 'Ort', hamtning: [{ fran: 'kolumn', colId: f.columns[0]!.id }], med: true },
+    ]
+    const bara0 = [{ frame: f, rader: [0] }]
+    expect(namnen(bara0, kolumner)).toEqual(['Ort'])
+    expect(stapla(bara0, plan(kolumner)).ofyllda).toEqual(['Ort'])
+    const bara1 = [{ frame: f, rader: [1] }]
+    expect(namnen(bara1, kolumner)).toEqual([])
+  })
+
+  it('ett radnummer utanför källan räknas som tomt, precis som i körningen', () => {
+    // Uppslaget ger undefined, och en Uint32Array gör 0 av det. Svaret måste
+    // bli detsamma på båda vägarna.
+    const f = frameOf('f', ['Ort'], [[''], ['Lund'], ['Kiruna']])
+    const kolumner: Malkolumn[] = [
+      { namn: 'Ort', forslagsnamn: 'Ort', hamtning: [{ fran: 'kolumn', colId: f.columns[0]!.id }], med: true },
+    ]
+    const kallor: Kalla[] = [{ frame: f, rader: [9] }]
+    expect(namnen(kallor, kolumner)).toEqual(['Ort'])
+    expect(namnen(kallor, kolumner)).toEqual(stapla(kallor, plan(kolumner)).ofyllda)
+  })
+
+  it('svarar även om kolumner som ännu inte beslutats', () => {
+    // Att en kolumn blir tom är själva skälet att svara nej på frågan om den.
+    // Ett svar som bara gäller redan medtagna kolumner kommer för sent.
+    const f = frameOf('f', ['Land'], [['']])
+    const kolumner: Malkolumn[] = [{ namn: 'Land', forslagsnamn: 'Land', hamtning: [TOMT], med: null }]
+    expect(ofylldaFore([alla(f)], kolumner)).toEqual([true])
+  })
+
+  it('en källordbok med spöken lurar inte svaret', () => {
+    // `intern` tar aldrig bort. Tas raden med Malmö bort ligger värdet kvar i
+    // ordboken, och ett svar som läste ordbokslängden hade sagt "ifylld" om en
+    // kolumn vars enda kvarvarande cell är tom.
+    const f = frameOf('f', ['Ort'], [['Malmö'], ['']])
+    deleteRows(f, [0])
+    const kolumner: Malkolumn[] = [
+      { namn: 'Ort', forslagsnamn: 'Ort', hamtning: [{ fran: 'kolumn', colId: f.columns[0]!.id }], med: true },
+    ]
+    expect(f.columns[0]!.dict.length).toBe(2)
+    const { fore, efter } = badaVagarna([alla(f)], kolumner)
+    expect(fore).toEqual(['Ort'])
+    expect(fore).toEqual(efter)
+  })
+
+  it('döper om krockande namn precis som körningen', () => {
+    const kolumner: Malkolumn[] = [
+      { namn: 'Land', forslagsnamn: 'Land', hamtning: [TOMT], med: true },
+      { namn: 'Land', forslagsnamn: 'Land', hamtning: [TOMT], med: true },
+    ]
+    const { fore, efter } = badaVagarna([alla(KUNDER)], kolumner)
+    expect(fore).toEqual(['Land', 'Land (2)'])
+    expect(fore).toEqual(efter)
+  })
+
+  it('går aldrig isär med körningen, hur formen än ser ut', () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.array(fc.string({ maxLength: 4 }), { minLength: 1, maxLength: 3 }), {
+          minLength: 1,
+          maxLength: 4,
+        }),
+        fc.option(fc.string({ minLength: 1, maxLength: 3 }), { nil: undefined }),
+        (rutnat, standard) => {
+          const bredd = Math.max(...rutnat.map((r) => r.length))
+          const rubriker = Array.from({ length: bredd }, (_, i) => `k${i}`)
+          const f = frameOf('f', rubriker, rutnat.map((r) => rubriker.map((_, i) => r[i] ?? '')))
+          const g = frameOf('g', ['annat'], [['x']])
+          const kolumner = beslutade(malformAvKallor([f, g])).map((k) => ({ ...k, standard }))
+          const kallor = [alla(f), alla(g)]
+          expect(namnen(kallor, kolumner)).toEqual(stapla(kallor, plan(kolumner)).ofyllda)
+        },
+      ),
+    )
+  })
+})
+
+describe('hopslagning för hand', () => {
+  /** Två filer som stavar telefonnumret så olika att hittaAlias missar. */
+  const A = frameOf('a.csv', ['Namn', 'Mobilnr'], [['Anna', '070-1']])
+  const B = frameOf('b.csv', ['Namn', 'Telefon'], [['Bo', '070-2']])
+  const kol = (form: Malkolumn[], namn: string) => form.findIndex((k) => k.namn === namn)
+
+  it('gissningen missar, och det är därför greppet finns', () => {
+    const form = malformAvKallor([A, B])
+    expect(form.map((k) => k.namn)).toEqual(['Namn', 'Mobilnr', 'Telefon'])
+  })
+
+  it('den som behålls ger namnet, den andra fyller luckorna', () => {
+    const form = malformAvKallor([A, B])
+    const ihop = slaIhopMal(form, kol(form, 'Mobilnr'), kol(form, 'Telefon'))
+    expect(ihop.map((k) => k.namn)).toEqual(['Namn', 'Mobilnr'])
+    const { frame } = stapla([alla(A), alla(B)], plan(beslutade(ihop)))
+    const tel = frame.columns.find((c) => c.name === 'Mobilnr')!
+    expect([0, 1].map((r) => getCell(tel, r))).toEqual(['070-1', '070-2'])
+  })
+
+  it('antecknar vad den absorberat', () => {
+    const form = malformAvKallor([A, B])
+    const ihop = slaIhopMal(form, kol(form, 'Mobilnr'), kol(form, 'Telefon'))
+    expect(ihop[1]!.sammanslagna).toEqual(['Telefon'])
+  })
+
+  it('kedjade hopslagningar plattas ut', () => {
+    // `Mobil` hade hittaAlias klarat själv; `Kontaktväg` är det den inte kan
+    // gissa, och alltså det greppet finns till för.
+    const C = frameOf('c.csv', ['Namn', 'Kontaktväg'], [['Cia', '070-3']])
+    let form = malformAvKallor([A, B, C])
+    form = slaIhopMal(form, kol(form, 'Mobilnr'), kol(form, 'Telefon'))
+    form = slaIhopMal(form, kol(form, 'Mobilnr'), kol(form, 'Kontaktväg'))
+    expect(form[1]!.sammanslagna).toEqual(['Telefon', 'Kontaktväg'])
+    const { frame } = stapla([alla(A), alla(B), alla(C)], plan(beslutade(form)))
+    const tel = frame.columns.find((c) => c.name === 'Mobilnr')!
+    expect([0, 1, 2].map((r) => getCell(tel, r))).toEqual(['070-1', '070-2', '070-3'])
+  })
+
+  it('krockar pekas ut innan något går förlorat', () => {
+    // Har en fil BÅDA kolumnerna är de inte samma sak, och en hopslagning
+    // kastar den ena. Det ska stå innan man trycker.
+    const bada = frameOf('bada.csv', ['Mobilnr', 'Telefon'], [['1', '2']])
+    const form = malformAvKallor([bada])
+    expect(krockandeKallor(form[0]!, form[1]!)).toEqual([0])
+    expect(krockandeKallor(malformAvKallor([A, B])[1]!, malformAvKallor([A, B])[2]!)).toEqual([])
+  })
+
+  it('en fil som har båda kolumnerna tappar inte den ena tyst', () => {
+    // `Hamtning[]` rymmer en källkolumn per fil. Två går inte att uttrycka, så
+    // det som blir över måste stå kvar som en egen rad — inte försvinna.
+    const bada = frameOf('bada.csv', ['Telefon', 'Mobilnr'], [['fast', 'mobil']])
+    const bara = frameOf('bara.csv', ['Mobilnr'], [['070-9']])
+    const form = malformAvKallor([bada, bara])
+    expect(form.map((k) => k.namn)).toEqual(['Telefon', 'Mobilnr'])
+
+    const ihop = slaIhopMal(form, 0, 1)
+    expect(ihop.map((k) => k.namn)).toEqual(['Telefon', 'Mobilnr'])
+    // Resten bär bara krocken, och den är en ny fråga.
+    expect(ihop[1]!.med).toBe(null)
+    expect(ihop[1]!.fraga).toBe(true)
+    expect(antalKallor(ihop[1]!.hamtning)).toBe(1)
+
+    const { frame } = stapla([alla(bada), alla(bara)], plan(beslutade(ihop)))
+    const tel = frame.columns.find((c) => c.name === 'Telefon')!
+    const mob = frame.columns.find((c) => c.name === 'Mobilnr')!
+    expect([0, 1].map((r) => getCell(tel, r))).toEqual(['fast', '070-9'])
+    expect([0, 1].map((r) => getCell(mob, r))).toEqual(['mobil', ''])
+  })
+
+  it('en överhoppad kolumn slukar inte den andras data', () => {
+    // Mobilnr var överhoppad, Telefon obesvarad. Efter hopslagningen är raden
+    // en annan fråga än den som besvarades, så nejet får inte stå kvar och
+    // tyst svälja Telefons värden — den frågas om igen och spärrar körningen.
+    const form = malformAvKallor([A, B])
+    const avslagen = form.map((k, i) => (i === 1 ? { ...k, med: false as const } : k))
+    const ihop = slaIhopMal(avslagen, 1, 2)
+    expect(ihop[1]!.med).toBe(null)
+    expect(obeslutade(ihop)).toHaveLength(1)
+  })
+
+  it('ett uttryckligt ja väger tyngre än ett nej', () => {
+    const form = malformAvKallor([A, B])
+    const svarad = form.map((k, i) =>
+      i === 1 ? { ...k, med: false as const } : i === 2 ? { ...k, med: true as const } : k,
+    )
+    expect(slaIhopMal(svarad, 1, 2)[1]!.med).toBe(true)
+  })
+
+  it('två nej förblir ett nej', () => {
+    const form = malformAvKallor([A, B]).map((k) => ({ ...k, med: false as const }))
+    expect(slaIhopMal(form, 1, 2)[1]!.med).toBe(false)
+  })
+
+  it('anteckningen bär identiteten, så ett namnbyte inte raderar raden', () => {
+    // Döper man överlevaren till den absorberades namn skulle en namnbaserad
+    // anteckning göra raden till sin egen absorberade — och ta bort sig själv.
+    const form = malformAvKallor([A, B])
+    const ihop = slaIhopMal(form, kol(form, 'Mobilnr'), kol(form, 'Telefon'))
+    const omdopt = ihop.map((k, i) => (i === 1 ? { ...k, namn: 'Telefon' } : k))
+    const bevarat = medBevaradeBeslut(malformAvKallor([A, B]), omdopt)
+    expect(bevarat.map((k) => k.forslagsnamn)).toEqual(['Namn', 'Mobilnr'])
+    expect(antalKallor(bevarat[1]!.hamtning)).toBe(2)
+  })
+
+  it('att slå ihop en kolumn med sig själv gör ingenting', () => {
+    const form = malformAvKallor([A, B])
+    expect(slaIhopMal(form, 1, 1)).toEqual(form)
+  })
+})
+
+describe('medBevaradeBeslut', () => {
+  const A = frameOf('a.csv', ['Namn', 'Ort'], [['Anna', 'Lund']])
+  const B = frameOf('b.csv', ['Namn', 'Stad'], [['Bo', 'Malmö']])
+
+  it('svaret på en fråga överlever en omräkning', () => {
+    const gamla = malformAvKallor([A, B]).map((k) => ({ ...k, med: k.med ?? false }))
+    const bevarat = medBevaradeBeslut(malformAvKallor([A, B]), gamla)
+    expect(bevarat.map((k) => k.med)).toEqual(gamla.map((k) => k.med))
+  })
+
+  it('ett gammalt obesvarat skriver inte över ett nytt beslut', () => {
+    const gamla: Malkolumn[] = [{ namn: 'Namn', forslagsnamn: 'Namn', hamtning: [TOMT], med: null }]
+    const nya: Malkolumn[] = [{ namn: 'Namn', forslagsnamn: 'Namn', hamtning: [TOMT], med: true }]
+    expect(medBevaradeBeslut(nya, gamla)[0]!.med).toBe(true)
+  })
+
+  it('standardvärdet överlever', () => {
+    const gamla: Malkolumn[] = [{ namn: 'Ort', forslagsnamn: 'Ort', hamtning: [TOMT], med: true, standard: 'Okänd' }]
+    const nya: Malkolumn[] = [{ namn: 'Ort', forslagsnamn: 'Ort', hamtning: [TOMT], med: null }]
+    expect(medBevaradeBeslut(nya, gamla)[0]!.standard).toBe('Okänd')
+  })
+
+  it('en handgjord hopslagning görs om', () => {
+    // Det verktyget gissar hittar det igen. Det användaren vet gör det inte —
+    // så hopslagningen måste läggas tillbaka när förslaget räknas om.
+    const form = malformAvKallor([A, B])
+    const ihop = slaIhopMal(form, 1, 2)
+    expect(ihop.map((k) => k.namn)).toEqual(['Namn', 'Ort'])
+
+    const bevarat = medBevaradeBeslut(malformAvKallor([A, B]), ihop)
+    expect(bevarat.map((k) => k.namn)).toEqual(['Namn', 'Ort'])
+    expect(antalKallor(bevarat[1]!.hamtning)).toBe(2)
+  })
+
+  it('görs om även när den absorberade står först i det nya förslaget', () => {
+    const gamla: Malkolumn[] = [
+      { namn: 'B', forslagsnamn: 'B', hamtning: [TOMT, { fran: 'kolumn', colId: B.columns[0]!.id }], med: true, sammanslagna: ['A'] },
+    ]
+    const nya: Malkolumn[] = [
+      { namn: 'A', forslagsnamn: 'A', hamtning: [{ fran: 'kolumn', colId: A.columns[0]!.id }, TOMT], med: null },
+      { namn: 'B', forslagsnamn: 'B', hamtning: [TOMT, { fran: 'kolumn', colId: B.columns[0]!.id }], med: null },
+    ]
+    const ut = medBevaradeBeslut(nya, gamla)
+    expect(ut.map((k) => k.namn)).toEqual(['B'])
+    expect(antalKallor(ut[0]!.hamtning)).toBe(2)
+  })
+
+  it('en absorberad kolumn står hellre kvar för sig än faller bort tyst', () => {
+    // Överlevaren följde med sin fil när den kryssades av.
+    const gamla: Malkolumn[] = [
+      { namn: 'Telefon', forslagsnamn: 'Telefon', hamtning: [TOMT], med: true, sammanslagna: ['Mobilnr'] },
+    ]
+    const nya: Malkolumn[] = [{ namn: 'Mobilnr', forslagsnamn: 'Mobilnr', hamtning: [TOMT], med: null }]
+    expect(medBevaradeBeslut(nya, gamla).map((k) => k.namn)).toEqual(['Mobilnr'])
+  })
+
+  it('en anteckning som pekar på sig själv sätter inte igång en cykel', () => {
+    const gamla: Malkolumn[] = [{ namn: 'X', forslagsnamn: 'X', hamtning: [TOMT], med: true, sammanslagna: ['X'] }]
+    const nya: Malkolumn[] = [{ namn: 'X', forslagsnamn: 'X', hamtning: [TOMT], med: null }]
+    expect(medBevaradeBeslut(nya, gamla).map((k) => k.namn)).toEqual(['X'])
   })
 })
 

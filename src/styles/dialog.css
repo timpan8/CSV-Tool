@@ -237,6 +237,114 @@
 
 .notis__text { flex: 1; }
 
+/* ---------- Rutor i helskärmsvyerna ---------- */
+
+/*
+ * Skalet som Slå ihop och Kombinera delar: en rubrik och en kropp som skrollar
+ * för sig. Det bodde först i `slaihop.css`, men det är namngivet efter en av
+ * två vyer som använder det — och en rättning på ett ställe skulle inte nå det
+ * andra. Vyerna sätter bara sin egen `grid-template`.
+ */
+.ruta {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--yta);
+}
+
+.ruta__rubrik {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 12px 5px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-svag);
+}
+
+.ruta__kropp {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 12px 10px;
+}
+
+/*
+ * En kropp som bara innehåller en tabell låter *omslaget* skrolla.
+ *
+ * `position: sticky` fäster mot närmaste skrollande förfader. Skrollar kroppen
+ * medan omslaget växer fritt får rubrikraden ingenting att fästa mot och
+ * försvinner uppåt — och med fem nästan identiska väljarspalter per rad säger
+ * raden ingenting utan sina rubriker.
+ */
+.ruta__kropp--tabell {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ruta__kropp--tabell > .fortab__omslag,
+.ruta__kropp--tabell > .aliaskarta__omslag {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/*
+ * Siffrorna som en remsa, inte som en tabell med en rad per tal.
+ *
+ * Sex tabellrader tog 130 px av ett fönster som är 720 px högt, och varje pixel
+ * toppen tar är en pixel rutorna nedanför inte får. Talet står kvar först i
+ * varje post, så meningen läses likadant — den ligger bara på bredden.
+ */
+.vytal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 14px;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-svag);
+  font-variant-numeric: tabular-nums;
+}
+
+.vytal strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.vytal > * + *::before {
+  content: '\00b7';
+  margin-right: 14px;
+  color: var(--linje-stark);
+}
+
+.vytal--okant,
+.vytal--okant strong {
+  color: var(--varning);
+}
+
+/*
+ * Ett tal i remsan kan vara vägen till raden det handlar om.
+ *
+ * Det ska läsas som en del av meningen, inte som en knapp bland knappar — en
+ * räknare som plötsligt hade knappram mitt i en textremsa vore svårare att
+ * läsa än den är att klicka på.
+ */
+.vytal__lank {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* ---------- Förhandsvisningstabell ---------- */
 
 .fortab {

@@ -102,7 +102,13 @@ import { SlaIhop } from './SlaIhop.jsx'
 import { ProfilDialog } from './ProfilDialog.jsx'
 import { Kommandopalett } from './Kommandopalett.jsx'
 import { byggKommandon } from './kommandon.js'
-import { kombineraOppen, mallTabId, oppnaKombinera, vantarPaMall } from '../state/kombinera.js'
+import {
+  kombineraOppen,
+  mallTabId,
+  oppnaKombinera,
+  stangKombinera,
+  vantarPaMall,
+} from '../state/kombinera.js'
 import { oppnaSlaIhop, slaIhopOppen, stangSlaIhop } from '../state/slaihop.js'
 import { nyRegelId, TOMT_FILTER, type Filterregel } from '../core/ops/filter.js'
 import {
@@ -142,6 +148,21 @@ interface MenyLage {
 interface PasteState {
   plan: PasteRequest
   sel: Selection
+}
+
+/**
+ * Fält där man faktiskt skriver.
+ *
+ * En kryssruta har taggen INPUT men bär ingen text, och en Escape där ska
+ * stänga vyn som vanligt — aliaskartans beslutskolumn är kryssrutor, och en
+ * Escape som inte gör något är värre än ingen Escape alls.
+ */
+function iTextfalt(el: HTMLElement | null): boolean {
+  if (el === null) return false
+  if (el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') return true
+  return (
+    el.tagName === 'INPUT' && !/^(checkbox|radio|button|submit)$/.test((el as HTMLInputElement).type)
+  )
 }
 
 export function App() {
@@ -1069,12 +1090,44 @@ export function App() {
         return
       }
 
+      /*
+       * En egen vy äger tangentbordet, precis som paletten och menyn ovan.
+       *
+       * Rutnätet finns inte på skärmen. Utan den här grenen tömde Delete celler
+       * i en flik man inte tittar på, Ctrl+Z ångrade där, och `preventDefault`
+       * på Enter tog knapparna i vyn deras aktivering — vyn gick alltså inte
+       * att köra med tangentbordet.
+       *
+       * Escape hanteras här och inte med en lyssnare i varje vy. En lyssnare
+       * registrerad i en effekt finns först efter ritningen, och två lyssnare
+       * på samma fönster betyder att ett Escape stänger både paletten och vyn
+       * under den. Kedjan här har redan gjort `return` för paletten och menyn,
+       * så det kan inte hända.
+       */
+      const stangEgenVy = verkstad.value
+        ? stangVerkstad
+        : kombineraOppen.value
+          ? stangKombinera
+          : slaIhopOppen.value
+            ? stangSlaIhop
+            : lagen.current.oversikt
+              ? () => setOversiktOppen(false)
+              : null
+      if (stangEgenVy) {
+        // Escape i ett textfält betyder "lämna fältet", inte "riv vyn".
+        // Aliaskartans namnfält skriver igenom vid varje tecken, så det finns
+        // inget utkast att ångra — men att slå sönder en halvbyggd karta för
+        // att fokus råkade ligga i ett fält vore värre. Andra Escape stänger.
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          if (iTextfalt(target)) target?.blur()
+          else stangEgenVy()
+        }
+        return
+      }
+
       const nu = nuLage()
       if (!nu) return
-      // Med en egen vy öppen är rutnätet inte det man tittar på. Ctrl+Z hade
-      // annars ångrat i den aktiva fliken medan rättningen gjordes i den
-      // andra, och piltangenterna hade flyttat en markering ingen ser.
-      if (verkstad.value || kombineraOppen.value || lagen.current.oversikt) return
       const { tab, frame, kolumner: synligaKolumner, sel: markering } = nu
 
       if (mod) {
