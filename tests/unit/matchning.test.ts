@@ -80,13 +80,13 @@ beforeEach(() => {
 describe('restlistorna', () => {
   it('innehåller precis de rader som saknar par', () => {
     oppna()
-    expect(rest()).toEqual({ vanster: [1, 2], hoger: [1, 2] })
+    expect(rest()).toEqual({ vanster: [1, 2], hoger: [1, 2], osakra: [] })
   })
 
   it('ett handgjort par tar bort raden ur båda listorna', () => {
     oppna()
     laggExtrapar(1, 1, 'hand', 'för hand')
-    expect(rest()).toEqual({ vanster: [2], hoger: [2] })
+    expect(rest()).toEqual({ vanster: [2], hoger: [2], osakra: [] })
   })
 
   it('samma par två gånger lägger bara till ett', () => {
@@ -109,7 +109,7 @@ describe('avskriven och avvisad hålls isär', () => {
   it('att avvisa ett förslag lämnar raden kvar', () => {
     oppna()
     avvisaForslag(1, 1)
-    expect(rest()).toEqual({ vanster: [1, 2], hoger: [1, 2] })
+    expect(rest()).toEqual({ vanster: [1, 2], hoger: [1, 2], osakra: [] })
     expect(arAvvisat(verkstad.value!, 1, 1)).toBe(true)
     expect(arAvvisat(verkstad.value!, 1, 2)).toBe(false)
   })
@@ -128,7 +128,7 @@ describe('rundor', () => {
     // Bo och Dan bor båda i Kiruna. Cia och Eva gör inte det.
     expect(traffar).toBe(1)
     expect(verkstad.value!.extra).toEqual([{ v: 1, h: 1, kalla: 'runda', notis: 'runda 1' }])
-    expect(rest()).toEqual({ vanster: [2], hoger: [2] })
+    expect(rest()).toEqual({ vanster: [2], hoger: [2], osakra: [] })
   })
 
   it('en runda rör aldrig rader som redan har par', () => {

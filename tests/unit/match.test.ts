@@ -9,11 +9,14 @@ import {
   forhandsurval,
   matcha,
   NYCKELAVSKILJARE,
+  nyckelavvikelse,
+  nyckelForRad,
   slaIhop,
   slaSamman,
   type Matchning,
   type Matchningspar,
   type Matchningstyp,
+  TRAFFVARDEN,
 } from '../../src/core/ops/match.js'
 
 function frameOf(namn: string, headers: string[], rows: string[][]): Frame {
@@ -198,7 +201,7 @@ describe('slaIhop', () => {
   it('behåller vänsterfilens egna kolumner först', () => {
     const m = matcha(VANSTER, HOGER, P)
     const { frame } = slaIhop(VANSTER, HOGER, m, val())
-    expect(frame.columns.map((c) => c.name)).toEqual(['Namn', 'Belopp'])
+    expect(frame.columns.map((c) => c.name)).toEqual(['Namn', 'Belopp', 'Träff'])
     expect(getCell(frame.columns[0]!, 1)).toBe('Bo')
   })
 
@@ -237,7 +240,7 @@ describe('slaIhop', () => {
       flertraff: 'forsta',
       prefix: '',
     })
-    expect(frame.columns.map((c) => c.name)).toEqual(['Namn', 'Namn (2)'])
+    expect(frame.columns.map((c) => c.name)).toEqual(['Namn', 'Namn (2)', 'Träff'])
   })
 
   it('kan sätta ett prefix på de nya kolumnerna', () => {
@@ -255,7 +258,8 @@ describe('slaIhop', () => {
   it('utan valda högerkolumner blir resultatet vänsterfilen', () => {
     const m = matcha(VANSTER, HOGER, P)
     const { frame } = slaIhop(VANSTER, HOGER, m, val({ hogerKolumner: [] }))
-    expect(frame.columns).toHaveLength(1)
+    // Vänsterfilens enda kolumn plus Träff.
+    expect(frame.columns).toHaveLength(2)
     expect(frame.rowCount).toBe(3)
   })
 })
@@ -466,6 +470,7 @@ describe('forhandsurval', () => {
     vansterMatchade: new Set(matchade.map(([v]) => v)).size,
     hogerMatchade: 0,
     vansterFlera: 0,
+    vansterOsakra: [],
     hogerFlera: 0,
     tommaVanster: 0,
     tommaHoger: 0,
@@ -560,7 +565,7 @@ describe('slaIhop med urval', () => {
     expect(frame.rowCount).toBe(0)
     expect(rader).toBe(0)
     expect(fyllda).toBe(0)
-    expect(frame.columns.map((c) => c.name)).toEqual(['Namn', 'Belopp'])
+    expect(frame.columns.map((c) => c.name)).toEqual(['Namn', 'Belopp', 'Träff'])
   })
 
   it('duplicerar inom urvalet precis som utan', () => {
@@ -671,5 +676,193 @@ describe('celler utan partner är frånvarande, inte tomma', () => {
       prefix: '',
     })
     expect(hasFlag(frame.columns[0]!, 1, Flag.Padded)).toBe(false)
+  })
+})
+
+describe('nyckelForRad', () => {
+  /**
+   * Samma nyckel som matchningen räknar, för en rad.
+   *
+   * Att svaren aldrig får gå isär är hela poängen: visar gränssnittet en
+   * nyckel som `matcha` inte hashade är förklaringen till att raden blev över
+   * en annan förklaring än den sanna.
+   */
+  const somByggNycklar = (f: Frame, p: Matchningspar[], sida: 'vanster' | 'hoger') => {
+    const hela = byggNycklar(f, p, sida)
+    return Array.from({ length: f.rowCount }, (_, r) => {
+      const delar = nyckelForRad(f, p, sida, r)
+      return delar.some((d) => d.nyckel === '')
+        ? ''
+        : delar.map((d) => d.nyckel).join(NYCKELAVSKILJARE)
+    }).map((egen, r) => [egen, hela[r]])
+  }
+
+  it('ger samma nyckel som byggNycklar, rad för rad', () => {
+    const v = frameOf('v', ['Namn', 'Ort'], [['Erik Öberg', 'Lund'], ['ANNA  K', 'Malmö'], ['', 'Boden']])
+    const h = frameOf('h', ['n', 'o'], [['x', 'y']])
+    const p = [par(v, h, 0, 0), par(v, h, 1, 1)]
+    for (const [egen, hela] of somByggNycklar(v, p, 'vanster')) expect(egen).toBe(hela)
+  })
+
+  it('visar den normaliserade formen bredvid värdet', () => {
+    const v = frameOf('v', ['Namn'], [['Erik Öberg']])
+    const h = frameOf('h', ['n'], [['x']])
+    const delar = nyckelForRad(v, [par(v, h, 0, 0, 'accentoberoende')], 'vanster', 0)
+    expect(delar).toEqual([{ par: 0, varde: 'Erik Öberg', nyckel: 'erik oberg' }])
+  })
+
+  it('en tom del ger tom nyckel, precis som i matchningen', () => {
+    const v = frameOf('v', ['Namn'], [['']])
+    const h = frameOf('h', ['n'], [['x']])
+    expect(nyckelForRad(v, [par(v, h, 0, 0)], 'vanster', 0)[0]!.nyckel).toBe('')
+    expect(byggNycklar(v, [par(v, h, 0, 0)], 'vanster')[0]).toBe('')
+  })
+
+  it('slår ihop högersidans två kolumner som matchningen gör', () => {
+    const v = frameOf('v', ['Namn'], [['Anna Karlsson']])
+    const h = frameOf('h', ['Fornamn', 'Efternamn'], [['Karlsson', 'Anna']])
+    const p: Matchningspar[] = [
+      {
+        vansterColId: v.columns[0]!.id,
+        hogerColId: h.columns[0]!.id,
+        hogerColId2: h.columns[1]!.id,
+        typ: 'namndelar',
+      },
+    ]
+    const del = nyckelForRad(h, p, 'hoger', 0)[0]!
+    expect(del.varde).toBe('Karlsson Anna')
+    expect(del.nyckel).toBe(byggNycklar(h, p, 'hoger')[0])
+    // Ordföljden spelar ingen roll — det är hela poängen med namndelar.
+    expect(del.nyckel).toBe(byggNycklar(v, p, 'vanster')[0])
+  })
+
+  it('en kolumn som tagits bort ger tom nyckel i stället för att kasta', () => {
+    const v = frameOf('v', ['Namn'], [['Anna']])
+    const h = frameOf('h', ['n'], [['x']])
+    const p: Matchningspar[] = [{ vansterColId: 'finns-inte', hogerColId: h.columns[0]!.id, typ: 'oberoende' }]
+    expect(nyckelForRad(v, p, 'vanster', 0)).toEqual([{ par: 0, varde: '', nyckel: '' }])
+  })
+})
+
+describe('Träff-kolumnen', () => {
+  const KUND = frameOf('kunder', ['Namn'], [['Anna'], ['Bo'], ['Cia']])
+  const ORDER = frameOf('order', ['Kund', 'Belopp'], [['Anna', '100'], ['anna', '150'], ['Bo', '90']])
+  const P = [par(KUND, ORDER, 0, 0)]
+  const traffar = (frame: Frame) => {
+    const col = frame.columns.find((c) => c.name === 'Träff')!
+    return Array.from({ length: frame.rowCount }, (_, r) => getCell(col, r))
+  }
+
+  it('skiljer träff, ingen träff och flera träffar åt', () => {
+    // Anna matchar två orderrader, Bo en, Cia ingen.
+    const m = matcha(KUND, ORDER, P)
+    const { frame } = slaIhop(KUND, ORDER, m, {
+      hogerKolumner: [ORDER.columns[1]!.id],
+      flertraff: 'lamna',
+      prefix: '',
+    })
+    expect(traffar(frame)).toEqual([TRAFFVARDEN.flera, TRAFFVARDEN.traff, TRAFFVARDEN.utan])
+  })
+
+  it('säger flera träffar även när en av dem valdes', () => {
+    // Med "Första träffen" får raden ett värde — men den var ändå osäker, och
+    // det är precis det man behöver kunna filtrera fram i efterhand.
+    const m = matcha(KUND, ORDER, P)
+    const { frame } = slaIhop(KUND, ORDER, m, {
+      hogerKolumner: [ORDER.columns[1]!.id],
+      flertraff: 'forsta',
+      prefix: '',
+    })
+    expect(traffar(frame)[0]).toBe(TRAFFVARDEN.flera)
+    expect(getCell(frame.columns[1]!, 0)).toBe('100')
+  })
+
+  it('kostar tre ordboksposter, inte en per rad', () => {
+    const m = matcha(KUND, ORDER, P)
+    const { frame } = slaIhop(KUND, ORDER, m, {
+      hogerKolumner: [],
+      flertraff: 'lamna',
+      prefix: '',
+    })
+    const col = frame.columns.find((c) => c.name === 'Träff')!
+    expect(col.dict).toEqual(['', TRAFFVARDEN.traff, TRAFFVARDEN.utan, TRAFFVARDEN.flera])
+    expect(col.typeLocked).toBe(true)
+  })
+
+  it('viker undan för en kolumn som redan heter Träff', () => {
+    const v = frameOf('v', ['Namn', 'Träff'], [['Anna', 'ja']])
+    const m = matcha(v, ORDER, [par(v, ORDER, 0, 0)])
+    const { frame } = slaIhop(v, ORDER, m, { hogerKolumner: [], flertraff: 'lamna', prefix: '' })
+    expect(frame.columns.map((c) => c.name)).toEqual(['Namn', 'Träff', 'Träff (2)'])
+  })
+})
+
+describe('vansterOsakra', () => {
+  const KUND = frameOf('kunder', ['Namn'], [['Anna'], ['Bo'], ['Cia']])
+  const ORDER = frameOf('order', ['Kund'], [['Anna'], ['anna'], ['Bo']])
+
+  it('pekar ut raderna med för många partners, inte bara räknar dem', () => {
+    // Räknaren fanns sedan tidigare; raderna gjorde det inte, och då hamnade
+    // en osäker rad i ingen lista alls.
+    const m = matcha(KUND, ORDER, [par(KUND, ORDER, 0, 0)])
+    expect(m.vansterFlera).toBe(1)
+    expect(m.vansterOsakra).toEqual([0])
+    // Och de ligger inte i vansterUtan — de saknar inte partner.
+    expect(m.vansterUtan).toEqual([2])
+  })
+
+  it('överlever att verkstadens egna par vägs in', () => {
+    const m = matcha(KUND, ORDER, [par(KUND, ORDER, 0, 0)])
+    const full = slaSamman(m, [{ v: 2, h: 2 }], KUND, ORDER)
+    expect(full.vansterOsakra).toEqual([0])
+    expect(full.vansterUtan).toEqual([])
+  })
+})
+
+describe('nyckelavvikelse', () => {
+  it('två lika nycklar har ingen avvikelse', () => {
+    expect(nyckelavvikelse('nils ödman', 'nils ödman')).toBe(null)
+  })
+
+  it('pekar ut tillägget i slutet', () => {
+    const a = nyckelavvikelse('nils ödman', 'nils ödman (avliden)')!
+    expect('nils ödman'.slice(...a.v)).toBe('')
+    expect('nils ödman (avliden)'.slice(...a.h)).toBe(' (avliden)')
+  })
+
+  it('pekar ut tillägget i början utan att måla resten', () => {
+    // En jämförelse enbart framifrån hade rödmarkerat hela strängen så fort
+    // ett tecken lagts till först.
+    const a = nyckelavvikelse('anna berg', 'fru anna berg')!
+    expect('anna berg'.slice(...a.v)).toBe('')
+    expect('fru anna berg'.slice(...a.h)).toBe('fru ')
+  })
+
+  it('pekar ut ett utbytt tecken mitt i', () => {
+    const a = nyckelavvikelse('nordbygg', 'nordbygq')!
+    expect('nordbygg'.slice(...a.v)).toBe('g')
+    expect('nordbygq'.slice(...a.h)).toBe('q')
+  })
+
+  it('två helt olika nycklar avviker i sin helhet', () => {
+    const a = nyckelavvikelse('anna', 'bo')!
+    expect('anna'.slice(...a.v)).toBe('anna')
+    expect('bo'.slice(...a.h)).toBe('bo')
+  })
+
+  it('intervallen ligger alltid inom sin sträng', () => {
+    fc.assert(
+      fc.property(fc.string({ maxLength: 12 }), fc.string({ maxLength: 12 }), (a, b) => {
+        const r = nyckelavvikelse(a, b)
+        if (r === null) return a === b
+        return (
+          r.v[0] >= 0 && r.v[1] <= a.length && r.v[0] <= r.v[1] &&
+          r.h[0] >= 0 && r.h[1] <= b.length && r.h[0] <= r.h[1] &&
+          // Det som ligger utanför avvikelsen är gemensamt.
+          a.slice(0, r.v[0]) === b.slice(0, r.h[0]) &&
+          a.slice(r.v[1]) === b.slice(r.h[1])
+        )
+      }),
+    )
   })
 })

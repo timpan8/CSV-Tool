@@ -42,9 +42,14 @@
   padding: 8px 14px 0;
 }
 
+/*
+ * Arbetsbänken är bredare än förut, för att den numera bär tre spalter.
+ * Jämförelsen ställer fältnamnet och båda filernas värden på samma rad, och i
+ * 380 px klipptes just den del av nyckeln som skilde sig — alltså svaret.
+ */
 .verkstad__listor {
   display: grid;
-  grid-template-columns: 1fr minmax(300px, 380px) 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 1.5fr) minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
@@ -215,24 +220,49 @@
   color: var(--fara);
 }
 
-/* ---------- Raddetaljen ---------- */
+/* ---------- Jämförelsebänken ---------- */
 
-.raddetalj {
+/*
+ * Två rader ställda mot varandra, fält för fält.
+ *
+ * Här satt förut två `Raddetalj` staplade under varandra, båda med rubriken
+ * "Vald rad" och en spalt var. Fälten gick alltså aldrig att läsa mot varandra,
+ * och frågan man sitter med — *vilket fält är det som skiljer?* — hade ingen
+ * plats att synas på.
+ */
+.jamforelse {
   border: 1px solid var(--linje);
   border-radius: var(--radie);
-  padding: 7px 9px;
   background: var(--yta);
+  overflow: hidden;
+  /*
+   * Krymp inte. Arbetsbänken är en flexkolumn som skrollar, och utan det här
+   * pressades bänken ihop av knapparna under sig tills fälten låg under
+   * *Para ihop* — som då fångade klicken. Bänken håller sin höjd; det är
+   * panelen som skrollar, och fältlistan har sitt eget tak.
+   */
+  flex: none;
 }
 
-.raddetalj--tom {
+.jamforelse--tom {
   border-style: dashed;
+  padding: 7px 9px;
 }
 
-.raddetalj__rubrik {
-  display: flex;
+/* Samma spaltbredder som fältraderna, så filnamnen står över sin egen spalt. */
+.jamforelse__topp,
+.jamforelse__rad {
+  display: grid;
+  grid-template-columns: minmax(90px, 1.1fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  padding: 4px 8px;
+}
+
+.jamforelse__topp {
+  grid-template-columns: minmax(90px, 1.1fr) minmax(0, 1fr) minmax(0, 1fr);
+  border-bottom: 1px solid var(--linje);
+  background: var(--yta-2);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -240,38 +270,106 @@
   color: var(--text-svag);
 }
 
-.raddetalj__fil {
+/* Filnamnen står över spalt två och tre; spalt ett är etiketten. */
+.jamforelse__topp .jamforelse__fil:first-child {
+  grid-column: 2;
+}
+
+.jamforelse__fil {
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
   color: var(--text-svagast);
-}
-
-.raddetalj__falt {
-  margin: 6px 0 0;
-}
-
-.raddetalj__rad {
-  display: grid;
-  grid-template-columns: 90px 1fr;
-  gap: 6px;
-  align-items: baseline;
-}
-
-.raddetalj__rad dt {
-  font-size: 11px;
-  color: var(--text-svag);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.raddetalj__rad dd {
-  margin: 0;
+.jamforelse__falt {
+  max-height: 44vh;
+  overflow-y: auto;
+}
+
+.jamforelse__rad + .jamforelse__rad {
+  border-top: 1px solid var(--linje);
+}
+
+/* Nyckelraderna är de enda matchningen faktiskt jämför. De står först och syns. */
+.jamforelse__rad--nyckel {
+  background: var(--accent-svag);
+}
+
+/* Den rad som förklarar varför paret uteblev. */
+.jamforelse__rad--skiljer .jamforelse__norm mark {
+  background: var(--varning-svag);
+  color: var(--text);
+  border-radius: var(--radie-liten);
+}
+
+.jamforelse__rad--lika .jamforelse__cell {
+  color: var(--text-svag);
+}
+
+.jamforelse__etikett {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  font-size: 11px;
+  color: var(--text-svag);
   min-width: 0;
 }
 
-.raddetalj__varde {
+.jamforelse__marke {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+
+.jamforelse__marke--gissad {
+  color: var(--text-svagast);
+}
+
+.jamforelse__utfall {
+  font-size: 11px;
+  color: var(--varning);
+}
+
+.jamforelse__cell {
+  min-width: 0;
+}
+
+.jamforelse__cell--saknas {
+  color: var(--text-svagast);
+}
+
+/*
+ * Den normaliserade nyckeln under värdet.
+ *
+ * Samma idiom som `.fortab__norm` i Slå ihop-vyn, av samma skäl: det är den
+ * enda platsen där man ser vad jämförelsen faktiskt gör med värdet innan den
+ * jämför. Verkstaden var fram till nu den enda vyn som saknade den.
+ */
+.jamforelse__norm {
+  display: block;
+  font-size: 11px;
+  color: var(--text-svagast);
+  font-family: var(--font-mono);
+  /*
+   * Bryts, klipps inte. Nyckeln är svaret på varför raderna inte matchade, och
+   * en ellips landar med förkärlek på just den avvikande delen — det enda man
+   * faktiskt behövde se.
+   */
+  overflow-wrap: anywhere;
+}
+
+.jamforelse__norm::before {
+  content: '\2192 ';
+}
+
+.jamforelse__varde {
   display: block;
   width: 100%;
   padding: 2px 4px;
@@ -287,7 +385,7 @@
   white-space: nowrap;
 }
 
-.raddetalj__varde:hover {
+.jamforelse__varde:hover {
   border-color: var(--linje-stark);
   background: var(--yta-2);
 }
@@ -297,6 +395,7 @@
   font-size: 12px;
   padding: 2px 4px;
 }
+
 
 /* ---------- Luddiga förslag ---------- */
 
@@ -517,4 +616,24 @@
   flex: 1;
   font-size: 12px;
   color: var(--text-svag);
+}
+
+/*
+ * Varför raden ligger i listan.
+ *
+ * Tre olika problem som fram till nu såg likadana ut. En tom nyckel kan aldrig
+ * matcha — ingen ny runda hjälper, värdet måste fyllas i. Flera träffar är
+ * motsatsen: raden har för många partners och behöver ett val. Att måla dem
+ * lika vore att påstå att de betyder samma sak.
+ */
+.restrad__sort {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--varning);
+  white-space: nowrap;
+}
+
+.restrad--flera .restrad__nummer,
+.restrad--tom .restrad__nummer {
+  color: var(--varning);
 }

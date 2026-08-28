@@ -1,6 +1,23 @@
-import type { ColumnId, Frame } from '../core/types.js'
+import { Flag, type ColumnId, type Frame } from '../core/types.js'
+import { hasFlag } from '../core/frame/column.js'
 import { cellText } from '../core/ops/match.js'
 import { formatCount, rader as raderText } from '../core/locale/sv.js'
+
+/**
+ * Varför raden ligger här.
+ *
+ * Tre olika problem som fram till nu såg likadana ut. `utan` saknar partner.
+ * `tom` har en nyckel som är tom och kan därför aldrig matcha någon — ingen ny
+ * runda i världen hjälper. `flera` har tvärtom för många partners och behöver
+ * ett val, inte en sökning.
+ */
+export type Restsort = 'utan' | 'tom' | 'flera'
+
+const SORTTEXT: Record<Restsort, string> = {
+  utan: '',
+  tom: 'tom nyckel',
+  flera: 'flera träffar',
+}
 
 /**
  * Så många rader ritas ut på en gång.
@@ -22,6 +39,8 @@ export function Restlista(props: {
   kolumner: ColumnId[]
   vald: number | null
   avskrivna: number
+  /** Varför varje rad ligger här. Utelämnad betyder `utan`. */
+  sort?: (rad: number) => Restsort
   onValj: (rad: number | null) => void
   onSkrivAv: (rad: number) => void
 }) {
@@ -42,8 +61,14 @@ export function Restlista(props: {
               : 'Alla rader hittade en partner.'}
           </p>
         )}
-        {visade.map((rad) => (
-          <div class={`restrad${props.vald === rad ? ' restrad--vald' : ''}`} key={rad}>
+        {visade.map((rad) => {
+          const sort = props.sort ? props.sort(rad) : 'utan'
+          return (
+          <div
+            class={`restrad restrad--${sort}${props.vald === rad ? ' restrad--vald' : ''}`}
+            key={rad}
+            data-sort={sort}
+          >
             <button
               class="restrad__val"
               aria-pressed={props.vald === rad}
@@ -53,15 +78,26 @@ export function Restlista(props: {
               <span class="restrad__celler">
                 {props.kolumner.map((id, i) => {
                   const text = cellText(props.frame, id, rad)
+                  const col = props.frame.columns.find((c) => c.id === id)
+                  // En cell som saknades i filen är inte en tom cell. Samma
+                  // skillnad som Flag.Padded bär genom hela verktyget.
+                  const saknat = col !== undefined && hasFlag(col, rad, Flag.Padded)
                   return (
                     <span
                       class={`restrad__cell${i === 0 ? ' restrad__cell--forst' : ''}`}
                       key={id}
                     >
-                      {text === '' ? <em class="restrad__tomt">tomt</em> : text}
+                      {text === '' ? (
+                        <em class="restrad__tomt">{saknat ? 'saknades' : 'tomt'}</em>
+                      ) : (
+                        text
+                      )}
                     </span>
                   )
                 })}
+                {SORTTEXT[sort] !== '' && (
+                  <span class="restrad__sort">{SORTTEXT[sort]}</span>
+                )}
               </span>
             </button>
             <button
@@ -73,7 +109,8 @@ export function Restlista(props: {
               ✕
             </button>
           </div>
-        ))}
+          )
+        })}
         {props.rader.length > TAK && (
           <p class="restlista__tom">
             Visar {formatCount(TAK)} av {raderText(props.rader.length)}. Kör en ny runda på en
