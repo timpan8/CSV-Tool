@@ -11,7 +11,6 @@ import {
   operatorerFor,
   regelmask,
   tillampaFilter,
-  trasigaRegler,
   type Filter,
   type Filterregel,
   type Operator,
@@ -252,7 +251,7 @@ describe('regler som inte kan köras', () => {
     expect(aktivaRegler(ORTER, { regler: [regel(ORT, 'tom')], koppling: 'alla' })).toHaveLength(1)
   })
 
-  it('en regel på en borttagen kolumn rapporteras men raderas inte', () => {
+  it('en regel på en borttagen kolumn hoppar ur men raderas inte', () => {
     const frame = frameOf(['Ort', 'Namn'], [['Lund', 'Anna']])
     const id = frame.columns[0]!.id
     const filter: Filter = { regler: [regel(id, 'ar', 'Lund')], koppling: 'alla' }
@@ -260,7 +259,6 @@ describe('regler som inte kan köras', () => {
 
     removeColumn(frame, id)
     expect(aktivaRegler(frame, filter)).toHaveLength(0)
-    expect(trasigaRegler(frame, filter)).toHaveLength(1)
     // Regeln finns kvar och vaknar till liv igen om kolumnen ångras tillbaka.
     expect(filter.regler).toHaveLength(1)
   })

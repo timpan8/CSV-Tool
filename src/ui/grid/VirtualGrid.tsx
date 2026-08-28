@@ -692,6 +692,3 @@ function Header(props: HeaderProps) {
     </div>
   )
 }
-
-/** Används av kolumnpanelen så att bredder stämmer överens. */
-export const KOLUMNBREDD_STANDARD = DEFAULT_WIDTH

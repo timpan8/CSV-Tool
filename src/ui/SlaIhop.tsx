@@ -110,10 +110,19 @@ export function SlaIhop(props: {
   const fliksignatur = flikar.map((t) => t.id).join(',')
   useEffect(() => {
     const nyVanster = flikar.some((t) => t.id === vansterId) ? vansterId : (flikar[0]?.id ?? '')
-    if (nyVanster !== vansterId) setVansterId(nyVanster)
-    if (!flikar.some((t) => t.id === hogerId) || hogerId === nyVanster) {
-      setHogerId(flikar.find((t) => t.id !== nyVanster)?.id ?? '')
-    }
+    const nyHoger =
+      !flikar.some((t) => t.id === hogerId) || hogerId === nyVanster
+        ? (flikar.find((t) => t.id !== nyVanster)?.id ?? '')
+        : hogerId
+    if (nyVanster === vansterId && nyHoger === hogerId) return
+    setVansterId(nyVanster)
+    setHogerId(nyHoger)
+    // Ett filbyte är ett filbyte, oavsett om det kom ur en select eller en
+    // stängd flik: handgjorda par och kolumnval hör till de gamla filerna
+    // och skulle annars tyst styra matchningen mot fel kolumner — precis som
+    // `onValj` och `byt` nollställer de här.
+    setEgnaPar(false)
+    setValdaKolumner(null)
   }, [fliksignatur])
 
   const foreslagna = useMemo(
@@ -278,7 +287,10 @@ export function SlaIhop(props: {
             }}
             onDragLeave={() => setOver(false)}
             onDrop={(e) => {
+              // Både förhindrad och stoppad: App:s fönsterlyssnare öppnar
+              // annars samma fil en gång till, som en andra flik.
               e.preventDefault()
+              e.stopPropagation()
               setOver(false)
               const filer = Array.from(e.dataTransfer?.files ?? [])
               if (filer.length > 0) props.onFiler(filer)
@@ -631,19 +643,24 @@ export function SlaIhop(props: {
         <span class="slaihop__fot__text">
           Resultatet blir en ny flik. Källfilerna rörs inte.
           {rester > 0 && ` ${formatCount(rester)} rader hittar ingen partner.`}
+          {(matchning?.vansterFlera ?? 0) > 0 &&
+            ` ${formatCount(matchning!.vansterFlera)} matchar flera och behöver ett val.`}
         </span>
         <button class="knapp" onClick={stangSlaIhop}>
           Avbryt
         </button>
         <button
           class="knapp"
-          disabled={!matchning || rester === 0}
+          // Flerträffarna räknas med: de är inte rester, men de är precis
+          // lika mycket rader att beta av — verkstaden är enda stället där
+          // valet mellan träffarna kan göras för hand.
+          disabled={!matchning || rester + matchning.vansterFlera === 0}
           title={
             !matchning
               ? 'Välj minst ett kolumnpar först.'
-              : rester === 0
-                ? 'Ingen rad blev över — det finns inget att beta av.'
-                : 'Gå igenom raderna som inte matchade innan filerna slås ihop.'
+              : rester + matchning.vansterFlera === 0
+                ? 'Ingen rad blev över och ingen matchar flera — det finns inget att beta av.'
+                : 'Gå igenom raderna som inte matchade, och de som matchar flera, innan filerna slås ihop.'
           }
           onClick={tillVerkstaden}
         >
@@ -764,7 +781,9 @@ function radtext(frame: Frame, nycklar: readonly ColumnId[], rad: number): strin
       .map((c) => c.id),
   ]
   const delar = ider.map((id) => cellText(frame, id, rad)).filter((t) => t !== '')
-  return delar.length > 0 ? delar.join(' · ') : `rad ${frame.sourceRow[rad] ?? rad + 1}`
+  // `||`, inte `??`: sourceRow är 0 för rader som lagts till för hand, och
+  // "rad 0" är ett radnummer som inte finns. Samma fall som i Verkstad.tsx.
+  return delar.length > 0 ? delar.join(' · ') : `rad ${frame.sourceRow[rad] || rad + 1}`
 }
 
 /**

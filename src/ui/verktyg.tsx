@@ -30,6 +30,10 @@ export const VERKTYG: Verktygspost[] = [
   { namn: 'telefon', etikett: 'Telefon…' },
   { namn: 'epost', etikett: 'E-post → namn…' },
   { namn: 'dela', etikett: 'Dela kolumnen…' },
+  // Namnet krockar med kommando-id:t 'slaihop' i kommandon.ts, som öppnar
+  // fil-sammanslagningen (SlaIhop-vyn). Ingen kollision i drift — paletten
+  // prefixar verktygen som 'verktyg:slaihop' — och namnet går inte att byta:
+  // det persisteras som stegtyp i sparade profiler.
   { namn: 'slaihop', etikett: 'Slå ihop kolumner…' },
   { namn: 'rakna', etikett: 'Räkna…' },
   { namn: 'ersatt', etikett: 'Sök och ersätt…' },

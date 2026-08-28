@@ -528,11 +528,22 @@ export function medBevaradeBeslut(
     }
   }
 
+  const iNya = new Set(nya.map((k) => k.forslagsnamn))
   const bevarad = (k: Malkolumn): Malkolumn => {
     const gammal = forr.get(k.forslagsnamn)
     if (!gammal) return k
+    /*
+     * Anteckningen om vad raden slukat följer med — men bara de id:n som
+     * inte finns i det nya förslaget. De som finns absorberas om i andra
+     * svepet och antecknas där; de som saknas har kryssats av med sin fil,
+     * och utan raden här tappades handgreppet då för gott: när filen kom
+     * tillbaka stod den absorberade kolumnen som en egen rad igen, tvärtemot
+     * löftet på `Malkolumn.sammanslagna`.
+     */
+    const kvar = (gammal.sammanslagna ?? []).filter((id) => !iNya.has(id))
     return {
       ...k,
+      ...(kvar.length > 0 ? { sammanslagna: kvar } : {}),
       med: gammal.med === null ? k.med : gammal.med,
       ...(gammal.standard === undefined ? {} : { standard: gammal.standard }),
     }
@@ -547,8 +558,24 @@ export function medBevaradeBeslut(
     const i = plats.get(varden)
     // Överlevaren kan ha försvunnit med sin fil. Då står den absorberade
     // hellre kvar för sig än att tyst falla bort.
-    if (i === undefined) ut.push(bevarad(k))
-    else ut[i] = absorbera(ut[i]!, k)
+    if (i === undefined) {
+      ut.push(bevarad(k))
+      continue
+    }
+    /*
+     * Samma handgrepp som när hopslagningen gjordes, av samma funktion:
+     * krockande källor blir en spärrande restrad i stället för att slukas.
+     * `absorbera` direkt hade kastat filen-med-bådas värden tyst och låtit
+     * körningen passera utan den fråga som spärrade den före omräkningen.
+     * Restraden går genom `bevarad`, så ett redan givet svar på dess fråga
+     * står sig.
+     */
+    const ihop = slaIhopMal([ut[i]!, k], 0, 1)
+    ut[i] = ihop[0]!
+    if (ihop.length > 1) {
+      ut.splice(i + 1, 0, bevarad(ihop[1]!))
+      for (const [namn, p] of plats) if (p > i) plats.set(namn, p + 1)
+    }
   }
   return ut
 }

@@ -347,6 +347,12 @@ export function Kombinera(props: {
                   else vantarPaMall.value = false
                   ;(e.currentTarget as HTMLInputElement).value = ''
                 }}
+                // Avbruten filväljare avfyrar ingen change-händelse, bara
+                // cancel. Utan den här stod flaggan kvar, och nästa fil som
+                // öppnades — hur som helst — blev tyst mall.
+                onCancel={() => {
+                  vantarPaMall.value = false
+                }}
               />
               <p class="verktyg__sammanfattning">
                 {mallFlik

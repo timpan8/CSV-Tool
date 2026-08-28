@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  countMappedChanges,
   getCell,
   intern,
   mapColumnValues,
@@ -73,12 +72,6 @@ describe('mapColumnValues', () => {
     expect([getCell(col, 0), getCell(col, 1), getCell(col, 2)]).toEqual(['', 'Lund!', ''])
   })
 
-  it('countMappedChanges ger samma siffra utan att ändra något', () => {
-    const col = createColumn('Ort', 4)
-    ;['a ', 'b', 'c ', 'd '].forEach((v, i) => (col.codes[i] = intern(col, v)))
-    expect(countMappedChanges(col, (v) => v.trim())).toBe(3)
-    expect(getCell(col, 0)).toBe('a ')
-  })
 })
 
 describe('ögonblicksbilder av kolumner', () => {

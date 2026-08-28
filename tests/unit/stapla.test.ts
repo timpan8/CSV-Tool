@@ -686,6 +686,44 @@ describe('medBevaradeBeslut', () => {
     const nya: Malkolumn[] = [{ namn: 'X', forslagsnamn: 'X', hamtning: [TOMT], med: null }]
     expect(medBevaradeBeslut(nya, gamla).map((k) => k.namn)).toEqual(['X'])
   })
+
+  it('krockresten överlever en omräkning i stället för att slukas', () => {
+    // En fil har BÅDA kolumnerna: hopslagningen lämnar en spärrande restrad.
+    // Vid omräkningen absorberades hela den nya kolumnen förut — bada-filens
+    // mobilvärde försvann tyst, och ingen fråga spärrade längre körningen.
+    const bada = frameOf('bada.csv', ['Telefon', 'Mobilnr'], [['fast', 'mobil']])
+    const bara = frameOf('bara.csv', ['Mobilnr'], [['070-9']])
+    const ihop = slaIhopMal(malformAvKallor([bada, bara]), 0, 1)
+    expect(ihop.map((k) => k.namn)).toEqual(['Telefon', 'Mobilnr'])
+
+    const omraknat = medBevaradeBeslut(malformAvKallor([bada, bara]), ihop)
+    expect(omraknat.map((k) => k.namn)).toEqual(['Telefon', 'Mobilnr'])
+    expect(antalKallor(omraknat[0]!.hamtning)).toBe(2)
+    const rest = omraknat[1]!
+    expect(rest.med).toBe(null)
+    expect(rest.fraga).toBe(true)
+    expect(antalKallor(rest.hamtning)).toBe(1)
+  })
+
+  it('hopslagningen överlever att den absorberade kolumnens fil kryssas av och på', () => {
+    // Löftet på Malkolumn.sammanslagna: handgreppet ska inte gå förlorat för
+    // att en fil kryssas av. Förut tappade bevarad() anteckningen, och när
+    // filen kom tillbaka stod den absorberade kolumnen som en egen rad igen.
+    // Mobilnr/Telefon är inte synonymer, så hopslagningen är handens verk.
+    const C = frameOf('c.csv', ['Namn', 'Mobilnr'], [['Cia', '070-1']])
+    const D = frameOf('d.csv', ['Namn', 'Telefon'], [['Dan', '070-2']])
+    const form = malformAvKallor([C, D])
+    const ihop = slaIhopMal(form, 1, 2)
+    expect(ihop[1]!.sammanslagna).toEqual(['Telefon'])
+
+    const utanD = medBevaradeBeslut(malformAvKallor([C]), ihop)
+    expect(utanD.map((k) => k.namn)).toEqual(['Namn', 'Mobilnr'])
+    expect(utanD[1]!.sammanslagna).toEqual(['Telefon'])
+
+    const medD = medBevaradeBeslut(malformAvKallor([C, D]), utanD)
+    expect(medD.map((k) => k.namn)).toEqual(['Namn', 'Mobilnr'])
+    expect(antalKallor(medD[1]!.hamtning)).toBe(2)
+  })
 })
 
 describe('malformAvMall', () => {

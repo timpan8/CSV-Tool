@@ -7,8 +7,8 @@ import {
   type Sammanslagning,
   TOM_MATCHNING,
 } from '../core/ops/match.js'
-import { tabs, type Tab } from './store.js'
-import { laddaSession, sparaSession } from './lagring.js'
+import { notify, tabs, type Tab } from './store.js'
+import { laddaSession, lagringsfel, sparaSession } from './lagring.js'
 import { findColumn } from '../core/frame/frame.js'
 import type { ColumnId, Frame } from '../core/types.js'
 
@@ -188,9 +188,10 @@ export function oppnaVerkstad(
 /**
  * Öppnar vyn igen på den parkerade sessionen.
  *
- * Falskt när det inte finns någon session, eller när en av källfilerna
- * stängts sedan sist — då finns inga rader att para ihop, och att öppna en
- * tom verkstad vore att låtsas att arbetet är kvar.
+ * Svaret är synkningens. Vid 'ingen' eller 'stangd' öppnas vyn inte: det
+ * finns ingen session, eller så har en källfil stängts och inga rader finns
+ * att para ihop — att öppna en tom verkstad vore att låtsas att arbetet är
+ * kvar.
  */
 export function aterupptaVerkstad(): Synkning {
   if (!verkstad.value) return 'ingen'
@@ -403,11 +404,13 @@ function skriv(andra: (s: Verkstad) => Verkstad): void {
 /**
  * Parar ihop två rader.
  *
- * Restlistorna innehåller bara rader utan par, så ett handgjort par är alltid
- * ett rent 1:1-par mellan en vänsterrest och en högerrest: det kan varken
- * krocka med den automatiska matchningen eller skapa en flerträff. Bara en
- * runda kan göra det, och dess träffar är ekvivalensträffar precis som
- * grundmatchningens.
+ * Restlistorna `vanster` och `hoger` innehåller bara rader utan par, så ett
+ * par mellan två rester är alltid rent 1:1. De osäkra raderna — som redan
+ * har flera automatiska träffar — visas i samma vänsterlista men går inte
+ * att para här: vyn spärrar det (se `paraIhop` i `Verkstad.tsx`), eftersom
+ * ännu en träff hade gjort raden mer tvetydig, inte mindre. Det som kan
+ * skapa en flerträff är en runda, och dess träffar är ekvivalensträffar
+ * precis som grundmatchningens.
  */
 export function laggExtrapar(v: number, h: number, kalla: Parkalla, notis: string): void {
   skriv((s) =>
@@ -452,14 +455,6 @@ export function skrivAvAlla(vanster: readonly number[], hoger: readonly number[]
     avskrivnaVanster: new Set([...s.avskrivnaVanster, ...vanster]),
     avskrivnaHoger: new Set([...s.avskrivnaHoger, ...hoger]),
   }))
-}
-
-export function angraAvskrivningar(): void {
-  skriv((s) => ({ ...s, avskrivnaVanster: new Set(), avskrivnaHoger: new Set() }))
-}
-
-export function sattSammanslagning(delta: Partial<Sammanslagning>): void {
-  skriv((s) => ({ ...s, sammanslagning: { ...s.sammanslagning, ...delta } }))
 }
 
 /**
@@ -539,6 +534,36 @@ export interface SparadVerkstad {
   hogerSignatur: number
 }
 
+/**
+ * Sessionen tillbaka ur sin sparade form — den rena spegeln av
+ * `sparadVerkstad`, så att fältmappningen går att testa som en rundtur.
+ *
+ * Radformerna får en tom array med flit. Kontrollen i `samma` tar annars
+ * identitetsgenvägen mot den levande ramens array och svarar "oförändrad"
+ * utan att ha jämfört någonting — alltså skulle kontrollen alltid säga ja.
+ */
+export function verkstadAvSparad(data: SparadVerkstad): Verkstad {
+  const tom = new Uint32Array(0)
+  return {
+    vansterTabId: data.vansterTabId,
+    hogerTabId: data.hogerTabId,
+    vansterFrameId: data.vansterFrameId,
+    hogerFrameId: data.hogerFrameId,
+    vansterNamn: data.vansterNamn,
+    hogerNamn: data.hogerNamn,
+    omgangar: data.omgangar,
+    par: data.par,
+    sammanslagning: data.sammanslagning,
+    extra: data.extra,
+    avvisade: new Set(data.avvisade),
+    avskrivnaVanster: new Set(data.avskrivnaVanster),
+    avskrivnaHoger: new Set(data.avskrivnaHoger),
+    rundor: data.rundor,
+    vansterForm: { sourceRow: tom, signatur: data.vansterSignatur },
+    hogerForm: { sourceRow: tom, signatur: data.hogerSignatur },
+  }
+}
+
 export function sparadVerkstad(s: Verkstad): SparadVerkstad {
   return {
     vansterTabId: s.vansterTabId,
@@ -570,38 +595,35 @@ export function sparadVerkstad(s: Verkstad): SparadVerkstad {
  * Vyn öppnas aldrig av sig själv. Vägen tillbaka in är menyposten — en vy som
  * poppar upp av sig själv efter en omladdning vore inte hjälpsam utan
  * påträngande.
- *
- * Radformerna får en tom array med flit. Kontrollen i `samma` tar annars
- * identitetsgenvägen mot den levande ramens array och svarar "oförändrad"
- * utan att ha jämfört någonting — alltså skulle kontrollen alltid säga ja.
  */
 export async function aterstallVerkstad(): Promise<boolean> {
   const data = (await laddaSession()) as SparadVerkstad | null
+  /*
+   * Läsningen är asynkron och gränssnittet lever under tiden: användaren kan
+   * hinna släppa filer och starta en ny sammanslagning innan den lagrade
+   * sessionen kommit tillbaka. Då vinner den levande — den är nyare — och
+   * skrivs över den lagrade i stället för tvärtom.
+   */
+  if (verkstad.value !== null) {
+    laddad = true
+    schemalaggSessionsskrivning(JSON.stringify(sparadVerkstad(verkstad.value)))
+    return true
+  }
   if (!data) {
     laddad = true
+    sparad = null
     return false
   }
-  const tom = new Uint32Array(0)
-  verkstad.value = {
-    vansterTabId: data.vansterTabId,
-    hogerTabId: data.hogerTabId,
-    vansterFrameId: data.vansterFrameId,
-    hogerFrameId: data.hogerFrameId,
-    vansterNamn: data.vansterNamn,
-    hogerNamn: data.hogerNamn,
-    omgangar: data.omgangar,
-    par: data.par,
-    sammanslagning: data.sammanslagning,
-    extra: data.extra,
-    avvisade: new Set(data.avvisade),
-    avskrivnaVanster: new Set(data.avskrivnaVanster),
-    avskrivnaHoger: new Set(data.avskrivnaHoger),
-    rundor: data.rundor,
-    vansterForm: { sourceRow: tom, signatur: data.vansterSignatur },
-    hogerForm: { sourceRow: tom, signatur: data.hogerSignatur },
-  }
+  verkstad.value = verkstadAvSparad(data)
   verkstadOppen.value = false
   laddad = true
+  /*
+   * Bokför det lästa som redan skrivet. Effekten nedan dedupar mot `sparad`,
+   * och utan den här raden stod den kvar på "okänt" — så när användaren
+   * kastade sessionen blev både nästa värde och det bokförda null, raderingen
+   * dedupades bort, och den kastade sessionen återuppstod vid nästa start.
+   */
+  sparad = JSON.stringify(sparadVerkstad(verkstad.value))
   return flikarna() !== null
 }
 
@@ -614,7 +636,52 @@ export async function aterstallVerkstad(): Promise<boolean> {
 let laddad = false
 
 let sessionsTimer: ReturnType<typeof setTimeout> | null = null
-let sparad: string | null = null
+
+/**
+ * Serialiseringen som lagringen redan har. `null` betyder att den är tom,
+ * `undefined` att den är okänd — före återställningen, och efter en
+ * misslyckad skrivning — så att nästa ändring skriver i stället för att
+ * dedupas bort.
+ */
+let sparad: string | null | undefined
+
+function schemalaggSessionsskrivning(nasta: string | null): void {
+  sparad = nasta
+  if (sessionsTimer !== null) clearTimeout(sessionsTimer)
+  sessionsTimer = setTimeout(() => {
+    sessionsTimer = null
+    void skrivSession(nasta)
+  }, 800)
+}
+
+/**
+ * Skrivningen, med samma varning som flikarnas.
+ *
+ * Rent verkstadsarbete rör aldrig någon fliks `dataRevision` och går alltså
+ * aldrig genom `skrivFlikar` — den enda andra plats som visar lagringsfelet.
+ * Utan felhanteringen här kunde användaren beta av hundratals beslut i tron
+ * att de sparades, utan att någonsin få veta att de inte gjorde det.
+ */
+async function skrivSession(nasta: string | null): Promise<void> {
+  const gick = await sparaSession(nasta === null ? null : (JSON.parse(nasta) as SparadVerkstad))
+  // Har en nyare skrivning redan schemalagts är det den som gäller — både
+  // bokföringen och varningen hör då till den.
+  if (gick || sparad !== nasta) return
+  sparad = undefined
+  const text = lagringsfel()
+  if (text) notify(text, { ton: 'varning' })
+}
+
+/**
+ * Efter »Glöm sparade filer«: lagringen är tom, så bokföringen får inte påstå
+ * något annat. Finns en levande session skrivs den tillbaka — samma beslut
+ * som för flikarna, som också står kvar och återsparas efter en glömning.
+ */
+export function glomdSession(): void {
+  const s = verkstad.value
+  if (s === null) sparad = null
+  else schemalaggSessionsskrivning(JSON.stringify(sparadVerkstad(s)))
+}
 
 /**
  * Skriver sessionen när den ändrats, en stund efter sista ändringen.
@@ -631,10 +698,5 @@ effect(() => {
   if (!laddad) return
   const nasta = s === null ? null : JSON.stringify(sparadVerkstad(s))
   if (nasta === sparad) return
-  sparad = nasta
-  if (sessionsTimer !== null) clearTimeout(sessionsTimer)
-  sessionsTimer = setTimeout(() => {
-    sessionsTimer = null
-    void sparaSession(nasta === null ? null : (JSON.parse(nasta) as SparadVerkstad))
-  }, 800)
+  schemalaggSessionsskrivning(nasta)
 })

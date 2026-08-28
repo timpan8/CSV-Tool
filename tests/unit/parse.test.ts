@@ -6,8 +6,8 @@ import { cp1252EncodeString } from '../../src/core/csv/cp1252.js'
 import { getCell } from '../../src/core/frame/column.js'
 import { Flag, type Frame } from '../../src/core/types.js'
 import {
+  encodeExport,
   EXCEL_FRIENDLY,
-  exportCsv,
   guardFormula,
   stringifyCsv,
 } from '../../src/core/csv/stringify.js'
@@ -151,7 +151,8 @@ describe('svensk Excel-export', () => {
 describe('export', () => {
   it('skriver Excel-vänlig CSV med BOM och semikolon', () => {
     const frame = parse('Namn;Ort\nÅsa;Malmö\n')
-    const { bytes } = exportCsv(frame, EXCEL_FRIENDLY)
+    // Samma komposition som ExportDialog: strängen först, sedan byten.
+    const { bytes } = encodeExport(stringifyCsv(frame, EXCEL_FRIENDLY), EXCEL_FRIENDLY)
     expect(Array.from(bytes.subarray(0, 3))).toEqual([0xef, 0xbb, 0xbf])
     const text = new TextDecoder().decode(bytes.subarray(3))
     expect(text).toBe('Namn;Ort\r\nÅsa;Malmö\r\n')
@@ -159,7 +160,8 @@ describe('export', () => {
 
   it('rapporterar tecken som går förlorade vid CP1252-export', () => {
     const frame = parse('Namn;Not\nAnna;✓ klart\n')
-    const result = exportCsv(frame, { ...EXCEL_FRIENDLY, encoding: 'windows-1252', bom: false })
+    const val = { ...EXCEL_FRIENDLY, encoding: 'windows-1252' as const, bom: false }
+    const result = encodeExport(stringifyCsv(frame, val), val)
     expect(result.lostCharacters).toEqual(['✓'])
     expect(new TextDecoder('windows-1252').decode(result.bytes)).toContain('? klart')
   })

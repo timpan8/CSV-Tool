@@ -1,5 +1,5 @@
 import { Flag, type Column, type ColumnId, type Frame } from '../types.js'
-import { findColumn } from '../frame/frame.js'
+import { findColumn, newFrameId } from '../frame/frame.js'
 import { createColumn, getCell, intern } from '../frame/column.js'
 import { normalizeAlways, stripDiacritics } from '../locale/sv.js'
 import { delaEpost } from './email.js'
@@ -792,7 +792,10 @@ export function slaIhop(
   }
 
   const frame: Frame = {
-    id: `f${Math.round(antal)}-${vanster.id}-${hoger.id}`,
+    // Alltid ett nytt id, som `stapla` och `gruppera`. Ett id härlett ur
+    // källorna gav två omgångar i verkstaden samma id — och ram-id:t är det
+    // enda som säger att två flikar är olika filer.
+    id: newFrameId(),
     name: `${vanster.name} + ${hoger.name}`,
     columns: kolumner,
     rowCount: antal,

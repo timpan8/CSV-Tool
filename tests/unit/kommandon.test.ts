@@ -1,21 +1,51 @@
 import { describe, expect, it } from 'vitest'
 import { byggKommandon, sokKommandon, type Kommandohandlare } from '../../src/ui/kommandon.js'
 
-/** Alla handtag som räknare, så att det går att se vad som faktiskt kördes. */
+/**
+ * Alla handtag som räknare, så att det går att se vad som faktiskt kördes.
+ *
+ * Objektet är typat rakt mot `Kommandohandlare`, utan cast: en handlare som
+ * tillkommer i gränssnittet utan att läggas till här är ett kompileringsfel.
+ * Förut dolde en `as unknown`-cast att fyra handtag saknades helt.
+ */
 function handlare(): { h: Kommandohandlare; korda: string[] } {
   const korda: string[] = []
-  const namn = [
-    'oppnaFil', 'exportera', 'profiler', 'sok', 'sortera', 'filter', 'dubbletter',
-    'slaIhop', 'kombinera', 'sammanfatta', 'visaAllaRader', 'dopOm', 'duplicera', 'vaxlaDold',
-    'taBortKolumn', 'infogaKolumn', 'filtreraKolumn', 'visaOgiltiga', 'infogaRadOvan',
-    'infogaRadUnder', 'dupliceraRader', 'taBortRader', 'tommaRader', 'tommaKolumner',
-    'angra', 'goraOm', 'vaxlaTema',
-  ] as const
-  const h = Object.fromEntries([
-    ...namn.map((n) => [n, () => korda.push(n)]),
-    ['stada', (id: string) => korda.push(`stada:${id}`)],
-    ['verktyg', (n: string) => korda.push(`verktyg:${n}`)],
-  ]) as unknown as Kommandohandlare
+  const r = (n: string) => () => korda.push(n)
+  const h: Kommandohandlare = {
+    oppnaFil: r('oppnaFil'),
+    exportera: r('exportera'),
+    profiler: r('profiler'),
+    sok: r('sok'),
+    sortera: r('sortera'),
+    filter: r('filter'),
+    dubbletter: r('dubbletter'),
+    slaIhop: r('slaIhop'),
+    fortsattVerkstad: r('fortsattVerkstad'),
+    kombinera: r('kombinera'),
+    mall: r('mall'),
+    sammanfatta: r('sammanfatta'),
+    oversikt: r('oversikt'),
+    visaAllaRader: r('visaAllaRader'),
+    stada: (id) => korda.push(`stada:${id}`),
+    verktyg: (n) => korda.push(`verktyg:${n}`),
+    dopOm: r('dopOm'),
+    duplicera: r('duplicera'),
+    vaxlaDold: r('vaxlaDold'),
+    taBortKolumn: r('taBortKolumn'),
+    infogaKolumn: r('infogaKolumn'),
+    filtreraKolumn: r('filtreraKolumn'),
+    visaOgiltiga: r('visaOgiltiga'),
+    infogaRadOvan: r('infogaRadOvan'),
+    infogaRadUnder: r('infogaRadUnder'),
+    dupliceraRader: r('dupliceraRader'),
+    taBortRader: r('taBortRader'),
+    tommaRader: r('tommaRader'),
+    tommaKolumner: r('tommaKolumner'),
+    angra: r('angra'),
+    goraOm: r('goraOm'),
+    vaxlaTema: r('vaxlaTema'),
+    glomSparat: r('glomSparat'),
+  }
   return { h, korda }
 }
 
@@ -75,8 +105,22 @@ describe('byggKommandon', () => {
 
   it('varje kommando har ett eget id', () => {
     const { h } = handlare()
-    const ider = byggKommandon(LAGE, h).map((k) => k.id)
+    const ider = byggKommandon({ ...LAGE, parkerad: 'kunder.csv ↔ order.csv' }, h).map((k) => k.id)
     expect(new Set(ider).size).toBe(ider.length)
+  })
+
+  it('den parkerade verkstaden får ett kommando som bär filnamnen', () => {
+    const { h, korda } = handlare()
+    // Utan parkerad session finns ingen post — en post som nästan alltid är
+    // avstängd lär man sig hoppa över.
+    expect(byggKommandon(LAGE, h).some((k) => k.id === 'fortsatt-verkstad')).toBe(false)
+
+    const lista = byggKommandon({ ...LAGE, parkerad: 'kunder.csv ↔ order.csv' }, h)
+    const post = lista.find((k) => k.id === 'fortsatt-verkstad')!
+    expect(post.etikett).toBe('Fortsätt beta av resten…')
+    expect(post.beskrivning).toContain('kunder.csv ↔ order.csv')
+    post.kor()
+    expect(korda).toEqual(['fortsattVerkstad'])
   })
 })
 

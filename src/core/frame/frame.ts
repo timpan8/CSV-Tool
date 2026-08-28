@@ -129,11 +129,6 @@ export function duplicateColumn(frame: Frame, id: ColumnId): Column | undefined 
   return copy
 }
 
-/** Läser en hel rad som strängar, i visningsordning. */
-export function readRow(frame: Frame, physicalRow: number, columns = frame.columns): string[] {
-  return columns.map((c) => getCell(c, physicalRow))
-}
-
 /**
  * Fysiska rader som är helt tomma i samtliga kolumner.
  * Excel skriver ofta rader som bara är avgränsare (`;;;;;`), och de blir

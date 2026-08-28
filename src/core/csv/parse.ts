@@ -1,13 +1,11 @@
 import Papa from 'papaparse'
 import {
   Flag,
-  type Column,
   type Delimiter,
   type Frame,
   type ParseSettings,
   type Warning,
 } from '../types.js'
-import { intern } from '../frame/column.js'
 import { ColumnBuilder } from '../frame/builder.js'
 import { createFrame, uniqueColumnName } from '../frame/frame.js'
 import { decodeBytes, type DecodeResult } from './decode.js'
@@ -217,12 +215,6 @@ export function parseCsvBytes(
 ): ParseResult {
   const decode = decodeBytes(bytes, overrides.encoding)
   return parseCsvText(decode.text, decode, overrides)
-}
-
-/** Fyller en tom kolumn med ett konstant värde. Används av "infoga kolumn". */
-export function fillColumn(col: Column, value: string, rowCount: number): void {
-  const code = intern(col, value)
-  col.codes.fill(code, 0, rowCount)
 }
 
 /**

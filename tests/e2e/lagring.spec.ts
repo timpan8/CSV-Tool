@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { sparatInnehall, vantaPaBorttaget, vantaPaSparat } from './lagringshjalp.js'
 
 async function oppnaExempel(page: Page) {
   await page.goto('/')
@@ -7,14 +8,9 @@ async function oppnaExempel(page: Page) {
   await expect(page.locator('.statusrad')).toContainText('16 rader')
 }
 
-/** Skrivningen är fördröjd, så vänta tills den hunnit ske. */
-async function invanta(page: Page) {
-  await page.waitForTimeout(1600)
-}
-
 test('flikarna finns kvar efter en omladdning', async ({ page }) => {
   await oppnaExempel(page)
-  await invanta(page)
+  await vantaPaSparat(page, 'Anna Karlsson')
 
   await page.reload()
   await expect(page.locator('.statusrad')).toContainText('16 rader')
@@ -37,7 +33,7 @@ test('en redigering och ett filter följer med tillbaka', async ({ page }) => {
   await regel.locator('select').first().selectOption({ label: 'Status' })
   await regel.locator('.regel__varde').first().fill('Aktiv')
   await expect(page.locator('.statusrad')).toContainText('10 av 16 rader')
-  await invanta(page)
+  await vantaPaSparat(page, 'Malmö stad', '"varde":"Aktiv"')
 
   await page.reload()
   await expect(page.locator('.statusrad')).toContainText('10 av 16 rader')
@@ -47,10 +43,10 @@ test('en redigering och ett filter följer med tillbaka', async ({ page }) => {
 
 test('en stängd flik kommer inte tillbaka', async ({ page }) => {
   await oppnaExempel(page)
-  await invanta(page)
+  await vantaPaSparat(page, 'Anna Karlsson')
   await page.locator('.flik__stang').first().click()
   await expect(page.locator('.tomt')).toBeVisible()
-  await invanta(page)
+  await vantaPaBorttaget(page, 'Anna Karlsson')
 
   await page.reload()
   await expect(page.locator('.tomt')).toBeVisible()
@@ -59,7 +55,7 @@ test('en stängd flik kommer inte tillbaka', async ({ page }) => {
 
 test('glöm sparade filer tömmer lagringen men rör inte flikarna', async ({ page }) => {
   await oppnaExempel(page)
-  await invanta(page)
+  await vantaPaSparat(page, 'Anna Karlsson')
 
   await page.keyboard.press('Control+k')
   await page.getByLabel('Sök bland kommandon').fill('glöm sparade')
@@ -68,8 +64,49 @@ test('glöm sparade filer tömmer lagringen men rör inte flikarna', async ({ pa
   // Fliken på skärmen står kvar.
   await expect(page.locator('.statusrad')).toContainText('16 rader')
 
+  await vantaPaBorttaget(page, 'Anna Karlsson')
   await page.reload()
   await expect(page.locator('.tomt')).toBeVisible()
+})
+
+/*
+ * Regressionsvakt: städsvepet i skrivningen raderade förut varje nyckel som
+ * inte fanns i den egna instansens fliklista — så två webbläsarflikar med
+ * verktyget raderade varandras sparade filer vid varje skrivning.
+ */
+test('två webbläsarflikar raderar inte varandras sparade filer', async ({ page, context }) => {
+  // Flik A sparar exempelfilen.
+  await oppnaExempel(page)
+  await vantaPaSparat(page, 'Anna Karlsson')
+
+  // Flik B startar och återställer den — B:s bokföring känner bara till den.
+  const andra = await context.newPage()
+  await andra.goto('/')
+  await expect(andra.locator('.statusrad')).toContainText('16 rader')
+
+  // Flik A öppnar en andra fil, som bara A vet om.
+  await page.locator('input[type=file]').first().setInputFiles({
+    name: 'djur.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('Djur;Ben\nKatt;4\nStrandpipare;2\n'),
+  })
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await expect(page.locator('.flik')).toHaveCount(2)
+  await vantaPaSparat(page, 'Strandpipare')
+
+  // B gör en ändring, så att B:s fördröjda skrivning körs.
+  await andra.getByRole('gridcell', { name: 'Malmö', exact: true }).first().dblclick()
+  await andra.locator('.rutnat__redigering').fill('Uggleboet')
+  await andra.keyboard.press('Enter')
+  await vantaPaSparat(andra, 'Uggleboet')
+
+  // A:s andra fil ska ha överlevt B:s skrivning...
+  expect(await sparatInnehall(page)).toContain('Strandpipare')
+
+  // ...och komma tillbaka när A laddas om.
+  await page.reload()
+  await expect(page.locator('.flik')).toHaveCount(2)
+  await expect(page.locator('.flik__namn', { hasText: 'djur.csv' })).toBeVisible()
 })
 
 test('en uppgradering av databasen kastar inte det som redan är sparat', async ({ page }) => {
@@ -77,7 +114,7 @@ test('en uppgradering av databasen kastar inte det som redan är sparat', async 
   await page.getByRole('button', { name: 'Öppna exempelfil' }).click()
   await page.getByRole('button', { name: 'Öppna filen' }).click()
   await expect(page.locator('.statusrad')).toContainText('16 rader')
-  await page.waitForTimeout(2000)
+  await vantaPaSparat(page, 'Anna Karlsson')
 
   /*
    * Bygg om databasen som den såg ut i version 1 — två butiker, samma rader.

@@ -122,10 +122,6 @@ export function lagringsfel(): string | null {
   return felmeddelande
 }
 
-export function lagringenAr(): 'på' | 'av' {
-  return stangd ? 'av' : 'på'
-}
-
 /**
  * Fångar det enda felet som är värt att säga till om.
  *
@@ -162,8 +158,17 @@ export interface Sparbar {
  * `serializeFrame` finns sedan Worker-gränssnittet och ger exakt den form som
  * behövs. Buffertarna får **inte** överföras här — de tillhör de levande
  * kolumnerna, och IndexedDB klonar dem ändå.
+ *
+ * `taBort` är nycklarna till flikar som stängts sedan förra skrivningen —
+ * anroparen vet vilka, för det är den som bokför vad som skrivits. Att i
+ * stället svepa bort varje nyckel som inte finns i `flikar` vore att anta att
+ * databasen är ens egen: en annan webbläsarflik med verktyget delar den, och
+ * svepet raderade dess sparade filer vid varje skrivning härifrån.
  */
-export async function sparaFlikar(flikar: readonly Sparbar[]): Promise<boolean> {
+export async function sparaFlikar(
+  flikar: readonly Sparbar[],
+  taBort: readonly string[] = [],
+): Promise<boolean> {
   if (stangd) return false
   const db = await oppna()
   if (!db) return false
@@ -172,16 +177,10 @@ export async function sparaFlikar(flikar: readonly Sparbar[]): Promise<boolean> 
       const tx = db.transaction([RAMAR, FLIKAR], 'readwrite')
       const ramar = tx.objectStore(RAMAR)
       const rader = tx.objectStore(FLIKAR)
-      const kvar = new Set(flikar.map((f) => f.id))
 
       // Stängda flikar ska inte ligga kvar och komma tillbaka vid nästa start.
       for (const butik of [ramar, rader]) {
-        const nycklar = butik.getAllKeys()
-        nycklar.onsuccess = () => {
-          for (const nyckel of nycklar.result as string[]) {
-            if (!kvar.has(nyckel)) butik.delete(nyckel)
-          }
-        }
+        for (const nyckel of taBort) butik.delete(nyckel)
       }
 
       flikar.forEach((f, i) => {

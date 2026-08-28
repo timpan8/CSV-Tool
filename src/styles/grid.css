@@ -27,10 +27,6 @@
   background: var(--yta-hover);
 }
 
-.rutnat__rad--aktiv .rutnat__cell {
-  background: var(--accent-svag);
-}
-
 .rutnat__cell {
   flex: 0 0 auto;
   padding: 0 8px;

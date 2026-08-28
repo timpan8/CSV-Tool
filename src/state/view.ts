@@ -1,11 +1,11 @@
 import type { Column, Frame } from '../core/types.js'
-import { getCell, matchDictionary } from '../core/frame/column.js'
+import { matchDictionary } from '../core/frame/column.js'
 import { findColumn } from '../core/frame/frame.js'
 import { normalizeAlways, stripDiacritics } from '../core/locale/sv.js'
 import { ANDRAD, PROBLEM, uppslag, type Forhandsvisning } from './preview.js'
 import { utgangslage, type Ordning } from './ordning.js'
 import type { Sorteringsniva } from '../core/ops/sort.js'
-import { aktivaRegler, tillampaFilter, TOMT_FILTER, type Filter } from '../core/ops/filter.js'
+import { aktivaRegler, tillampaFilter, type Filter } from '../core/ops/filter.js'
 import type { Dubblettnyckel } from '../core/ops/duplicates.js'
 
 /**
@@ -132,15 +132,6 @@ function begransaTillDubbletter(
   return { ...grund, view: Uint32Array.from(kvar) }
 }
 
-/** Regelfel att visa i gränssnittet, räknade på hela ramen. */
-export function filterfel(frame: Frame, spec: ViewSpec) {
-  return tillampaFilter(frame, spec.filter ?? TOMT_FILTER, identityRader(frame)).fel
-}
-
-function identityRader(frame: Frame): Uint32Array {
-  return Uint32Array.from({ length: frame.rowCount }, (_, i) => i)
-}
-
 /**
  * Filtrerar en färdig vy till de rader en förhandsvisning ändrar.
  *
@@ -226,12 +217,4 @@ export function cellenMatchar(value: string, spec: ViewSpec): boolean {
   const fraga = (spec.search ?? '').trim()
   if (fraga === '' || value === '') return false
   return sokNyckel(value).includes(sokNyckel(fraga))
-}
-
-/** Läser ut en cell via vyindex, för aggregat och urklipp. */
-export function cellIVy(frame: Frame, viewRow: number, columnIndex: number): string {
-  const col = frame.columns[columnIndex]
-  const physical = frame.view[viewRow]
-  if (!col || physical === undefined) return ''
-  return getCell(col, physical)
 }

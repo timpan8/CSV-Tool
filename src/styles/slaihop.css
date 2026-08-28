@@ -1,9 +1,10 @@
 /*
  * Slå ihop två filer.
  *
- * Samma skelett som kombineringen och verkstaden — `auto 1fr auto` med topp,
- * kropp och fot. Det är tredje vyn med den formen, och likheten är poängen:
- * de tre flerfilsflödena ska kännas som samma verktyg.
+ * Samma skelett som kombineringen och verkstaden — `auto auto 1fr auto` med
+ * topp, inställningsband, rutor och fot. Det är tredje vyn med den formen,
+ * och likheten är poängen: de tre flerfilsflödena ska kännas som samma
+ * verktyg.
  */
 
 .slaihop {
@@ -89,7 +90,7 @@
   max-height: 96px;
 }
 
-.slaihop__installningar input[type='text'],
+/* Prefixfältet — bandets enda fritextfält. */
 .slaihop__installningar > .falt > input {
   min-width: 180px;
 }
@@ -188,7 +189,7 @@
   font-weight: 500;
 }
 
-/* ---------- Railen ---------- */
+/* ---------- Kontrollerna i inställningsbandet ---------- */
 
 .slaihop__byt {
   display: flex;

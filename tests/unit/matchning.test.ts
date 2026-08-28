@@ -9,6 +9,7 @@ import { cell } from '../../src/state/selection.js'
 import type { Matchningspar, Sammanslagning } from '../../src/core/ops/match.js'
 import { findColumn } from '../../src/core/frame/frame.js'
 import {
+  antecknaOmgang,
   avvisaForslag,
   arAvvisat,
   flikarna,
@@ -21,8 +22,11 @@ import {
   saknadeKolumner,
   skrivAv,
   kastaVerkstad,
+  sparadVerkstad,
   synkaVerkstad,
   verkstad,
+  verkstadAvSparad,
+  type SparadVerkstad,
 } from '../../src/state/matchning.js'
 
 function frameOf(namn: string, headers: string[], rows: string[][]): Frame {
@@ -233,6 +237,53 @@ describe('invarianten', () => {
       }),
       { numRuns: 100 },
     )
+  })
+})
+
+describe('sessionen mellan besök', () => {
+  /*
+   * Rundturen testas fältvis över den rena mappningen — glöms t.ex.
+   * `new Set(...)` vid ett framtida fält kommer arbetet tillbaka fel efter en
+   * omladdning utan att något annat test blir rött. Formerna jämförs på
+   * signaturen: `sourceRow` sparas aldrig, och den tomma arrayen är avsiktlig
+   * (se `verkstadAvSparad`).
+   */
+  it('rundturen sparad → JSON → återställd bevarar varje fält', () => {
+    const { v, h } = oppna()
+    avvisaForslag(1, 2)
+    korRunda([
+      {
+        vansterColId: v.frame.columns[1]!.id,
+        hogerColId: h.frame.columns[1]!.id,
+        typ: 'oberoende',
+      },
+    ])
+    skrivAv('vanster', 2)
+    skrivAv('hoger', 2)
+    laggExtrapar(0, 2, 'hand', 'för hand')
+    antecknaOmgang()
+    antecknaOmgang()
+
+    const fore = verkstad.value!
+    // Genom riktig JSON, som IndexedDB-raden i praktiken: structured clone är
+    // generösare än JSON, och det som överlever JSON överlever även den.
+    const data = JSON.parse(JSON.stringify(sparadVerkstad(fore))) as SparadVerkstad
+    const efter = verkstadAvSparad(data)
+
+    const utanFormer = (s: typeof fore) => ({ ...s, vansterForm: null, hogerForm: null })
+    expect(utanFormer(efter)).toEqual(utanFormer(fore))
+    expect(efter.vansterForm.signatur).toBe(fore.vansterForm.signatur)
+    expect(efter.hogerForm.signatur).toBe(fore.hogerForm.signatur)
+    expect(efter.vansterForm.sourceRow).toHaveLength(0)
+    expect(efter.hogerForm.sourceRow).toHaveLength(0)
+
+    // Och det som byggdes var inte tomt — annars bevisar rundturen ingenting.
+    expect(fore.extra.length).toBeGreaterThan(0)
+    expect(fore.avvisade.size).toBeGreaterThan(0)
+    expect(fore.avskrivnaVanster.size).toBeGreaterThan(0)
+    expect(fore.avskrivnaHoger.size).toBeGreaterThan(0)
+    expect(fore.rundor.length).toBeGreaterThan(0)
+    expect(fore.omgangar).toBe(2)
   })
 })
 
