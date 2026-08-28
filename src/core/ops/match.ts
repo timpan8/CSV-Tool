@@ -94,8 +94,14 @@ export function kraverTvaHoger(typ: Matchningstyp): boolean {
   return MATCHNINGSTYPER.find((t) => t.typ === typ)?.tvaHoger === true
 }
 
-/** Nyckeldelarna sammanfogas med ett tecken som inte kan förekomma i data. */
-const AVSKILJARE = '\u0000'
+/**
+ * Nyckeldelarna sammanfogas med ett tecken som inte kan förekomma i data.
+ *
+ * Exporterad för att gränssnittet ska kunna dela en nyckel i sina delar och
+ * visa den normaliserade formen per kolumnpar. Att se att `Öberg` blir
+ * `oberg` säger mer om vad en matchningstyp gör än någon beskrivning gör.
+ */
+export const NYCKELAVSKILJARE = '\u0000'
 
 function normalisera(value: string, typ: Matchningstyp): string {
   const v = normalizeAlways(value).trim()
@@ -191,7 +197,7 @@ export function byggNycklar(
         anvandbar = false
         break
       }
-      nyckel = i === 0 ? del : nyckel + AVSKILJARE + del
+      nyckel = i === 0 ? del : nyckel + NYCKELAVSKILJARE + del
     }
     nycklar[r] = anvandbar ? nyckel : ''
   }
@@ -475,18 +481,75 @@ export interface Resultat {
 }
 
 /**
+ * Vänsterrader som en förhandsvisning ska byggas av.
+ *
+ * De första N raderna duger inte. Råkar de alla ha träff ser resultatet
+ * felfritt ut; råkar ingen ha det ser det ut som att filerna inte hör ihop.
+ * Båda intrycken är fel, och båda uppstår av ren slump i vilken ände filen
+ * råkar börja.
+ *
+ * Urvalet tar därför träffar och icke-träffar i **den proportion de faktiskt
+ * har**, men aldrig så att någon sida försvinner helt när den finns: en enda
+ * omatchad rad bland tusen ska synas i förhandsvisningen, eftersom det är den
+ * raden man behöver upptäcka. Resultatet står i filens ordning, så att raderna
+ * går att känna igen mot rutnätet.
+ */
+export function forhandsurval(matchning: Matchning, tak: number): number[] {
+  if (tak <= 0) return []
+
+  // `par` byggs genom att svepa vänsterraderna i ordning, så de unika
+  // vänsterraderna faller ut stigande utan att behöva sorteras.
+  const matchade: number[] = []
+  let forra = -1
+  for (const { v } of matchning.par) {
+    if (v !== forra) {
+      matchade.push(v)
+      forra = v
+    }
+  }
+  const utan = matchning.vansterUtan
+
+  if (matchade.length === 0) return utan.slice(0, tak)
+  if (utan.length === 0) return matchade.slice(0, tak)
+
+  const totalt = matchade.length + utan.length
+  // Minst en av varje så länge båda finns, och minst en av varje så länge
+  // taket räcker till det.
+  let antalMatchade = Math.round((tak * matchade.length) / totalt)
+  antalMatchade = Math.min(Math.max(antalMatchade, 1), Math.max(1, tak - 1))
+  antalMatchade = Math.min(antalMatchade, matchade.length)
+  let antalUtan = Math.min(tak - antalMatchade, utan.length)
+  // Räcker inte den ena sidan till får den andra ta över det som blev över.
+  antalMatchade = Math.min(tak - antalUtan, matchade.length)
+
+  const valda = [...matchade.slice(0, antalMatchade), ...utan.slice(0, antalUtan)]
+  valda.sort((a, b) => a - b)
+  return valda
+}
+
+/**
  * Bygger den sammanslagna ramen.
  *
  * Vänsterfilen är stommen: alla dess rader följer med, även de utan träff.
  * Det är den enda varianten som aldrig tappar data i tysthet — rader som
  * inte matchade blir synliga som tomma celler i stället för att försvinna,
  * och högerfilens omatchade rader hamnar i restlistan.
+ *
+ * `vansterRader` begränsar bygget till ett urval, i den ordning urvalet står.
+ * Det är samma begrepp som `matcha`s `Urval` och `stapla`s `Kalla.rader`, och
+ * finns av samma skäl: en förhandsvisning ska räknas med *samma* funktion som
+ * körningen, bara på färre rader. En egen förhandsvisningsfunktion vore en
+ * andra sanning som förr eller senare säger något annat än knappen gör.
+ *
+ * Med urval beskriver `fyllda` och `rader` bara urvalet — inte vad en
+ * fullständig körning skulle ge.
  */
 export function slaIhop(
   vanster: Frame,
   hoger: Frame,
   matchning: Matchning,
   val: Sammanslagning,
+  vansterRader?: readonly number[],
 ): Resultat {
   const hogerKolumner = val.hogerKolumner
     .map((id) => findColumn(hoger, id))
@@ -502,7 +565,10 @@ export function slaIhop(
 
   // Vilka (vänsterrad, högerrad) resultatet ska bestå av. null = ingen träff.
   const plan: { v: number; h: number | null }[] = []
-  for (let r = 0; r < vanster.rowCount; r++) {
+  const kallrader = vansterRader ?? null
+  const antalKallrader = kallrader ? kallrader.length : vanster.rowCount
+  for (let i = 0; i < antalKallrader; i++) {
+    const r = kallrader ? kallrader[i]! : i
     const lista = traffar.get(r)
     if (!lista || lista.length === 0) {
       plan.push({ v: r, h: null })

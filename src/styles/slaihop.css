@@ -1,0 +1,227 @@
+/*
+ * Slå ihop två filer.
+ *
+ * Samma skelett som kombineringen och verkstaden — `auto 1fr auto` med topp,
+ * kropp och fot. Det är tredje vyn med den formen, och likheten är poängen:
+ * de tre flerfilsflödena ska kännas som samma verktyg.
+ */
+
+.slaihop {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.slaihop__topp {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--linje);
+}
+
+.slaihop__topp h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.slaihop__underrubrik {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-svag);
+}
+
+/*
+ * Sifferbordet får inte breda ut sig över hela raden.
+ *
+ * Det har sex rader här mot kombineringens en till tre, och varje rad det tar
+ * i höjd är en rad mindre i rutorna nedanför — som är de som faktiskt svarar
+ * på frågan. Med ett tak står det bredvid rubriken i stället för under den.
+ */
+.slaihop__topp .inventering {
+  width: auto;
+  max-width: 560px;
+}
+
+.slaihop__kropp {
+  display: grid;
+  grid-template-columns: var(--panel-bredd) 1fr;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.slaihop__kropp .panel__innehall {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 12px 12px;
+}
+
+/*
+ * Fyra rutor, allt synligt samtidigt.
+ *
+ * Resultatet får mer höjd än källfilerna: det är den ruta man tittar längst
+ * på, och den enda som har breda rader. `minmax(0, …)` behövs på båda leder —
+ * utan den vägrar rutorna krympa under sitt innehåll och rutnätet svämmar över
+ * i stället för att låta varje ruta skrolla för sig.
+ */
+.slaihop__rutor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 1px;
+  background: var(--linje);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.slaihop__ruta {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--yta);
+}
+
+.slaihop__ruta__rubrik {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 12px 5px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-svag);
+}
+
+.slaihop__ruta__kropp {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 12px 10px;
+}
+
+/* Nyckelkolumnen är den man ställer in på, så den ska gå att hitta direkt. */
+.fortab__nyckel {
+  background: var(--accent-svag);
+}
+
+.fortab__nyckelmark {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--accent-text);
+  opacity: 0.75;
+}
+
+/*
+ * Den normaliserade nyckeln under värdet.
+ *
+ * Det är den enda platsen i verktyget där man ser vad en jämförelse faktiskt
+ * gör — `Öberg` blir `oberg`. Den står svagare än värdet eftersom värdet är
+ * sanningen och nyckeln bara är hur den jämförs.
+ */
+.fortab__norm {
+  display: block;
+  font-size: 11px;
+  color: var(--text-svagast);
+  font-family: var(--font-mono);
+}
+
+.fortab__norm::before {
+  content: '→ ';
+}
+
+/* En tom cell i resultatet betyder "ingen partner", och det ska synas. */
+.fortab__tom {
+  background: var(--yta-2);
+}
+
+/* ---------- Paren ---------- */
+
+.slaihop__paret {
+  padding: 5px 0;
+  border-bottom: 1px solid var(--linje);
+  min-width: 0;
+}
+
+.slaihop__paret:last-child {
+  border-bottom: 0;
+}
+
+.slaihop__ingen {
+  color: var(--varning);
+  font-weight: 500;
+}
+
+.slaihop__flera {
+  color: var(--text-svagast);
+  font-weight: 500;
+}
+
+/* ---------- Railen ---------- */
+
+.slaihop__byt {
+  display: flex;
+  justify-content: center;
+}
+
+.slaihop__par {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--linje);
+}
+
+.slaihop__par:last-of-type {
+  border-bottom: 0;
+}
+
+.slaihop__parnot {
+  font-size: 12px;
+  color: var(--text-svag);
+}
+
+.slaihop__typtext {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-svag);
+}
+
+/* ---------- Tomt läge ---------- */
+
+.slaihop__tomtkropp {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.slaihop__tomtkropp .tomt__zon {
+  max-width: 560px;
+}
+
+/* ---------- Foten ---------- */
+
+.slaihop__fot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--linje);
+}
+
+.slaihop__fot__text {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-svag);
+}

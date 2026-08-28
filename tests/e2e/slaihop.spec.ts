@@ -18,33 +18,48 @@ async function oppnaFlerfilsmenyn(page: Page, post: string) {
   await page.getByRole('menuitem', { name: post }).click()
 }
 
-const oppnaDialogen = async (page: Page) => {
+const vy = (page: Page) => page.locator('.slaihop')
+
+const oppnaVyn = async (page: Page) => {
   await oppnaFlerfilsmenyn(page, 'Slå ihop…')
-  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(vy(page)).toBeVisible()
 }
 
-test('säger till när det bara finns en fil öppen', async ({ page }) => {
+/** Kolumnparet i railen: selects i ordningen vänster, höger, (höger 2), jämförelse. */
+const parrad = (page: Page) => page.locator('.slaihop__par').first()
+
+const kor = (page: Page) => page.getByRole('button', { name: 'Slå ihop', exact: true })
+
+test('erbjuder en filväljare när den andra filen saknas', async ({ page }) => {
+  // Förr var det här en återvändsgränd: en ruta som sa "öppna den andra filen
+  // först" med Stäng som enda knapp.
   await page.goto('/')
   await page.getByRole('button', { name: 'Öppna exempelfil' }).click()
   await page.getByRole('button', { name: 'Öppna filen' }).click()
-  await oppnaDialogen(page)
+  await oppnaVyn(page)
 
-  await expect(page.getByRole('dialog')).toContainText('bara en fil öppen')
-  await expect(page.getByRole('button', { name: 'Slå ihop', exact: true })).toHaveCount(0)
+  await expect(vy(page)).toContainText('Öppna filen du vill slå ihop med')
+  await expect(page.getByRole('button', { name: 'Öppna fil…' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Öppna exempelparet' })).toBeVisible()
+  await expect(kor(page)).toHaveCount(0)
+
+  // Och exempelparet tar en hela vägen fram utan att lämna vyn.
+  await page.getByRole('button', { name: 'Öppna exempelparet' }).click()
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await expect(kor(page)).toBeVisible()
 })
 
 test('föreslår kolumnpar utifrån rubrikerna och räknar träffarna', async ({ page }) => {
   await oppnaParet(page)
-  await oppnaDialogen(page)
+  await oppnaVyn(page)
 
   // Namn ↔ Name är inte samma ord, men samma sak — förslaget ska hitta det.
-  const par = page.locator('.regel').first()
-  await expect(par.locator('select').first()).toHaveValue(
-    await par.locator('select').first().inputValue(),
+  await expect(parrad(page).locator('select').nth(0)).toHaveValue(
+    await parrad(page).locator('select').nth(0).inputValue(),
   )
-  await expect(page.getByRole('dialog')).toContainText('Föreslaget utifrån kolumnernas namn')
+  await expect(vy(page)).toContainText('Föreslaget utifrån kolumnernas namn')
 
-  // Sju kundrader har en order; två order tillhör okända personer.
   const siffror = page.locator('.inventering')
   await expect(siffror).toContainText('hittar en träff')
   await expect(siffror).toContainText('blir över')
@@ -52,23 +67,97 @@ test('föreslår kolumnpar utifrån rubrikerna och räknar träffarna', async ({
 
 test('räknar kardinalitet och tomma nycklar före körningen', async ({ page }) => {
   await oppnaParet(page)
-  await oppnaDialogen(page)
+  await oppnaVyn(page)
 
-  const dialog = page.getByRole('dialog')
   // Anna Karlsson finns två gånger i kundfilen och Erik har två order.
-  await expect(dialog).toContainText('används av flera')
-  await expect(dialog).toContainText('matchar mer än en rad')
+  await expect(vy(page)).toContainText('används av flera')
+  await expect(vy(page)).toContainText('matchar mer än en rad')
   // ORD-1011 saknar namn och kan aldrig matcha.
-  await expect(dialog).toContainText('har tom nyckel och kan aldrig matcha')
+  await expect(vy(page)).toContainText('har tom nyckel och kan aldrig matcha')
 
   // Valet för flerträff dyker upp bara när det faktiskt finns flerträffar.
   await expect(page.getByRole('radio', { name: 'En rad per träff' })).toBeVisible()
 })
 
+test('visar båda källfilerna med nyckelkolumnen främst', async ({ page }) => {
+  await oppnaParet(page)
+  await oppnaVyn(page)
+
+  // Fyra rutor: två källfiler, paren, resultatet.
+  await expect(page.locator('.slaihop__ruta')).toHaveCount(4)
+
+  const vansterfil = page.locator('.slaihop__ruta').nth(0)
+  const hogerfil = page.locator('.slaihop__ruta').nth(1)
+  await expect(vansterfil).toContainText('exempel-kunder.csv')
+  await expect(hogerfil).toContainText('exempel-order.csv')
+
+  // Nyckeln ligger först, inte där den råkar stå i filen. Kundnr är
+  // kundfilens första kolumn, men Namn är den man matchar på.
+  await expect(vansterfil.locator('th').first()).toContainText('Namn')
+  await expect(vansterfil.locator('th').first()).toContainText('nyckel')
+  await expect(hogerfil.locator('th').first()).toContainText('Name')
+
+  // Och raderna är filens egna.
+  await expect(vansterfil).toContainText('Anna Karlsson')
+  await expect(hogerfil).toContainText('ORD-1001')
+})
+
+test('visar den normaliserade nyckeln när den skiljer sig från värdet', async ({ page }) => {
+  await oppnaParet(page)
+  await oppnaVyn(page)
+
+  // ERIK ÖBERG jämförs som "erik öberg" — det är hela skillnaden mellan
+  // jämförelsetyperna, och den syns ingen annanstans.
+  const hogerfil = page.locator('.slaihop__ruta').nth(1)
+  await expect(hogerfil.locator('.fortab__norm', { hasText: 'erik öberg' }).first()).toBeVisible()
+
+  // Med teckenexakt jämförelse normaliseras ingenting, så raden försvinner.
+  await parrad(page).locator('select').last().selectOption({ label: 'Teckenexakt' })
+  await expect(hogerfil.locator('.fortab__norm')).toHaveCount(0)
+})
+
+test('visar hur raderna paras ihop, och vilka som blev utan', async ({ page }) => {
+  await oppnaParet(page)
+  await oppnaVyn(page)
+
+  const paren = page.locator('.slaihop__ruta').nth(2)
+  await expect(paren).toContainText('Så här paras de')
+  // Ett riktigt par ur filerna, inte en siffra.
+  await expect(paren.locator('.slaihop__paret', { hasText: 'Anna Karlsson' })).toContainText(
+    'ORD-1001',
+  )
+  // Och de som inte hittade någon står med sitt skäl.
+  await expect(paren.locator('.slaihop__ingen').first()).toBeVisible()
+
+  // Byter man jämförelse ändras paren medan man tittar. Carl-Johan Nilsson
+  // står som "Carl-Johan Nilsson" i kundfilen men saknas i orderfilen på
+  // namn — via e-post hittar han sin order.
+  await parrad(page).locator('select').nth(0).selectOption({ label: 'E-post' })
+  await parrad(page).locator('select').nth(1).selectOption({ label: 'mail' })
+  await expect(paren.locator('.slaihop__paret').first()).toContainText('@')
+})
+
+test('visar resultatet med sömmen först och tomma celler synliga', async ({ page }) => {
+  await oppnaParet(page)
+  await oppnaVyn(page)
+
+  const resultat = page.locator('.slaihop__ruta').nth(3)
+  await expect(resultat).toContainText('Så här blir resultatet')
+  // Nyckeln först, sedan de hämtade kolumnerna — inte filens egen ordning.
+  await expect(resultat.locator('th').nth(0)).toHaveText('Namn')
+  await expect(resultat.locator('th').nth(1)).toHaveText('Order')
+  // En rad utan partner har tomma celler, och de är märkta.
+  await expect(resultat.locator('.fortab__tom').first()).toBeVisible()
+
+  // Prefixet syns i rubrikerna direkt, utan att något körs.
+  await page.getByPlaceholder('t.ex. exempel-order.csv – ').fill('o–')
+  await expect(resultat.locator('th').nth(1)).toHaveText('o–Order')
+})
+
 test('slår ihop till en ny flik där omatchade rader finns kvar tomma', async ({ page }) => {
   await oppnaParet(page)
-  await oppnaDialogen(page)
-  await page.getByRole('button', { name: 'Slå ihop', exact: true }).click()
+  await oppnaVyn(page)
+  await kor(page).click()
 
   await expect(page.locator('.flik')).toHaveCount(3)
   await expect(page.locator('.statusrad')).toContainText('16 rader')
@@ -89,42 +178,69 @@ test('slår ihop till en ny flik där omatchade rader finns kvar tomma', async (
   await expect(page.getByRole('gridcell', { name: 'ORD-1008', exact: true })).toHaveCount(0)
 })
 
-test('en rad per träff gör filen längre i stället för att tappa order', async ({ page }) => {
+test('förhandsvisningen och körningen är eniga om radantalet', async ({ page }) => {
   await oppnaParet(page)
-  await oppnaDialogen(page)
-  await page.getByRole('radio', { name: 'En rad per träff' }).click()
-  await page.getByRole('button', { name: 'Slå ihop', exact: true }).click()
+  await oppnaVyn(page)
 
-  // Erik Öberg har två order, så resultatet får en rad mer än kundfilen.
+  // Rutan säger vad hela resultatet blir, inte bara vad den visar.
+  const resultat = page.locator('.slaihop__ruta').nth(3)
+  await expect(resultat).toContainText('av 16 rader')
+
+  await page.getByRole('radio', { name: 'En rad per träff' }).click()
+  // Erik Öberg har två order, så resultatet får en rad mer än kundfilen —
+  // och det ska stå i rutan innan man kör.
+  await expect(resultat).toContainText('av 17 rader')
+
+  await kor(page).click()
   await expect(page.locator('.statusrad')).toContainText('17 rader')
   await expect(page.getByRole('gridcell', { name: 'Erik Öberg', exact: true })).toHaveCount(2)
 })
 
 test('matchning på e-post ger fler träffar än på namn', async ({ page }) => {
   await oppnaParet(page)
-  await oppnaDialogen(page)
+  await oppnaVyn(page)
 
-  const par = page.locator('.regel').first()
-  await par.locator('select').nth(0).selectOption({ label: 'E-post' })
-  await par.locator('select').nth(1).selectOption({ label: 'mail' })
+  await parrad(page).locator('select').nth(0).selectOption({ label: 'E-post' })
+  await parrad(page).locator('select').nth(1).selectOption({ label: 'mail' })
 
   // E-postadresserna är skrivna likadant i båda filerna, så de flesta order
   // hittar sin kund — även de vars namn är felstavade.
   await expect(page.locator('.inventering')).toContainText('hittar en träff')
-  await page.getByRole('button', { name: 'Slå ihop', exact: true }).click()
+  await kor(page).click()
   await expect(page.locator('.flik')).toHaveCount(3)
 })
 
 test('varnar när nästan inget matchar', async ({ page }) => {
   await oppnaParet(page)
-  await oppnaDialogen(page)
+  await oppnaVyn(page)
 
   // Kundnummer mot ordernummer hör inte ihop alls.
-  const par = page.locator('.regel').first()
-  await par.locator('select').nth(0).selectOption({ label: 'Kundnr' })
-  await par.locator('select').nth(1).selectOption({ label: 'Order' })
+  await parrad(page).locator('select').nth(0).selectOption({ label: 'Kundnr' })
+  await parrad(page).locator('select').nth(1).selectOption({ label: 'Order' })
 
-  await expect(page.getByRole('button', { name: 'Slå ihop', exact: true })).toBeDisabled()
+  await expect(kor(page)).toBeDisabled()
+})
+
+test('byt håll gör den andra filen till stomme', async ({ page }) => {
+  await oppnaParet(page)
+  await oppnaVyn(page)
+  await expect(vy(page)).toContainText('av 16 rader i exempel-kunder.csv hittar en träff')
+
+  await page.getByRole('button', { name: '⇄ Byt håll' }).click()
+
+  // Nu är orderfilen stommen, och siffrorna räknas från dess håll.
+  await expect(vy(page)).toContainText('av 14 rader i exempel-order.csv hittar en träff')
+  await expect(page.locator('.slaihop__ruta').nth(0)).toContainText('exempel-order.csv')
+  await kor(page).click()
+  await expect(page.locator('.statusrad')).toContainText('14 rader')
+})
+
+test('Escape stänger vyn', async ({ page }) => {
+  await oppnaParet(page)
+  await oppnaVyn(page)
+  await page.keyboard.press('Escape')
+  await expect(vy(page)).toHaveCount(0)
+  await expect(page.locator('.rutnat')).toBeVisible()
 })
 
 test('namn mot förnamn + efternamn matchar över två högerkolumner', async ({ page }) => {
@@ -149,26 +265,23 @@ test('namn mot förnamn + efternamn matchar över två högerkolumner', async ({
   await page.getByRole('button', { name: 'Öppna filen' }).click()
   await page.locator('.flik__namn', { hasText: 'exempel-kunder.csv' }).click()
 
-  await oppnaDialogen(page)
-  // Bara en annan flik finns, så den är redan vald.
-  const dialog = page.getByRole('dialog')
+  await oppnaVyn(page)
 
   // Rubrikerna liknar ingenting i kundfilen, så förslaget hittar inget par.
-  await expect(dialog).toContainText('Inga kolumnpar valda')
+  await expect(vy(page)).toContainText('Inga kolumnpar valda')
   await page.getByRole('button', { name: '＋ Lägg till kolumnpar' }).click()
 
-  const par = page.locator('.regel').first()
-  await par.locator('select').first().selectOption({ label: 'Namn' })
-  await par.locator('select').nth(1).selectOption({ label: 'Fornamn' })
-  await par.locator('select').last().selectOption({ label: 'Namn mot förnamn + efternamn' })
+  await parrad(page).locator('select').nth(0).selectOption({ label: 'Namn' })
+  await parrad(page).locator('select').nth(1).selectOption({ label: 'Fornamn' })
+  await parrad(page).locator('select').last().selectOption({ label: 'Namn mot förnamn + efternamn' })
 
   // Utan den andra kolumnen kan matchningen inte köras, och det sägs rakt ut.
-  await expect(dialog).toContainText('saknar sin andra högerkolumn')
+  await expect(vy(page)).toContainText('saknar sin andra högerkolumn')
 
   await page.getByLabel('Andra högerkolumnen').selectOption({ label: 'Efternamn' })
-  await expect(dialog).not.toContainText('saknar sin andra högerkolumn')
+  await expect(vy(page)).not.toContainText('saknar sin andra högerkolumn')
 
-  await page.getByRole('button', { name: 'Slå ihop', exact: true }).click()
+  await kor(page).click()
   await expect(page.locator('.rubrik[title="Rabatt"]')).toBeVisible()
   // Anna Karlsson finns två gånger i kundfilen och båda får rabatten; Erik
   // Öberg matchar trots skiftläget. Åsa saknar efternamn och får ingenting.

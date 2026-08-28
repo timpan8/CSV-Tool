@@ -5,9 +5,12 @@ import { createFrame } from '../../src/core/frame/frame.js'
 import type { Frame } from '../../src/core/types.js'
 import {
   byggNycklar,
+  forhandsurval,
   matcha,
+  NYCKELAVSKILJARE,
   slaIhop,
   slaSamman,
+  type Matchning,
   type Matchningspar,
   type Matchningstyp,
 } from '../../src/core/ops/match.js'
@@ -449,5 +452,143 @@ describe('namn mot förnamn + efternamn', () => {
       },
     ])
     expect(m.par).toHaveLength(0)
+  })
+})
+
+
+describe('forhandsurval', () => {
+  /** En matchning med bara de fält urvalet läser. */
+  const m = (matchade: number[][], utan: number[]): Matchning => ({
+    par: matchade.flatMap(([v, h]) => [{ v: v!, h: h! }]),
+    vansterUtan: utan,
+    hogerUtan: [],
+    vansterMatchade: new Set(matchade.map(([v]) => v)).size,
+    hogerMatchade: 0,
+    vansterFlera: 0,
+    hogerFlera: 0,
+    tommaVanster: 0,
+    tommaHoger: 0,
+    storstaTraff: 1,
+  })
+
+  it('tar med både träffar och icke-träffar', () => {
+    const urval = forhandsurval(m([[0, 0], [2, 1], [4, 2]], [1, 3, 5]), 6)
+    expect(urval).toEqual([0, 1, 2, 3, 4, 5])
+  })
+
+  it('står i filens ordning', () => {
+    const urval = forhandsurval(m([[7, 0], [9, 1]], [1, 3]), 4)
+    expect(urval).toEqual([1, 3, 7, 9])
+    expect([...urval].sort((a, b) => a - b)).toEqual(urval)
+  })
+
+  it('visar en ensam omatchad rad även bland många träffar', () => {
+    // Just den raden är den enda man behöver upptäcka.
+    const matchade = Array.from({ length: 200 }, (_, i) => [i, i])
+    const urval = forhandsurval(m(matchade, [200]), 8)
+    expect(urval).toContain(200)
+    expect(urval).toHaveLength(8)
+  })
+
+  it('visar en ensam träff även bland många omatchade', () => {
+    const utan = Array.from({ length: 200 }, (_, i) => i + 1)
+    const urval = forhandsurval(m([[0, 0]], utan), 8)
+    expect(urval).toContain(0)
+    expect(urval).toHaveLength(8)
+  })
+
+  it('följer proportionen när båda sidorna är gott om', () => {
+    // 75 % träffar ska ge ungefär 75 % träffar i urvalet.
+    const matchade = Array.from({ length: 300 }, (_, i) => [i, i])
+    const utan = Array.from({ length: 100 }, (_, i) => i + 300)
+    const urval = forhandsurval(m(matchade, utan), 8)
+    const antalUtan = urval.filter((r) => r >= 300).length
+    expect(antalUtan).toBe(2)
+    expect(urval).toHaveLength(8)
+  })
+
+  it('räknar en vänsterrad med flera träffar en gång', () => {
+    const urval = forhandsurval(m([[0, 0], [0, 1], [0, 2], [3, 3]], [1]), 4)
+    expect(urval).toEqual([0, 1, 3])
+  })
+
+  it('klarar noll träffar, noll rader och ett tak större än filen', () => {
+    expect(forhandsurval(m([], [0, 1]), 5)).toEqual([0, 1])
+    expect(forhandsurval(m([[0, 0]], []), 5)).toEqual([0])
+    expect(forhandsurval(m([], []), 5)).toEqual([])
+    expect(forhandsurval(m([[0, 0]], [1]), 0)).toEqual([])
+    expect(forhandsurval(m([[0, 0]], [1]), -3)).toEqual([])
+  })
+
+  it('taket hålls', () => {
+    const matchade = Array.from({ length: 50 }, (_, i) => [i * 2, i])
+    const utan = Array.from({ length: 50 }, (_, i) => i * 2 + 1)
+    for (const tak of [1, 2, 3, 7, 12, 99, 500]) {
+      expect(forhandsurval(m(matchade, utan), tak).length).toBeLessThanOrEqual(tak)
+    }
+  })
+})
+
+describe('slaIhop med urval', () => {
+  const VANSTER = frameOf('kunder', ['Namn'], [['Anna'], ['Bo'], ['Cia'], ['Dan']])
+  const HOGER = frameOf('order', ['Kund', 'Belopp'], [['anna', '100'], ['Cia', '200']])
+  const P = [par(VANSTER, HOGER, 0, 0)]
+  const VAL = { hogerKolumner: [HOGER.columns[1]!.id], flertraff: 'forsta' as const, prefix: '' }
+
+  it('bygger exakt de raderna, i urvalets ordning', () => {
+    const m = matcha(VANSTER, HOGER, P)
+    const { frame, fyllda, rader } = slaIhop(VANSTER, HOGER, m, VAL, [1, 2])
+    expect(frame.rowCount).toBe(2)
+    expect(rader).toBe(2)
+    // Bo utan träff, Cia med.
+    expect([0, 1].map((r) => getCell(frame.columns[0]!, r))).toEqual(['Bo', 'Cia'])
+    expect([0, 1].map((r) => getCell(frame.columns[1]!, r))).toEqual(['', '200'])
+    // fyllda beskriver urvalet, inte filen.
+    expect(fyllda).toBe(1)
+  })
+
+  it('behåller radnumren ur vänsterfilen', () => {
+    const m = matcha(VANSTER, HOGER, P)
+    const { frame } = slaIhop(VANSTER, HOGER, m, VAL, [3, 0])
+    expect(Array.from(frame.sourceRow)).toEqual([4, 1])
+  })
+
+  it('ett tomt urval ger en tom ram utan att kasta', () => {
+    const m = matcha(VANSTER, HOGER, P)
+    const { frame, fyllda, rader } = slaIhop(VANSTER, HOGER, m, VAL, [])
+    expect(frame.rowCount).toBe(0)
+    expect(rader).toBe(0)
+    expect(fyllda).toBe(0)
+    expect(frame.columns.map((c) => c.name)).toEqual(['Namn', 'Belopp'])
+  })
+
+  it('duplicerar inom urvalet precis som utan', () => {
+    const v = frameOf('v', ['Namn'], [['Anna'], ['Bo']])
+    const h = frameOf('h', ['Kund', 'Nr'], [['anna', '1'], ['anna', '2'], ['bo', '3']])
+    const m = matcha(v, h, [par(v, h, 0, 0)])
+    const val = { hogerKolumner: [h.columns[1]!.id], flertraff: 'duplicera' as const, prefix: '' }
+    const { frame } = slaIhop(v, h, m, val, [0])
+    expect(frame.rowCount).toBe(2)
+    expect([0, 1].map((r) => getCell(frame.columns[1]!, r))).toEqual(['1', '2'])
+  })
+
+  it('utan urval är resultatet oförändrat — regressionsvakt', () => {
+    const m = matcha(VANSTER, HOGER, P)
+    const utan = slaIhop(VANSTER, HOGER, m, VAL)
+    const med = slaIhop(VANSTER, HOGER, m, VAL, [0, 1, 2, 3])
+    const dump = (f: typeof utan.frame) =>
+      Array.from({ length: f.rowCount }, (_, r) => f.columns.map((c) => getCell(c, r)))
+    expect(dump(med.frame)).toEqual(dump(utan.frame))
+    expect(med.fyllda).toBe(utan.fyllda)
+    expect(med.rader).toBe(utan.rader)
+    expect(Array.from(med.frame.sourceRow)).toEqual(Array.from(utan.frame.sourceRow))
+  })
+})
+
+describe('NYCKELAVSKILJARE', () => {
+  it('delar en flerkolumnsnyckel i sina delar', () => {
+    const v = frameOf('v', ['Namn', 'Ort'], [['Anna Karlsson', 'Malmö']])
+    const nycklar = byggNycklar(v, [par(v, v, 0, 0), par(v, v, 1, 1)], 'vanster')
+    expect(nycklar[0]!.split(NYCKELAVSKILJARE)).toEqual(['anna karlsson', 'malmö'])
   })
 })
