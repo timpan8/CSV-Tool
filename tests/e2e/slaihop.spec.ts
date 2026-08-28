@@ -54,14 +54,16 @@ test('föreslår kolumnpar utifrån rubrikerna och räknar träffarna', async ({
   await oppnaParet(page)
   await oppnaVyn(page)
 
-  // Namn ↔ Name är inte samma ord, men samma sak — förslaget ska hitta det.
-  await expect(parrad(page).locator('select').nth(0)).toHaveValue(
-    await parrad(page).locator('select').nth(0).inputValue(),
-  )
+  // Namn ↔ Name är inte samma ord, men samma sak — förslaget ska hitta just
+  // det paret. Etiketterna asserteras, inte selectens värde mot sig själv:
+  // ett förslag som valde t.ex. Kundnr ↔ Order ska falla här.
+  await expect(parrad(page).locator('select').nth(0).locator('option:checked')).toHaveText('Namn')
+  await expect(parrad(page).locator('select').nth(1).locator('option:checked')).toHaveText('Name')
   await expect(vy(page)).toContainText('Föreslaget utifrån kolumnernas namn')
 
   const siffror = page.locator('.slaihop .vytal')
-  await expect(siffror).toContainText('hittar en träff')
+  // Talet är facit för exempelparet: åtta kunder har en order med samma namn.
+  await expect(siffror).toContainText('8 av 16 rader hittar en träff')
   await expect(siffror).toContainText('blir över')
 })
 
@@ -211,12 +213,17 @@ test('matchning på e-post ger fler träffar än på namn', async ({ page }) => 
   await oppnaParet(page)
   await oppnaVyn(page)
 
+  // Namnnyckelns facit först, så att jämförelsen efter bytet är en riktig
+  // jämförelse och inte samma delsträng två gånger.
+  await expect(page.locator('.slaihop .vytal')).toContainText('8 av 16 rader hittar en träff')
+
   await parrad(page).locator('select').nth(0).selectOption({ label: 'E-post' })
   await parrad(page).locator('select').nth(1).selectOption({ label: 'mail' })
 
-  // E-postadresserna är skrivna likadant i båda filerna, så de flesta order
-  // hittar sin kund — även de vars namn är felstavade.
-  await expect(page.locator('.slaihop .vytal')).toContainText('hittar en träff')
+  // E-postadresserna är skrivna likadant i båda filerna, så Zlatan Ekk och
+  // Ängström Ida hittar sin kund trots de felskrivna namnen: tio i stället
+  // för åtta.
+  await expect(page.locator('.slaihop .vytal')).toContainText('10 av 16 rader hittar en träff')
   await kor(page).click()
   await expect(page.locator('.flik')).toHaveCount(3)
 })

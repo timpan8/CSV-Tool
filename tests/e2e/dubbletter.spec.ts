@@ -143,3 +143,24 @@ test('välj själv vilken rad som stannar', async ({ page }) => {
   await expect(page.getByRole('gridcell', { name: '10035', exact: true })).toBeVisible()
   await expect(page.getByRole('gridcell', { name: '10021', exact: true })).toHaveCount(0)
 })
+
+test('ett gammalt handval styr inte när läget bytts till första i filen', async ({ page }) => {
+  await oppnaExempel(page)
+  await oppnaDubbletter(page)
+  for (const namn of ['Kundnr', 'Registrerad', 'Postnr', 'Ort', 'Belopp', 'Status']) {
+    await nyckelkryss(page, namn).uncheck()
+  }
+
+  // Peka ut den andra raden för hand...
+  await page.getByRole('radio', { name: 'Den jag väljer' }).click()
+  await page.locator('.radnr__behall').nth(1).click()
+  await expect(page.locator('.radnr__behall').nth(1)).toHaveAttribute('aria-pressed', 'true')
+
+  // ...men ångra sig och byt till "Den första i filen". Inga ringar ritas då,
+  // så ett handval som ändå vann hade varit osynligt — förut gjorde det det.
+  await page.getByRole('radio', { name: 'Den första i filen' }).click()
+  await page.getByRole('button', { name: /^Ta bort 1 rad/ }).click()
+
+  await expect(page.getByRole('gridcell', { name: '10021', exact: true })).toBeVisible()
+  await expect(page.getByRole('gridcell', { name: '10035', exact: true })).toHaveCount(0)
+})

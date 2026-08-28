@@ -205,6 +205,16 @@ describe('slaIhop', () => {
     expect(getCell(frame.columns[0]!, 1)).toBe('Bo')
   })
 
+  it('två körningar myntar två olika ram-id', () => {
+    // Ram-id:t är det enda som säger att två flikar är olika filer, och
+    // verkstadens sessionskoppling vilar på det. Ett id härlett ur källorna
+    // gav två omgångar på samma källor exakt samma id.
+    const m = matcha(VANSTER, HOGER, P)
+    const forsta = slaIhop(VANSTER, HOGER, m, val()).frame
+    const andra = slaIhop(VANSTER, HOGER, m, val()).frame
+    expect(forsta.id).not.toBe(andra.id)
+  })
+
   it('duplicerar raden per träff när man ber om det', () => {
     const h = frameOf('order', ['Kund', 'Belopp'], [['Anna', '100'], ['anna', '150']])
     const p = [par(VANSTER, h, 0, 0)]

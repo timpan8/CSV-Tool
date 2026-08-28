@@ -6,6 +6,7 @@ import {
   findColumn,
   insertColumn,
   moveColumn,
+  removeColumn,
   sammaInnehall,
   uniqueColumnName,
 } from '../core/frame/frame.js'
@@ -44,6 +45,7 @@ import {
   setForhandsvisning,
   sorteraOm,
   sorteringenArInaktuell,
+  sparaNu,
   vaxlaSortering,
   setSelection,
   setViewSpec,
@@ -392,10 +394,7 @@ export function App() {
         setActiveColumn(col.id)
       },
       () => {
-        if (skapad) {
-          const at = columnIndex(frame, skapad)
-          if (at !== -1) frame.columns.splice(at, 1)
-        }
+        if (skapad) removeColumn(frame, skapad)
       },
     )
   }
@@ -409,7 +408,7 @@ export function App() {
       `Tog bort kolumnen ${col.name}`,
       'drop',
       () => {
-        frame.columns.splice(columnIndex(frame, id), 1)
+        removeColumn(frame, id)
       },
       () => {
         frame.columns.splice(index, 0, col)
@@ -458,10 +457,7 @@ export function App() {
         skapad = duplicateColumn(frame, id)?.id ?? null
       },
       () => {
-        if (skapad) {
-          const at = columnIndex(frame, skapad)
-          if (at !== -1) frame.columns.splice(at, 1)
-        }
+        if (skapad) removeColumn(frame, skapad)
       },
     )
   }
@@ -526,18 +522,31 @@ export function App() {
   /**
    * Tar upp den parkerade verkstaden igen.
    *
-   * Ett ställe, tre ingångar: menyposten, palettkommandot och åtgärden i
-   * notisen efter en körning. Synkningen sker inne i `aterupptaVerkstad` — det
-   * är den enda punkt som körs när vyn varit stängd, och alltså den enda som
-   * kan upptäcka att filerna ändrats under tiden.
+   * Ett ställe, fyra ingångar: menyposten, palettkommandot, åtgärden i
+   * notisen efter en körning och åtgärden i uppstartsnotisen efter en
+   * omladdning. Synkningen sker inne i `aterupptaVerkstad` — det är den enda
+   * punkt som körs när vyn varit stängd, och alltså den enda som kan upptäcka
+   * att filerna ändrats under tiden.
    */
-  const aterta = () => {
-    // Paletten går att öppna ovanpå vilken vy som helst, så den här kan nås
-    // med en annan vy uppe. En osynlig verkstad som äger tangentbordet är
-    // precis det felet den härledda Escape-kedjan finns för att undvika.
+  /**
+   * Stänger varje egen vy.
+   *
+   * Paletten går att öppna ovanpå vilken vy som helst, så dess kommandon kan
+   * köras med en annan vy uppe. Allt som ska visa något i rutnätsläget —
+   * verkstaden, sökraden, tabellverktygen — måste därför först ta sig dit:
+   * en osynlig vy eller panel som äger tangentbordet är precis det felet den
+   * härledda Escape-kedjan finns för att undvika.
+   */
+  const stangEgnaVyer = () => {
     stangSlaIhop()
     stangKombinera()
     setOversiktOppen(false)
+    // Vyn, inte sessionen: arbetet ligger kvar precis som vid Escape.
+    lamnaVerkstad()
+  }
+
+  const aterta = () => {
+    stangEgnaVyer()
     const svar = aterupptaVerkstad()
     if (svar === 'omnumrerad') {
       notify(
@@ -832,12 +841,6 @@ export function App() {
   }
 
   /**
-   * Tar bort de överflödiga raderna i varje dubblettgrupp.
-   *
-   * Vyn stängs efteråt: en dubblettvy utan dubbletter kvar ser trasig ut,
-   * som om verktyget tappat bort sig.
-   */
-  /**
    * Lägger till en regel på en kolumn och öppnar filterpanelen.
    *
    * Regeln läggs till i stället för att ersätta filtret — man bygger vidare
@@ -1032,11 +1035,23 @@ export function App() {
     )
   }
 
+  /**
+   * Tar bort de överflödiga raderna i varje dubblettgrupp.
+   *
+   * Vyn stängs efteråt: en dubblettvy utan dubbletter kvar ser trasig ut,
+   * som om verktyget tappat bort sig.
+   */
   const taBortDubbletter = (nyckel: Dubblettnyckel, hur: Behall) => {
     const nu = nuLage()
     if (!nu || !frame) return
     const grupper = hittaDubbletter(frame, nyckel)
-    const bort = overflodigaRader(grupper, hur === 'valda' ? 'forsta' : hur, egnaBehallna)
+    // Handvalen gäller bara i valda-läget. Under »första«/»sista« ritas inga
+    // ringar, och gamla val från ett tidigare läge ska inte vinna i smyg.
+    const bort = overflodigaRader(
+      grupper,
+      hur === 'valda' ? 'forsta' : hur,
+      hur === 'valda' ? egnaBehallna : undefined,
+    )
     if (bort.length === 0) return
     taBortRader(nu.tab, bort)
     sattDubbletter(nu.tab, null)
@@ -1296,7 +1311,10 @@ export function App() {
       const text = e.clipboardData?.getData('text/plain') ?? ''
       if (text.trim() === '') return
       e.preventDefault()
-      if (!tab) oppnaText(text, 'inklistrat.csv')
+      // Samma spärr som tangentbordskedjan: i en egen vy finns rutnätet inte
+      // på skärmen, och en inklistring får inte skriva i celler man inte ser.
+      // Texten blir en ny flik i stället — som när ingen fil är öppen.
+      if (!tab || lagen.current.stangEgenVy) oppnaText(text, 'inklistrat.csv')
       else forbereKlistraIn(text)
     }
     window.addEventListener('paste', onPaste)
@@ -1313,6 +1331,12 @@ export function App() {
       if (e.relatedTarget === null) setSlappOver(false)
     }
     const drop = (e: DragEvent) => {
+      // En släppzon i en vy (SlaIhops tomma läge) har redan tagit hand om
+      // händelsen — annars öppnades samma fil två gånger.
+      if (e.defaultPrevented) {
+        setSlappOver(false)
+        return
+      }
       e.preventDefault()
       setSlappOver(false)
       const files = Array.from(e.dataTransfer?.files ?? [])
@@ -1664,6 +1688,9 @@ export function App() {
             // det som gör att sessionen får leva vidare utan att en färdig
             // resultatflik kan ändras under händerna på den som tittar.
             openFrame(resultat)
+            // Skriv fliken direkt: omgångsräknaren nedan sparas efter 800 ms
+            // och får inte hinna före resultatet den påstår finns.
+            sparaNu()
             antecknaOmgang()
             notify(text, {
               // Notisen är enda platsen som säger att resten finns kvar, och
@@ -1866,15 +1893,32 @@ export function App() {
               oppnaFil: () => palettFil.current?.click(),
               glomSparat: () => {
                 void glomSparat().then(() =>
-                  notify('Det sparade är borta. Flikarna du har öppna står kvar.'),
+                  notify(
+                    'Det sparade är borta. Flikarna du har öppna står kvar, och det du gör härnäst sparas som vanligt.',
+                  ),
                 )
               },
               exportera: () => setExportOppen(true),
               profiler: () => setProfilerOppna(true),
-              sok: () => setSokOppen(true),
-              sortera: () => oppnaTabellverktyg('sortera'),
-              filter: () => oppnaTabellverktyg('filter'),
-              dubbletter: () => oppnaTabellverktyg('dubbletter'),
+              // Sökraden och tabellverktygen ritas bara i rutnätsläget, så en
+              // egen vy måste stängas först — annars sätts ett läge som inte
+              // syns förrän vyn råkar stängas. Se `stangEgnaVyer`.
+              sok: () => {
+                stangEgnaVyer()
+                setSokOppen(true)
+              },
+              sortera: () => {
+                stangEgnaVyer()
+                oppnaTabellverktyg('sortera')
+              },
+              filter: () => {
+                stangEgnaVyer()
+                oppnaTabellverktyg('filter')
+              },
+              dubbletter: () => {
+                stangEgnaVyer()
+                oppnaTabellverktyg('dubbletter')
+              },
               slaIhop: () => oppnaSlaIhop(),
               kombinera: () => oppnaKombinera(),
               mall: () => oppnaKombinera(true),
@@ -2057,7 +2101,7 @@ function flerfilsmeny(handlers: {
         handlers.session.lage === 'ingen'
           ? 'Ingen påbörjad sammanslagning att gå tillbaka till.'
           : handlers.session.lage === 'stangd'
-            ? `Filerna är stängda, så det finns inga rader att beta av. ${handlers.session.ogjort} beslut väntar på att de öppnas igen.`
+            ? `Filerna är stängda, så det finns inga rader att beta av. ${handlers.session.ogjort} beslut gick förlorade med dem — en fil som öppnas igen är en ny fil för verktyget, så besluten går inte att återansluta.`
             : undefined,
       kor: handlers.aterta,
     },

@@ -8,7 +8,7 @@ import {
   type Matchningspar,
   type Nyckeldel,
 } from '../core/ops/match.js'
-import { normalizeAlways, stripDiacritics } from '../core/locale/sv.js'
+import { rubriknyckel } from '../core/ops/rubriker.js'
 
 /**
  * Två rader ställda mot varandra, fält för fält.
@@ -229,13 +229,6 @@ function etikett(v?: Column, h?: Column, h2?: Column): string {
   return v.name === hNamn ? v.name : `${v.name} ↔ ${hNamn}`
 }
 
-/** Rubriker som betyder samma sak trots olika skrivsätt. */
-function rubriknyckel(namn: string): string {
-  return stripDiacritics(normalizeAlways(namn).trim())
-    .toLocaleLowerCase('sv')
-    .replace(/[^a-z0-9]/g, '')
-}
-
 function Faltrad(props: {
   rad: Rad
   onRatta: (sida: 'vanster' | 'hoger', col: Column, varde: string) => void
@@ -283,7 +276,7 @@ function Cell(props: {
     return (
       <div class="jamforelse__cell">
         <input
-          class="raddetalj__input"
+          class="jamforelse__input"
           value={utkast}
           autoFocus
           aria-label={`${s.col.name} i ${s.sida === 'vanster' ? 'vänsterfilen' : 'högerfilen'}`}

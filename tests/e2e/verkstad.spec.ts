@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { vantaPaBorttaget, vantaPaSparat } from './lagringshjalp.js'
 
 /** Öppnar exempelparet och går in i verkstaden på Namn ↔ Name. */
 async function oppnaVerkstaden(page: Page) {
@@ -275,8 +276,9 @@ test('arbetet överlever en omladdning och går att fortsätta med', async ({ pa
   await page.getByRole('button', { name: 'Slå ihop', exact: true }).click()
   await expect(page.locator('.flik')).toHaveCount(3)
 
-  // Både flikarna och sessionen skrivs fördröjt. Vänta ut båda.
-  await page.waitForTimeout(2500)
+  // Både flikarna och sessionen skrivs fördröjt. Vänta in båda i lagringen:
+  // resultatfliken i ramarna, den antecknade omgången i sessionsraden.
+  await vantaPaSparat(page, 'exempel-kunder.csv + exempel-order.csv', '"omgangar":1')
   await page.reload()
   await expect(page.locator('.flik')).toHaveCount(3)
   // Sessionen säger ifrån av sig själv — utan den syns ingenting på skärmen.
@@ -289,13 +291,41 @@ test('arbetet överlever en omladdning och går att fortsätta med', async ({ pa
   await expect(page.locator('.verkstad__par')).toHaveCount(1)
   await expect(page.locator('.verkstad__par')).toContainText('Carl-Johan Nilsson')
 
-  // Och man kan fortsätta: ett par till, och en ny omgång.
-  await vanster(page).locator('.restrad').first().click()
-  await hoger(page).locator('.restrad').first().click()
+  // Och man kan fortsätta: ett par till, och en ny omgång. Raden väljs bland
+  // dem utan träff — en flerträffsrad går inte längre att para för hand.
+  await vanster(page).locator('.restrad[data-sort="utan"]').first().click()
+  await hoger(page).locator('.restrad[data-sort="utan"]').first().click()
   await page.getByRole('button', { name: 'Para ihop' }).click()
   await expect(page.locator('.verkstad__par')).toHaveCount(2)
   await page.getByRole('button', { name: 'Slå ihop igen' }).click()
   await expect(page.locator('.flik__namn', { hasText: 'omgång 2' })).toBeVisible()
+})
+
+/*
+ * Regressionsvakt: efter en omladdning var skrivningens bokföring tom, så
+ * att kasta sessionen dedupades bort som "ingen ändring" — och det kastade
+ * arbetet återuppstod vid nästa start, hur många gånger man än kastade.
+ */
+test('en kastad session är kastad även efter nästa omladdning', async ({ page }) => {
+  await oppnaVerkstaden(page)
+  await vanster(page).locator('.restrad', { hasText: 'Carl-Johan Nilsson' }).click()
+  await hoger(page).locator('.restrad', { hasText: 'Petra Sund' }).click()
+  await page.getByRole('button', { name: 'Para ihop' }).click()
+  await vantaPaSparat(page, '"id":"verkstad"')
+
+  await page.reload()
+  await expect(page.locator('.toast', { hasText: 'påbörjad sammanslagning' })).toBeVisible()
+
+  // Kasta utan att först gå in i verkstaden: stäng en källflik. Det är vägen
+  // som glömdes — att öppna vyn råkar synka om sessionen och dölja felet.
+  page.on('dialog', (d) => d.accept())
+  await page.getByRole('button', { name: 'Stäng exempel-order.csv' }).click()
+  await vantaPaBorttaget(page, '"id":"verkstad"')
+
+  await page.reload()
+  await expect(page.locator('.statusrad')).toContainText('16 rader')
+  await page.getByRole('button', { name: 'Flera filer ▾' }).click()
+  await expect(page.getByRole('menuitem', { name: 'Fortsätt beta av resten…' })).toBeDisabled()
 })
 
 test('en stängd källfil tar verkstaden med sig, och säger det', async ({ page }) => {

@@ -88,11 +88,6 @@ interface Profilpost extends Innehallsprofil {
 
 const cache = new WeakMap<Column, Profilpost>()
 
-/** Endast för tester: gör kostnadsmätningar oberoende av tidigare anrop. */
-export function nollstallProfilcache(col?: Column): void {
-  if (col) cache.delete(col)
-}
-
 /**
  * Innehållsprofilen för en kolumn.
  *

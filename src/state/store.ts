@@ -10,6 +10,9 @@ import { cell, klamp, type Selection } from './selection.js'
 import { reserveraFrameId } from '../core/frame/frame.js'
 import type { Profilsteg } from '../core/ops/profil.js'
 import { laddaFlikar, lagringsfel, rensaLagring, sparaFlikar } from './lagring.js'
+// Cirkeln store ↔ matchning är ofarlig: båda sidor använder den andres
+// exporter först vid anrop, aldrig under modulinitieringen.
+import { glomdSession } from './matchning.js'
 
 let seq = 0
 const nextId = () => `t${(seq += 1).toString(36)}`
@@ -74,15 +77,12 @@ export interface Tab {
   /** Cellen som redigeras just nu, i vy-koordinater. */
   redigerar: { rad: number; kol: number } | null
   /**
-   * Den omskrivning som visas i tabellen men ännu inte är gjord.
-   *
-   * Den ligger på fliken och inte i dialogens eget läge, eftersom rutnätet
-   * ritar den och `refreshView` filtrerar på den. En förhandsvisning är
-   * heller aldrig en dataändring och hamnar därför aldrig i historiken.
-   */
-  /**
    * Förhandsvisningarna som visas men ännu inte tillämpats — en per kolumn
    * verktyget körs över. Tom lista betyder ingen.
+   *
+   * De ligger på fliken och inte i dialogens eget läge, eftersom rutnätet
+   * ritar dem och `refreshView` filtrerar på dem. En förhandsvisning är
+   * heller aldrig en dataändring och hamnar därför aldrig i historiken.
    */
   forhandsvisning: Forhandsvisning[]
   /**
@@ -107,8 +107,6 @@ export const revision = signal(0)
 export const activeTab = computed<Tab | null>(
   () => tabs.value.find((t) => t.id === activeTabId.value) ?? null,
 )
-
-export const activeFrame = computed<Frame | null>(() => activeTab.value?.frame ?? null)
 
 export function touch(): void {
   revision.value += 1
@@ -174,9 +172,16 @@ async function skrivFlikar(): Promise<void> {
       smutsig: tab.smutsig,
       aktiv: tab.id === aktiv,
       ramenAndrad: tidigare?.data !== tab.dataRevision,
+      // Revisionen fryses i ögonblicksbilden. Skrivningen är asynkron, och en
+      // redigering som landar medan den pågår ska inte bokföras som skriven —
+      // det var den inte, och nästa jämförelse måste se skillnaden.
+      data: tab.dataRevision,
       latt: lattSignatur(tab, i, tab.id === aktiv),
     }
   })
+  // Flikar som stängts sedan förra skrivningen — bara de får raderas ur
+  // lagringen, se `sparaFlikar` för varför okända nycklar lämnas i fred.
+  const borta = [...skrivet.keys()].filter((id) => !lista.some((t) => t.id === id))
 
   // Jämför både vilka flikar som finns och vad de innehåller. Bara antalet
   // räcker inte: en stängd flik och en nyöppnad ger samma antal men ska
@@ -188,17 +193,30 @@ async function skrivFlikar(): Promise<void> {
     sparbara.every((f) => !f.ramenAndrad && skrivet.get(f.id)?.latt === f.latt)
   if (oforandrat) return
 
-  const gick = await sparaFlikar(sparbara)
+  const gick = await sparaFlikar(sparbara, borta)
   if (!gick) {
     const text = lagringsfel()
     if (text) notify(text, { ton: 'varning' })
     return
   }
   skrivet.clear()
-  for (const tab of lista) {
-    const f = sparbara.find((x) => x.id === tab.id)
-    if (f) skrivet.set(tab.id, { data: tab.dataRevision, latt: f.latt })
+  for (const f of sparbara) skrivet.set(f.id, { data: f.data, latt: f.latt })
+}
+
+/**
+ * Skriver nu i stället för att vänta ut fördröjningen.
+ *
+ * För ögonblick där en flik måste in i lagringen innan något annat hinner
+ * anteckna att den finns: en verkstadskörning skriver sin omgångsräknare
+ * efter 800 ms medan resultatfliken väntade 1 200 — stängdes webbläsaren i
+ * fönstret påstod sessionen en körning vars resultat aldrig sparats.
+ */
+export function sparaNu(): void {
+  if (sparTimer !== null) {
+    clearTimeout(sparTimer)
+    sparTimer = null
   }
+  void skrivFlikar()
 }
 
 /**
@@ -251,10 +269,17 @@ export async function aterstallFlikar(): Promise<number> {
   return nya.length
 }
 
-/** Glömmer allt som sparats i webbläsaren. Flikarna på skärmen står kvar. */
+/**
+ * Glömmer allt som sparats i webbläsaren. Flikarna på skärmen står kvar —
+ * och sparandet fortsätter: nästa skrivning ser den tömda bokföringen och
+ * skriver tillbaka alltihop. Sessionen har sin egen bokföring i
+ * `matchning.ts` och måste nollställas där, annars dedupas den som redan
+ * skriven och är ensam borta efter nästa omladdning.
+ */
 export async function glomSparat(): Promise<void> {
   skrivet.clear()
   await rensaLagring()
+  glomdSession()
 }
 
 /**

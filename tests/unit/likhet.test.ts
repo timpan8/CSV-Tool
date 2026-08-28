@@ -163,6 +163,8 @@ describe('egenskaper', () => {
             expect(f.poang.poang).toBeLessThanOrEqual(1)
             expect(f.poang.stavning).toBeLessThanOrEqual(1)
             expect(f.poang.orden).toBeLessThanOrEqual(1)
+            // Andra halvan av rubriken: två identiska strängar får full poäng.
+            if (varden[f.v] === varden[f.h]) expect(f.poang.poang).toBe(1)
           }
         },
       ),

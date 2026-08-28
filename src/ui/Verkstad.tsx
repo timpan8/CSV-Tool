@@ -192,8 +192,16 @@ export function Verkstad(props: {
     )
   }
 
+  /*
+   * En osäker rad går inte att para för hand. Den har redan flera träffar,
+   * och ett extrapar hade bara blivit en till: under *Lämna tom* hade paret
+   * noll verkan, under *Ta den första* hade autoparet vunnit över det
+   * handvalda. Ett val som tyst ignoreras är värre än ett som stoppas med
+   * förklaring — raden behöver ett val bland sina träffar, inte ett par till.
+   */
+  const valdArOsaker = valdVanster !== null && osakra.has(valdVanster)
   const paraIhop = () => {
-    if (valdVanster === null || valdHoger === null) return
+    if (valdVanster === null || valdHoger === null || valdArOsaker) return
     laggExtrapar(valdVanster, valdHoger, 'hand', 'för hand')
     setValdVanster(null)
     setValdHoger(null)
@@ -277,7 +285,7 @@ export function Verkstad(props: {
 
       <div class="verkstad__listor">
         <Restlista
-          titel="Kvar i vänsterfilen"
+          titel="Kvar i stommen (vänsterfilen)"
           filnamn={vanster.name}
           frame={vanster}
           rader={vansterLista}
@@ -310,11 +318,13 @@ export function Verkstad(props: {
 
             <button
               class="knapp knapp--primar verkstad__para"
-              disabled={valdVanster === null || valdHoger === null}
+              disabled={valdVanster === null || valdHoger === null || valdArOsaker}
               title={
-                valdVanster === null || valdHoger === null
-                  ? 'Markera en rad i varje lista först.'
-                  : undefined
+                valdArOsaker
+                  ? 'Raden matchar redan flera rader och behöver ett val bland sina träffar — ett par till hade gjort den mer tvetydig, inte mindre.'
+                  : valdVanster === null || valdHoger === null
+                    ? 'Markera en rad i varje lista först.'
+                    : undefined
               }
               onClick={paraIhop}
             >
@@ -469,8 +479,9 @@ export function Verkstad(props: {
  *
  * Raderna som blev över är ofta det man behöver skicka vidare — till den som
  * kan svara på varför de inte finns i det andra systemet. Filen får samma
- * Excel-vänliga format som den vanliga exporten, och hela ramens kolumner:
- * det som ska granskas är raden, inte nyckeln.
+ * Excel-vänliga format som den vanliga exporten, och ramens synliga kolumner:
+ * det som ska granskas är raden, inte nyckeln — men det man själv dolt ska
+ * inte smyga med i en fil som skickas vidare.
  */
 function exporteraRest(frame: Frame, rader: readonly number[]): void {
   if (rader.length === 0) return

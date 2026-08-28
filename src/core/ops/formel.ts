@@ -407,10 +407,3 @@ export function formelTransform(
     return varde === null || !Number.isFinite(varde) ? '' : skriv(varde)
   }
 }
-
-/** Kolumnerna en formel läser, i filens ordning. */
-export function formelnsKolumner(frame: Frame, anvanda: readonly string[]): Column[] {
-  return anvanda
-    .map((n) => frame.columns.find((c) => c.name === n))
-    .filter((c): c is Column => c !== undefined)
-}

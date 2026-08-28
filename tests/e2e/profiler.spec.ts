@@ -7,7 +7,6 @@ async function oppnaExempel(page: Page) {
   await expect(page.locator('.statusrad')).toContainText('16 rader')
 }
 
-/** Skriver om Registrerad till ÅÅÅÅ-MM-DD — ett steg som går att köra om. */
 /**
  * Öppnar ett verktyg ur kolumnmenyn.
  *
@@ -27,6 +26,7 @@ async function oppnaUrKolumnmenyn(page: Page, kolumn: string, post: string) {
   await expect(page.locator('.verktyg')).toBeVisible()
 }
 
+/** Skriver om Registrerad till ÅÅÅÅ-MM-DD — ett steg som går att köra om. */
 async function skrivOmDatum(page: Page) {
   await oppnaUrKolumnmenyn(page, 'Registrerad', 'Datum…')
   await page.getByRole('button', { name: 'Tillämpa' }).click()

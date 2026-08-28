@@ -75,14 +75,6 @@ export function hasFlag(col: Column, row: number, bit: number): boolean {
   return (col.flags[row]! & bit) !== 0
 }
 
-export function setFlag(col: Column, row: number, bit: number): void {
-  col.flags[row]! |= bit
-}
-
-export function clearFlag(col: Column, row: number, bit: number): void {
-  col.flags[row]! &= ~bit
-}
-
 /**
  * Antal förekomster per ordbokspost, över de rader som finns i `rows`.
  *
@@ -202,16 +194,6 @@ function buildMapping(col: Column, fn: (value: string) => string) {
     remap[d] = code
   }
   return { dict, dictIndex, remap, changed }
-}
-
-/** Antal celler som skulle ändras, utan att ändra något. */
-export function countMappedChanges(col: Column, fn: (value: string) => string): number {
-  const { changed } = buildMapping(col, fn)
-  let n = 0
-  for (let r = 0; r < col.codes.length; r++) {
-    if (changed[col.codes[r]!]! === 1) n += 1
-  }
-  return n
 }
 
 /** Kör transformen och returnerar antal ändrade celler. */

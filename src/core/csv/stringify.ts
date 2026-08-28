@@ -164,10 +164,6 @@ export function encodeExport(text: string, options: ExportOptions): EncodedExpor
   return { bytes: out, lostCharacters: [] }
 }
 
-export function exportCsv(frame: Frame, options: ExportOptions): EncodedExport {
-  return encodeExport(stringifyCsv(frame, options), options)
-}
-
 /**
  * Skriver ett godtyckligt urval av kolumner och rader som avgränsad text.
  *
@@ -209,15 +205,4 @@ export function urvalTillCsv(
   const rubriker = columns.map((c) => quoteField(c.name, delimiter, 'minimal')).join(delimiter)
   const kropp = toDelimited(columns, rows, delimiter, newline)
   return kropp === '' ? rubriker : `${rubriker}${newline}${kropp}`
-}
-
-/** TSV till urklipp — klistras rakt in i Excel med kolumnerna intakta. */
-export function toTsv(frame: Frame, options: Partial<ExportOptions> = {}): string {
-  return stringifyCsv(frame, {
-    ...EXCEL_FRIENDLY,
-    ...options,
-    delimiter: '\t',
-    newline: '\n',
-    protectFormulas: false,
-  })
 }

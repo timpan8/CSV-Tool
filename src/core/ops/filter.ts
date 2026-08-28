@@ -351,11 +351,6 @@ export function tillampaFilter(
   return { rader: Uint32Array.from(traffar), fel }
 }
 
-/** Regler vars kolumn inte längre finns. De raderas inte — de rapporteras. */
-export function trasigaRegler(frame: Frame, filter: Filter): Filterregel[] {
-  return filter.regler.filter((r) => findColumn(frame, r.colId) === undefined)
-}
-
 /** "Ort är Malmö" — chippets text. */
 export function beskrivRegel(frame: Frame, regel: Filterregel): string {
   const col = findColumn(frame, regel.colId)
