@@ -190,7 +190,7 @@ function byggVarden(
 /**
  * Föreslår par mellan två restlistor.
  *
- * Namnet skiljer sig från `foreslaPar` i `MergeDialog`, som gissar
+ * Namnet skiljer sig från `foreslaPar` i `SlaIhop`, som gissar
  * *kolumnpar* utifrån rubrikerna. Det här gissar radpar utifrån innehållet.
  */
 export function foreslaLuddigaPar(

@@ -92,17 +92,18 @@ import { SortTool } from './SortTool.jsx'
 import { FilterTool } from './FilterTool.jsx'
 import { DuplicateTool } from './DuplicateTool.jsx'
 import { Filterrad } from './Filterrad.jsx'
-import { MergeDialog } from './MergeDialog.jsx'
 import { Verkstad } from './Verkstad.jsx'
 import { Oversikt } from './Oversikt.jsx'
 import { oppnaVerkstad, stangVerkstad, verkstad } from '../state/matchning.js'
 import type { Profilsteg } from '../core/ops/profil.js'
 import { Kombinera } from './Kombinera.jsx'
 import { GrupperaDialog } from './GrupperaDialog.jsx'
+import { SlaIhop } from './SlaIhop.jsx'
 import { ProfilDialog } from './ProfilDialog.jsx'
 import { Kommandopalett } from './Kommandopalett.jsx'
 import { byggKommandon } from './kommandon.js'
 import { kombineraOppen, mallTabId, oppnaKombinera, vantarPaMall } from '../state/kombinera.js'
+import { oppnaSlaIhop, slaIhopOppen, stangSlaIhop } from '../state/slaihop.js'
 import { nyRegelId, TOMT_FILTER, type Filterregel } from '../core/ops/filter.js'
 import {
   hittaDubbletter,
@@ -146,7 +147,6 @@ interface PasteState {
 export function App() {
   const [kö, setKö] = useState<File[]>([])
   const [exportOppen, setExportOppen] = useState(false)
-  const [slaIhopOppen, setSlaIhopOppen] = useState(false)
   const [profilerOppna, setProfilerOppna] = useState(false)
   const [palettOppen, setPalettOppen] = useState(false)
   const [oversiktOppen, setOversiktOppen] = useState(false)
@@ -1289,7 +1289,8 @@ export function App() {
   // tabell man inte längre tittar på, och skulle visa tal som inte gäller.
   const iVerkstaden = verkstad.value !== null
   const iKombinera = kombineraOppen.value
-  const egenVy = iVerkstaden || iKombinera || oversiktOppen
+  const iSlaIhop = slaIhopOppen.value
+  const egenVy = iVerkstaden || iKombinera || iSlaIhop || oversiktOppen
 
   return (
     <div class="app">
@@ -1357,7 +1358,7 @@ export function App() {
               x: (e.currentTarget as HTMLElement).getBoundingClientRect().left,
               y: (e.currentTarget as HTMLElement).getBoundingClientRect().bottom + 4,
               poster: flerfilsmeny({
-                slaIhop: () => setSlaIhopOppen(true),
+                slaIhop: () => oppnaSlaIhop(),
                 kombinera: () => oppnaKombinera(),
                 mall: () => oppnaKombinera(true),
               }),
@@ -1475,7 +1476,25 @@ export function App() {
         </div>
       )}
 
-      {iKombinera ? (
+      {iSlaIhop ? (
+        <SlaIhop
+          flikar={tabs.value.map((t) => ({ id: t.id, frame: t.frame }))}
+          aktivId={tab?.id ?? null}
+          onFiler={oppnaFiler}
+          onExempelpar={oppnaExempelpar}
+          onSlaIhop={(resultat, text) => {
+            openFrame(resultat)
+            notify(text)
+          }}
+          onVerkstad={(vansterTabId, hogerTabId, par, val) => {
+            const vansterTab = tabs.value.find((t) => t.id === vansterTabId)
+            const hogerTab = tabs.value.find((t) => t.id === hogerTabId)
+            if (!vansterTab || !hogerTab) return
+            stangSlaIhop()
+            oppnaVerkstad(vansterTab, hogerTab, par, val)
+          }}
+        />
+      ) : iKombinera ? (
         <Kombinera
           onKlar={(resultat, text) => {
             openFrame(resultat)
@@ -1696,7 +1715,7 @@ export function App() {
               sortera: () => oppnaTabellverktyg('sortera'),
               filter: () => oppnaTabellverktyg('filter'),
               dubbletter: () => oppnaTabellverktyg('dubbletter'),
-              slaIhop: () => setSlaIhopOppen(true),
+              slaIhop: () => oppnaSlaIhop(),
               kombinera: () => oppnaKombinera(),
               mall: () => oppnaKombinera(true),
               sammanfatta: () => setSammanfatta({ startkolumn: palettKolumn?.id ?? null }),
@@ -1786,27 +1805,6 @@ export function App() {
             notify(`Klistrade in ${celler(andrade)}.`, {
               atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) },
             })
-          }}
-        />
-      )}
-
-      {slaIhopOppen && tab && frame && (
-        <MergeDialog
-          vanster={frame}
-          andraFlikar={tabs.value
-            .filter((t) => t.id !== tab.id)
-            .map((t) => ({ id: t.id, frame: t.frame }))}
-          onStang={() => setSlaIhopOppen(false)}
-          onSlaIhop={(resultat, text) => {
-            setSlaIhopOppen(false)
-            openFrame(resultat)
-            notify(text)
-          }}
-          onVerkstad={(hogerTabId, par, val) => {
-            const hogerTab = tabs.value.find((t) => t.id === hogerTabId)
-            if (!hogerTab) return
-            setSlaIhopOppen(false)
-            oppnaVerkstad(tab, hogerTab, par, val)
           }}
         />
       )}
