@@ -3,11 +3,13 @@ import { Notis, Val } from './parts.js'
 import type { Column, ColumnId, Frame } from '../core/types.js'
 import { findColumn, visibleColumns } from '../core/frame/frame.js'
 import { rubriknyckel, synonymgrupp } from '../core/ops/rubriker.js'
+import type { Planpost } from '../core/ops/match.js'
 import {
   FLERTRAFF,
   MATCHNINGSTYPER,
   NYCKELAVSKILJARE,
   byggNycklar,
+  byggPlan,
   cellText,
   forhandsurval,
   kraverTvaHoger,
@@ -74,10 +76,28 @@ export function SlaIhop(props: {
   const [par, setPar] = useState<Matchningspar[]>([])
   const [flertraff, setFlertraff] = useState<Flertraff>('forsta')
   const [prefix, setPrefix] = useState('')
+  /*
+   * Prefixet fördröjs innan förhandsvisningen byggs om.
+   *
+   * `slaIhop` kopierar varje kolumns *ordbok* — `dict.slice()` och
+   * `new Map(dictIndex)` i `kopieraColumn` — och den kostnaden följer antalet
+   * unika värden, inte antalet rader. Ett kapat bygge är alltså inte gratis:
+   * uppmätt till 160 ms på två filer med 100 000 respektive 80 000 rader. Ett
+   * bygge per tangenttryck gör fältet ryckigt precis när man skriver i det.
+   *
+   * Samma 120 ms som sökrutan använder (`SearchBar.tsx`), och av samma skäl.
+   */
+  const [prefixdrojt, setPrefixdrojt] = useState('')
   const [valdaKolumner, setValdaKolumner] = useState<ColumnId[] | null>(null)
   // Sant tills användaren rört paren själv; då slutar förslaget skriva över.
   const [egnaPar, setEgnaPar] = useState(false)
   const [over, setOver] = useState(false)
+
+  useEffect(() => {
+    if (prefix === prefixdrojt) return
+    const timer = setTimeout(() => setPrefixdrojt(prefix), 120)
+    return () => clearTimeout(timer)
+  }, [prefix])
 
   // Escape stänger vyn, som i varje modal och verktygspanel. Att en helskärmsvy
   // vore undantaget är precis den sortens inkonsekvens som gör muskelminnet
@@ -167,10 +187,23 @@ export function SlaIhop(props: {
    * tangenttryck — men det ingår här, eftersom rubrikerna är just vad rutan
    * ska visa. Kostnaden är `FORHANDSRADER` rader, inte filen.
    */
+  /** Planen bakom förhandsvisningen, så rutan vet vilka rader som blev utan partner. */
+  const forhandsplan = useMemo(
+    () =>
+      matchning && vanster ? byggPlan(matchning, flertraff, vanster.rowCount, urval) : [],
+    [matchning, flertraff, vanster, urval],
+  )
+
   const forhand = useMemo(() => {
     if (!vanster || !hoger || !matchning || urval.length === 0) return null
-    return slaIhop(vanster, hoger, matchning, sammanslagning, urval).frame
-  }, [vanster, hoger, matchning, urval, valda.join(','), flertraff, prefix])
+    return slaIhop(
+      vanster,
+      hoger,
+      matchning,
+      { ...sammanslagning, prefix: prefixdrojt },
+      urval,
+    ).frame
+  }, [vanster, hoger, matchning, urval, valda.join(','), flertraff, prefixdrojt])
 
   /* ---------- Handtag ---------- */
 
@@ -597,6 +630,7 @@ export function SlaIhop(props: {
           />
           <Resultatet
             forhand={forhand}
+            plan={forhandsplan}
             matchning={matchning}
             vansterRader={vanster?.rowCount ?? 0}
             vansterKolumner={vanster?.columns.length ?? 0}
@@ -834,6 +868,8 @@ function Paren(props: {
  */
 function Resultatet(props: {
   forhand: Frame | null
+  /** En post per rad i `forhand`; `h === null` betyder att raden blev utan partner. */
+  plan: readonly Planpost[]
   matchning: Matchning | null
   vansterRader: number
   /** Antal kolumner vänsterfilen bidrar med — allt efter dem är hämtat. */
@@ -871,7 +907,11 @@ function Resultatet(props: {
     const hamtade = forhand.columns.slice(props.vansterKolumner)
     const nycklar = kvar.filter((c) => props.nyckelnamn.includes(c.name))
     const ovriga = kvar.filter((c) => !props.nyckelnamn.includes(c.name))
-    return [...nycklar, ...hamtade, ...ovriga]
+    return [
+      ...nycklar.map((col) => ({ col, hamtad: false })),
+      ...hamtade.map((col) => ({ col, hamtad: true })),
+      ...ovriga.map((col) => ({ col, hamtad: false })),
+    ]
   }, [forhand, props.vansterKolumner, props.nyckelnamn.join('|')])
 
   return (
@@ -892,24 +932,36 @@ function Resultatet(props: {
             <table class="fortab">
               <thead>
                 <tr>
-                  {ordnade.map((c) => (
-                    <th key={c.id}>{c.name}</th>
+                  {ordnade.map(({ col }) => (
+                    <th key={col.id}>{col.name}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {Array.from({ length: forhand.rowCount }, (_, r) => (
-                  <tr key={r}>
-                    {ordnade.map((c) => {
-                      const v = getCell(c, r)
-                      return (
-                        <td key={c.id} class={v === '' ? 'fortab__tom' : undefined}>
-                          {v}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
+                {Array.from({ length: forhand.rowCount }, (_, r) => {
+                  // Utan partner är hela den hämtade halvan frånvarande, inte
+                  // tom. Ett tomt värde ur en rad som *hade* en partner är
+                  // något helt annat — det är ett värde som saknades i filen —
+                  // och att måla dem lika vore att påstå att de betyder samma
+                  // sak.
+                  const utanPartner = props.plan[r]?.h === null
+                  return (
+                    <tr key={r}>
+                      {ordnade.map(({ col, hamtad }) => {
+                        const v = getCell(col, r)
+                        return (
+                          <td
+                            key={col.id}
+                            class={hamtad && utanPartner ? 'fortab__utan' : undefined}
+                            title={hamtad && utanPartner ? 'Raden hittade ingen partner' : undefined}
+                          >
+                            {v}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

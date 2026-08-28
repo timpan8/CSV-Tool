@@ -138,9 +138,27 @@
   content: '→ ';
 }
 
-/* En tom cell i resultatet betyder "ingen partner", och det ska synas. */
-.fortab__tom {
-  background: var(--yta-2);
+/*
+ * En cell som saknar partner, inte en cell som är tom.
+ *
+ * Skillnaden är hela poängen. En hämtad cell kan vara tom för att raden inte
+ * hittade någon partner — eller för att partnerns värde var tomt i sin fil.
+ * Det är två helt olika saker, och att måla dem lika vore att påstå att de
+ * betyder samma. Bara det första fallet märks, och bara i de hämtade
+ * kolumnerna.
+ *
+ * Strimman är samma mönster som rutnätet redan använder för en cell som
+ * fylldes ut vid import (`.rutnat__cell--utfylld`, grid.css) — den betyder
+ * redan "det här stod inte i filen".
+ */
+.fortab__utan {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 5px,
+    var(--yta-3) 5px,
+    var(--yta-3) 6px
+  );
 }
 
 /* ---------- Paren ---------- */

@@ -1,4 +1,4 @@
-import type { Column, ColumnId, Frame } from '../types.js'
+import { Flag, type Column, type ColumnId, type Frame } from '../types.js'
 import { findColumn } from '../frame/frame.js'
 import { getCell } from '../frame/column.js'
 import { normalizeAlways, stripDiacritics } from '../locale/sv.js'
@@ -527,6 +527,58 @@ export function forhandsurval(matchning: Matchning, tak: number): number[] {
   return valda
 }
 
+/** En resultatrad: vilken vänsterrad, och vilken högerrad. `null` = ingen partner. */
+export interface Planpost {
+  v: number
+  h: number | null
+}
+
+/**
+ * Vilka (vänsterrad, högerrad) resultatet ska bestå av.
+ *
+ * Bruten ut ur `slaIhop` för att gränssnittet ska kunna svara på frågan *blev
+ * den här raden utan partner?* utan att gissa. Utan den skulle en
+ * förhandsvisning behöva läsa av tomma celler och kalla dem "ingen träff" —
+ * men en cell kan vara tom för att partnern saknades **eller** för att
+ * partnerns värde var tomt, och det är två helt olika saker. Att blanda ihop
+ * dem vore samma fel som att låta en summa av ingenting bli noll.
+ *
+ * `vansterRader` begränsar planen till ett urval, i urvalets ordning.
+ */
+export function byggPlan(
+  matchning: Matchning,
+  flertraff: Flertraff,
+  vanterRowCount: number,
+  vansterRader?: readonly number[],
+): Planpost[] {
+  // Träffarna per vänsterrad, i högerfilens ordning.
+  const traffar = new Map<number, number[]>()
+  for (const { v, h } of matchning.par) {
+    const lista = traffar.get(v)
+    if (lista) lista.push(h)
+    else traffar.set(v, [h])
+  }
+
+  const plan: Planpost[] = []
+  const antal = vansterRader ? vansterRader.length : vanterRowCount
+  for (let i = 0; i < antal; i++) {
+    const r = vansterRader ? vansterRader[i]! : i
+    const lista = traffar.get(r)
+    if (!lista || lista.length === 0) {
+      plan.push({ v: r, h: null })
+    } else if (lista.length === 1) {
+      plan.push({ v: r, h: lista[0]! })
+    } else if (flertraff === 'duplicera') {
+      for (const h of lista) plan.push({ v: r, h })
+    } else if (flertraff === 'forsta') {
+      plan.push({ v: r, h: lista[0]! })
+    } else {
+      plan.push({ v: r, h: null })
+    }
+  }
+  return plan
+}
+
 /**
  * Bygger den sammanslagna ramen.
  *
@@ -555,34 +607,7 @@ export function slaIhop(
     .map((id) => findColumn(hoger, id))
     .filter((c): c is Column => c !== undefined)
 
-  // Träffarna per vänsterrad, i högerfilens ordning.
-  const traffar = new Map<number, number[]>()
-  for (const { v, h } of matchning.par) {
-    const lista = traffar.get(v)
-    if (lista) lista.push(h)
-    else traffar.set(v, [h])
-  }
-
-  // Vilka (vänsterrad, högerrad) resultatet ska bestå av. null = ingen träff.
-  const plan: { v: number; h: number | null }[] = []
-  const kallrader = vansterRader ?? null
-  const antalKallrader = kallrader ? kallrader.length : vanster.rowCount
-  for (let i = 0; i < antalKallrader; i++) {
-    const r = kallrader ? kallrader[i]! : i
-    const lista = traffar.get(r)
-    if (!lista || lista.length === 0) {
-      plan.push({ v: r, h: null })
-    } else if (lista.length === 1) {
-      plan.push({ v: r, h: lista[0]! })
-    } else if (val.flertraff === 'duplicera') {
-      for (const h of lista) plan.push({ v: r, h })
-    } else if (val.flertraff === 'forsta') {
-      plan.push({ v: r, h: lista[0]! })
-    } else {
-      plan.push({ v: r, h: null })
-    }
-  }
-
+  const plan = byggPlan(matchning, val.flertraff, vanster.rowCount, vansterRader)
   const antal = plan.length
   const namn = new Set(vanster.columns.map((c) => c.name))
   const kolumner: Column[] = []
@@ -643,7 +668,20 @@ function kopieraColumn(
   const flags = new Uint8Array(antal)
   for (let i = 0; i < antal; i++) {
     const r = radFor(i)
-    if (r === null) continue
+    if (r === null) {
+      /*
+       * Raden hittade ingen partner. Värdet *saknades*, det var inte tomt.
+       *
+       * Samma beslut som `stapla` fattar för en kolumn som inte fanns i en
+       * fil, och av samma skäl: en cell som är tom för att partnern saknades
+       * och en cell som är tom för att partnerns värde var tomt betyder helt
+       * olika saker. Utan flaggan går de inte att skilja åt någonstans — inte
+       * i förhandsvisningen, och inte i den färdiga fliken. Rutnätet ritar
+       * redan `Flag.Padded` som en strimma, så det syns utan ny kod.
+       */
+      flags[i] = Flag.Padded
+      continue
+    }
     codes[i] = kalla.codes[r]!
     flags[i] = kalla.flags[r]!
   }

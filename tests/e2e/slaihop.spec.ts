@@ -146,8 +146,16 @@ test('visar resultatet med sömmen först och tomma celler synliga', async ({ pa
   // Nyckeln först, sedan de hämtade kolumnerna — inte filens egen ordning.
   await expect(resultat.locator('th').nth(0)).toHaveText('Namn')
   await expect(resultat.locator('th').nth(1)).toHaveText('Order')
-  // En rad utan partner har tomma celler, och de är märkta.
-  await expect(resultat.locator('.fortab__tom').first()).toBeVisible()
+  // En rad utan partner märks i de hämtade kolumnerna — men bara där, och
+  // bara när partnern saknades. En cell som är tom för att värdet var tomt
+  // är något annat och ska inte se likadan ut.
+  const utan = resultat.locator('.fortab__utan')
+  await expect(utan.first()).toBeVisible()
+  await expect(utan.first()).toHaveAttribute('title', 'Raden hittade ingen partner')
+  // Nyckelkolumnen är aldrig märkt — den kom ur vänsterfilen och finns alltid.
+  await expect(resultat.locator('tbody tr').first().locator('td').first()).not.toHaveClass(
+    /fortab__utan/,
+  )
 
   // Prefixet syns i rubrikerna direkt, utan att något körs.
   await page.getByPlaceholder('t.ex. exempel-order.csv – ').fill('o–')
@@ -173,9 +181,12 @@ test('slår ihop till en ny flik där omatchade rader finns kvar tomma', async (
   await expect(page.getByRole('gridcell', { name: '2 400,00', exact: true })).toHaveCount(2)
   await expect(page.getByRole('gridcell', { name: 'ORD-1001', exact: true })).toHaveCount(2)
 
-  // Carl-Johan har ingen order och står kvar med tomma orderceller.
+  // Carl-Johan har ingen order och står kvar med tomma orderceller — och de
+  // är märkta som frånvarande, inte som tomma. Skillnaden syns i den färdiga
+  // fliken och inte bara i förhandsvisningen.
   await expect(page.getByRole('gridcell', { name: 'Carl-Johan Nilsson', exact: true })).toBeVisible()
   await expect(page.getByRole('gridcell', { name: 'ORD-1008', exact: true })).toHaveCount(0)
+  await expect(page.locator('.rutnat__cell--utfylld').first()).toBeVisible()
 })
 
 test('förhandsvisningen och körningen är eniga om radantalet', async ({ page }) => {

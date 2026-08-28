@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
-import { createColumn, getCell, intern } from '../../src/core/frame/column.js'
+import { createColumn, getCell, hasFlag, intern } from '../../src/core/frame/column.js'
 import { createFrame } from '../../src/core/frame/frame.js'
-import type { Frame } from '../../src/core/types.js'
+import { Flag, type Frame } from '../../src/core/types.js'
 import {
   byggNycklar,
+  byggPlan,
   forhandsurval,
   matcha,
   NYCKELAVSKILJARE,
@@ -590,5 +591,85 @@ describe('NYCKELAVSKILJARE', () => {
     const v = frameOf('v', ['Namn', 'Ort'], [['Anna Karlsson', 'Malmö']])
     const nycklar = byggNycklar(v, [par(v, v, 0, 0), par(v, v, 1, 1)], 'vanster')
     expect(nycklar[0]!.split(NYCKELAVSKILJARE)).toEqual(['anna karlsson', 'malmö'])
+  })
+})
+
+
+describe('byggPlan', () => {
+  const V = frameOf('kunder', ['Namn'], [['Anna'], ['Bo'], ['Cia']])
+  const H = frameOf('order', ['Kund', 'Nr'], [['anna', '1'], ['anna', '2'], ['cia', '3']])
+  const M = () => matcha(V, H, [par(V, H, 0, 0)])
+
+  it('säger vilka rader som blev utan partner', () => {
+    // Det är den upplysningen förhandsvisningen inte kan gissa sig till: en
+    // tom cell kan lika gärna vara en partner vars värde var tomt.
+    const plan = byggPlan(M(), 'forsta', V.rowCount)
+    expect(plan.map((p) => p.h === null)).toEqual([false, true, false])
+  })
+
+  it('duplicera ger en post per träff, forsta bara den första', () => {
+    expect(byggPlan(M(), 'duplicera', V.rowCount)).toHaveLength(4)
+    expect(byggPlan(M(), 'forsta', V.rowCount)).toHaveLength(3)
+  })
+
+  it('lamna gör en flerträffsrad partnerlös i stället för att välja åt en', () => {
+    const plan = byggPlan(M(), 'lamna', V.rowCount)
+    expect(plan.map((p) => p.h === null)).toEqual([true, true, false])
+  })
+
+  it('följer urvalet, i urvalets ordning', () => {
+    const plan = byggPlan(M(), 'forsta', V.rowCount, [2, 1])
+    expect(plan.map((p) => p.v)).toEqual([2, 1])
+    expect(plan.map((p) => p.h === null)).toEqual([false, true])
+  })
+
+  it('är exakt den plan slaIhop bygger sitt resultat av', () => {
+    // Vakten som gör att rutan och knappen aldrig kan bli oense.
+    const m = M()
+    const val = { hogerKolumner: [H.columns[1]!.id], flertraff: 'duplicera' as const, prefix: '' }
+    const { frame } = slaIhop(V, H, m, val)
+    const plan = byggPlan(m, 'duplicera', V.rowCount)
+    expect(plan).toHaveLength(frame.rowCount)
+    const nr = frame.columns[1]!
+    plan.forEach((p, r) => {
+      expect(getCell(nr, r) === '').toBe(p.h === null)
+    })
+  })
+})
+
+
+describe('celler utan partner är frånvarande, inte tomma', () => {
+  it('märker den hämtade cellen med Flag.Padded när raden blev utan partner', () => {
+    // Samma beslut som `stapla` fattar för en kolumn som saknas i en fil.
+    // Utan flaggan går "ingen partner" inte att skilja från "partnerns värde
+    // var tomt" — varken i förhandsvisningen eller i den färdiga fliken.
+    const v = frameOf('kunder', ['Namn'], [['Anna'], ['Bo']])
+    const h = frameOf('order', ['Kund', 'Nr'], [['anna', '']])
+    const m = matcha(v, h, [par(v, h, 0, 0)])
+    const { frame } = slaIhop(v, h, m, {
+      hogerKolumner: [h.columns[1]!.id],
+      flertraff: 'forsta',
+      prefix: '',
+    })
+    const nr = frame.columns[1]!
+
+    // Båda cellerna är tomma …
+    expect([getCell(nr, 0), getCell(nr, 1)]).toEqual(['', ''])
+    // … men bara den ena saknar ett värde. Anna hittade en partner vars Nr
+    // råkade vara tomt; Bo hittade ingen partner alls.
+    expect(hasFlag(nr, 0, Flag.Padded)).toBe(false)
+    expect(hasFlag(nr, 1, Flag.Padded)).toBe(true)
+  })
+
+  it('rör inte vänsterfilens kolumner', () => {
+    const v = frameOf('kunder', ['Namn'], [['Anna'], ['Bo']])
+    const h = frameOf('order', ['Kund', 'Nr'], [['anna', '1']])
+    const m = matcha(v, h, [par(v, h, 0, 0)])
+    const { frame } = slaIhop(v, h, m, {
+      hogerKolumner: [h.columns[1]!.id],
+      flertraff: 'forsta',
+      prefix: '',
+    })
+    expect(hasFlag(frame.columns[0]!, 1, Flag.Padded)).toBe(false)
   })
 })
