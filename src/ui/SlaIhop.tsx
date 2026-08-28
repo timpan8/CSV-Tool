@@ -322,107 +322,107 @@ export function SlaIhop(props: {
 
   return (
     <div class="slaihop">
-      <div class="slaihop__topp">
-        <div>
-          <h2>Slå ihop filer</h2>
-          <span class="slaihop__underrubrik">
-            {vanster?.name} ↔ {hoger?.name} — alla rader ur {vanster?.name} följer med, även de
-            utan träff.
-          </span>
-        </div>
-        {matchning && vanster && hoger && (
-          <table class="inventering">
-            <tbody>
-              <tr>
-                <td class="inventering__antal">{formatCount(matchning.vansterMatchade)}</td>
-                <td>
-                  av {formatCount(vanster.rowCount)} rader i {vanster.name} hittar en träff (
-                  {traffprocent} %)
-                </td>
-              </tr>
-              <tr class={matchning.vansterUtan.length > 0 ? 'inventering--okant' : ''}>
-                <td class="inventering__antal">{formatCount(matchning.vansterUtan.length)}</td>
-                <td>hittar ingen träff</td>
-              </tr>
-              <tr>
-                <td class="inventering__antal">{formatCount(matchning.hogerUtan.length)}</td>
-                <td>rader i {hoger.name} blir över</td>
-              </tr>
-              {matchning.vansterFlera > 0 && (
-                <tr class="inventering--okant">
-                  <td class="inventering__antal">{formatCount(matchning.vansterFlera)}</td>
-                  <td>matchar mer än en rad (som mest {formatCount(matchning.storstaTraff)})</td>
-                </tr>
-              )}
-              {matchning.hogerFlera > 0 && (
-                <tr>
-                  <td class="inventering__antal">{formatCount(matchning.hogerFlera)}</td>
-                  <td>rader i {hoger.name} används av flera</td>
-                </tr>
-              )}
-              {(matchning.tommaVanster > 0 || matchning.tommaHoger > 0) && (
-                <tr>
-                  <td class="inventering__antal">
-                    {formatCount(matchning.tommaVanster + matchning.tommaHoger)}
-                  </td>
-                  <td>har tom nyckel och kan aldrig matcha</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        )}
-      </div>
+      {/*
+        Toppen är en rad, inte ett block.
 
-      <div class="slaihop__kropp">
-        <div class="panel">
-          <div class="panel__rubrik">Filerna</div>
-          <div class="panel__innehall">
-            <div class="falt">
-              <span class="falt__etikett">Stommen — alla rader följer med</span>
-              <Val
-                varden={flikar.map((t) => ({
+        Filvalen hör ihop med rubriken — de säger *vilka* filer — och siffrorna
+        står som en remsa i stället för sex tabellrader. Sex rader tog 130 px
+        av ett fönster som är 720 px högt, och varje pixel toppen tar är en
+        pixel rutorna nedanför inte får.
+      */}
+      <div class="slaihop__topp">
+        <h2>Slå ihop filer</h2>
+          <div class="falt">
+            <span class="falt__etikett">Stommen — alla rader följer med</span>
+            <Val
+              varden={flikar.map((t) => ({
+                varde: t.id,
+                etikett: `${t.frame.name} (${formatCount(t.frame.rowCount)})`,
+              }))}
+              valt={vansterId}
+              onValj={(v) => {
+                if (v === hogerId) setHogerId(vansterId)
+                setVansterId(v)
+                setEgnaPar(false)
+                setValdaKolumner(null)
+              }}
+            />
+          </div>
+
+          <div class="slaihop__byt">
+            <button
+              class="knapp knapp--tyst"
+              title="Byt håll: den andra filen blir stommen."
+              onClick={byt}
+            >
+              ⇄ Byt håll
+            </button>
+          </div>
+
+          <div class="falt">
+            <span class="falt__etikett">Hämta uppgifter ur</span>
+            <Val
+              varden={flikar
+                .filter((t) => t.id !== vansterId)
+                .map((t) => ({
                   varde: t.id,
                   etikett: `${t.frame.name} (${formatCount(t.frame.rowCount)})`,
                 }))}
-                valt={vansterId}
-                onValj={(v) => {
-                  if (v === hogerId) setHogerId(vansterId)
-                  setVansterId(v)
-                  setEgnaPar(false)
-                  setValdaKolumner(null)
-                }}
-              />
-            </div>
+              valt={hogerId}
+              onValj={(v) => {
+                setHogerId(v)
+                setEgnaPar(false)
+                setValdaKolumner(null)
+              }}
+            />
+            <Filknappar onFiler={props.onFiler} />
+          </div>
+        {matchning && vanster && hoger && (
+          <div class="slaihop__tal">
+            <span>
+              <strong>{formatCount(matchning.vansterMatchade)}</strong> av{' '}
+              {formatCount(vanster.rowCount)} rader hittar en träff ({traffprocent} %)
+            </span>
+            {matchning.vansterUtan.length > 0 && (
+              <span class="slaihop__tal--okant">
+                <strong>{formatCount(matchning.vansterUtan.length)}</strong> hittar ingen
+              </span>
+            )}
+            <span>
+              <strong>{formatCount(matchning.hogerUtan.length)}</strong> blir över i {hoger.name}
+            </span>
+            {matchning.vansterFlera > 0 && (
+              <span class="slaihop__tal--okant">
+                <strong>{formatCount(matchning.vansterFlera)}</strong> matchar flera (som mest{' '}
+                {formatCount(matchning.storstaTraff)})
+              </span>
+            )}
+            {matchning.hogerFlera > 0 && (
+              <span>
+                <strong>{formatCount(matchning.hogerFlera)}</strong> används av flera
+              </span>
+            )}
+            {(matchning.tommaVanster > 0 || matchning.tommaHoger > 0) && (
+              <span>
+                <strong>{formatCount(matchning.tommaVanster + matchning.tommaHoger)}</strong> har
+                tom nyckel och kan aldrig matcha
+              </span>
+            )}
+          </div>
+        )}
+      </div>
 
-            <div class="slaihop__byt">
-              <button
-                class="knapp knapp--tyst"
-                title="Byt håll: den andra filen blir stommen."
-                onClick={byt}
-              >
-                ⇄ Byt håll
-              </button>
-            </div>
+      {/*
+        Inställningarna ligger på bredden, inte i en smal rail.
 
-            <div class="falt">
-              <span class="falt__etikett">Hämta uppgifter ur</span>
-              <Val
-                varden={flikar
-                  .filter((t) => t.id !== vansterId)
-                  .map((t) => ({
-                    varde: t.id,
-                    etikett: `${t.frame.name} (${formatCount(t.frame.rowCount)})`,
-                  }))}
-                valt={hogerId}
-                onValj={(v) => {
-                  setHogerId(v)
-                  setEgnaPar(false)
-                  setValdaKolumner(null)
-                }}
-              />
-              <Filknappar onFiler={props.onFiler} />
-            </div>
-
+        Först stod de i en 260 px-panel. Där rymdes 870 px innehåll i 380 —
+        allt från *Kolumner att hämta* och nedåt hamnade under vikkanten, i
+        en panel som inte såg ut att gå att rulla. Kontrollerna är korta och
+        breda till sin natur och skärmen är bred: på liggande led tar
+        allihop omkring 130 px i stället för 870, och rutorna får både
+        bredden och höjden som railen tog.
+      */}
+      <div class="slaihop__installningar">
             <div class="falt">
               <span class="falt__etikett">Rader hör ihop när de stämmer i</span>
               {aktivaPar.map((p, i) => (
@@ -603,8 +603,7 @@ export function SlaIhop(props: {
                 onInput={(e) => setPrefix((e.currentTarget as HTMLInputElement).value)}
               />
             </div>
-          </div>
-        </div>
+      </div>
 
         <div class="slaihop__rutor">
           {vanster && (
@@ -640,7 +639,6 @@ export function SlaIhop(props: {
             }
           />
         </div>
-      </div>
 
       <div class="slaihop__fot">
         <span class="slaihop__fot__text">
