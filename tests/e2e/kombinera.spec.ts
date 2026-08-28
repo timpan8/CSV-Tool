@@ -39,7 +39,7 @@ test('kolumner som bara finns i vissa filer spärrar körningen tills de besluta
   await expect(page.locator('.aliasrad--obeslutad').first()).toBeVisible()
 
   // Ta med allt som är obeslutat.
-  const taMed = page.getByRole('button', { name: 'Ta med' })
+  const taMed = page.getByRole('button', { name: 'Ta med', exact: true })
   while ((await taMed.count()) > 0) await taMed.first().click()
 
   await expect(page.locator('.aliasrad--obeslutad')).toHaveCount(0)
@@ -48,7 +48,7 @@ test('kolumner som bara finns i vissa filer spärrar körningen tills de besluta
 
 test('staplar filerna och visar vilken fil varje rad kom från', async ({ page }) => {
   await oppnaKombinera(page)
-  const taMed = page.getByRole('button', { name: 'Ta med' })
+  const taMed = page.getByRole('button', { name: 'Ta med', exact: true })
   while ((await taMed.count()) > 0) await taMed.first().click()
 
   // Förhandsvisningen bygger på riktigt, ur båda filerna.
@@ -68,10 +68,10 @@ test('staplar filerna och visar vilken fil varje rad kom från', async ({ page }
 test('en kolumn som hoppas över finns inte i resultatet', async ({ page }) => {
   await oppnaKombinera(page)
 
-  await rad(page, 'Summa').getByRole('button', { name: 'Hoppa över' }).click()
+  await rad(page, 'Summa').getByRole('button', { name: 'Hoppa över', exact: true }).click()
   await expect(rad(page, 'Summa')).toHaveClass(/aliasrad--av/)
 
-  const taMed = page.getByRole('button', { name: 'Ta med' })
+  const taMed = page.getByRole('button', { name: 'Ta med', exact: true })
   while ((await taMed.count()) > 0) await taMed.first().click()
   await page.getByRole('button', { name: 'Kombinera', exact: true }).click()
 
@@ -90,7 +90,7 @@ test('en ändrad koppling flyttar värdena till en annan spalt', async ({ page }
     .selectOption({ label: '— tomt —' })
   await expect(rad(page, 'Namn')).toContainText('finns i 1 av 2')
 
-  const taMed = page.getByRole('button', { name: 'Ta med' })
+  const taMed = page.getByRole('button', { name: 'Ta med', exact: true })
   while ((await taMed.count()) > 0) await taMed.first().click()
   await page.getByRole('button', { name: 'Kombinera', exact: true }).click()
 
@@ -122,8 +122,10 @@ test('en mallfil bestämmer resultatets form', async ({ page }) => {
     'är exempel och tas inte med i resultatet',
   )
 
-  // Land finns i mallen men i ingen fil, och det ska sägas före körningen.
-  await expect(page.locator('.inventering')).toContainText('fylls inte av någon fil')
+  // Land finns i mallen men i ingen fil, och det ska sägas före körningen —
+  // både som siffra i toppen och på den rad det gäller.
+  await expect(page.locator('.vytal')).toContainText('blir tomma')
+  await expect(rad(page, 'Land')).toContainText('Blir tom i hela resultatet')
 })
 
 test('mallen får inte bli ett tyst filter', async ({ page }) => {
@@ -142,7 +144,7 @@ test('mallens form fylls med data ur båda filerna', async ({ page }) => {
   await oppnaKombinera(page)
   await valjExempelmall(page)
 
-  const hoppaOver = page.getByRole('button', { name: 'Hoppa över' })
+  const hoppaOver = page.getByRole('button', { name: 'Hoppa över', exact: true })
   while ((await hoppaOver.count()) > 0) await hoppaOver.first().click()
   await page.getByRole('button', { name: 'Kombinera', exact: true }).click()
 
@@ -184,4 +186,141 @@ test('målformen står överst, före listan med filer', async ({ page }) => {
   const malform = await panel.getByLabel('Målform').boundingBox()
   const forstaFilen = await panel.locator('.kollista .kryss').first().boundingBox()
   expect(malform!.y).toBeLessThan(forstaFilen!.y)
+})
+
+test('massbesluten svarar på alla frågor och tar tillbaka svaren', async ({ page }) => {
+  await oppnaKombinera(page)
+  const obeslutade = page.locator('.aliasrad--obeslutad')
+  const fore = await obeslutade.count()
+  expect(fore).toBeGreaterThan(1)
+
+  await page.getByRole('button', { name: 'Ta med alla' }).click()
+  await expect(obeslutade).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Kombinera', exact: true })).toBeEnabled()
+
+  // Massbesluten verkar på alla frågor, inte bara på de obesvarade — annars
+  // vore ett felklick tolv klick att ångra.
+  await page.getByRole('button', { name: 'Hoppa över alla' }).click()
+  await expect(page.locator('.aliasrad--av')).toHaveCount(fore)
+
+  await page.getByRole('button', { name: 'Fråga igen', exact: true }).click()
+  await expect(obeslutade).toHaveCount(fore)
+})
+
+test('kolumner som inte beslutats syns ändå i förhandsvisningen, märkta', async ({ page }) => {
+  await oppnaKombinera(page)
+
+  // Frågan är "ska Ort vara med?". Att svara på den utan att se Ort vore att
+  // svara i blindo — så den visas, provisoriskt med och tydligt märkt.
+  const rubrik = page.locator('.fortab th', { hasText: 'Ort' })
+  await expect(rubrik).toHaveClass(/fortab__obeslutad/)
+  await expect(rubrik).toContainText('ej beslutad')
+
+  await rad(page, 'Ort').getByRole('button', { name: 'Ta med', exact: true }).click()
+  await expect(page.locator('.fortab th', { hasText: 'Ort' })).not.toHaveClass(
+    /fortab__obeslutad/,
+  )
+})
+
+test('en cell som filen inte gav syns som sådan i förhandsvisningen', async ({ page }) => {
+  await oppnaKombinera(page)
+  // Orderfilen har ingen Ort. Tom cell och cell-som-aldrig-fanns är inte samma
+  // sak, och skillnaden är hela skälet att fråga per kolumn.
+  await expect(page.locator('.fortab td.fortab__utan').first()).toBeVisible()
+  await expect(page.locator('.fortab td.fortab__utan').first()).toHaveAttribute(
+    'title',
+    'Stod inte i filen',
+  )
+})
+
+test('förhandsvisningen står still medan kartan skrollar', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await oppnaKombinera(page)
+
+  // Huvudytan skrollar inte: rutorna delar på den och skrollar var för sig.
+  const kropp = page.locator('.kombinera__kropp')
+  const matt = await kropp.evaluate((e) => ({ k: e.clientHeight, s: e.scrollHeight }))
+  expect(matt.s).toBeLessThanOrEqual(matt.k + 1)
+
+  // Båda rutorna syns samtidigt, innanför fönstret.
+  for (const ruta of await page.locator('.kombinera__rutor > .ruta').all()) {
+    const box = await ruta.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.height).toBeGreaterThan(120)
+    expect(box!.y + box!.height).toBeLessThanOrEqual(720)
+  }
+
+  // Kartan skrollar i sitt eget omslag, och rubrikraden följer med.
+  const sticky = await page.locator('.aliaskarta__omslag').evaluate((om) => {
+    const th = om.querySelector('thead th')!
+    const fore = Math.round(th.getBoundingClientRect().top - om.getBoundingClientRect().top)
+    om.scrollTop = 150
+    return { fore, efter: Math.round(th.getBoundingClientRect().top - om.getBoundingClientRect().top), rullade: om.scrollTop }
+  })
+  expect(sticky.rullade).toBeGreaterThan(0)
+  expect(sticky.efter).toBe(sticky.fore)
+})
+
+test('ett standardvärde fyller filerna som inte ger något', async ({ page }) => {
+  await oppnaKombinera(page)
+
+  await rad(page, 'Ort').getByLabel('Standardvärde för Ort').fill('Okänd')
+  // Radens not räknar om: det som skulle bli tomt fylls i stället.
+  await expect(rad(page, 'Ort')).toContainText('14 rader fylls med Okänd')
+
+  await page.getByRole('button', { name: 'Ta med alla' }).click()
+  // Värdet syns i förhandsvisningen, och strimman säger att det inte stod i filen.
+  const cell = page.locator('.fortab td.fortab__utan', { hasText: 'Okänd' }).first()
+  await expect(cell).toBeVisible()
+
+  // Där alla filer har kolumnen finns inget att fylla, och fältet säger det.
+  await expect(rad(page, 'Namn').getByLabel('Standardvärde för Namn')).toBeDisabled()
+})
+
+test('provvärdet under väljaren visar vad kolumnen faktiskt innehåller', async ({ page }) => {
+  await oppnaKombinera(page)
+  // Rubriker ljuger; innehållet gör det inte.
+  await expect(rad(page, 'Ort').locator('.aliaskarta__prov')).toContainText('Malmö')
+  await expect(rad(page, 'E-post').locator('.aliaskarta__prov').first()).toContainText('@')
+})
+
+test('två kolumner går att lägga i samma spalt för hand, och dela upp igen', async ({ page }) => {
+  await oppnaKombinera(page)
+
+  // Belopp och Summa betyder samma sak, men rubrikerna avslöjar det inte —
+  // och då finns ingen väg alls utan handgreppet.
+  await expect(rad(page, 'Belopp')).toContainText('finns i 1 av 2')
+  await expect(rad(page, 'Summa')).toContainText('finns i 1 av 2')
+
+  await rad(page, 'Belopp')
+    .getByRole('button', { name: 'Samma spalt som en annan målkolumn: Belopp' })
+    .click()
+  await rad(page, 'Belopp')
+    .getByLabel('Målkolumn som hör till samma spalt')
+    .selectOption({ label: 'Summa' })
+  await rad(page, 'Belopp').getByRole('button', { name: 'Samma spalt', exact: true }).click()
+
+  await expect(rad(page, 'Summa')).toHaveCount(0)
+  await expect(rad(page, 'Belopp')).toContainText('finns i 2 av 2')
+  await expect(rad(page, 'Belopp')).toContainText('+ Summa')
+
+  // Ett felklick ska gå att ta tillbaka utan att bygga om kartan.
+  await rad(page, 'Belopp').getByRole('button', { name: 'Dela upp Belopp igen' }).click()
+  await expect(rad(page, 'Summa')).toHaveCount(1)
+  await expect(rad(page, 'Belopp')).toContainText('finns i 1 av 2')
+})
+
+test('Escape stänger vyn, men lämnar först fältet man skriver i', async ({ page }) => {
+  await oppnaKombinera(page)
+
+  const falt = rad(page, 'Ort').getByLabel('Namn på målkolumn 6')
+  await falt.click()
+  await page.keyboard.press('Escape')
+  // Första Escape lämnar fältet — en halvbyggd karta ska inte rivas för att
+  // fokus råkade ligga i ett namnfält.
+  await expect(page.locator('.kombinera')).toBeVisible()
+  await expect(falt).not.toBeFocused()
+
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.kombinera')).toHaveCount(0)
 })

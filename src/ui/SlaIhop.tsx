@@ -99,19 +99,6 @@ export function SlaIhop(props: {
     return () => clearTimeout(timer)
   }, [prefix])
 
-  // Escape stänger vyn, som i varje modal och verktygspanel. Att en helskärmsvy
-  // vore undantaget är precis den sortens inkonsekvens som gör muskelminnet
-  // opålitligt.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const mal = e.target as HTMLElement | null
-      if (e.key !== 'Escape' || mal?.tagName === 'INPUT' || mal?.tagName === 'SELECT') return
-      e.preventDefault()
-      stangSlaIhop()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
 
   /*
    * Håller de två valen på flikar som faktiskt finns.
@@ -378,13 +365,13 @@ export function SlaIhop(props: {
             <Filknappar onFiler={props.onFiler} />
           </div>
         {matchning && vanster && hoger && (
-          <div class="slaihop__tal">
+          <div class="vytal">
             <span>
               <strong>{formatCount(matchning.vansterMatchade)}</strong> av{' '}
               {formatCount(vanster.rowCount)} rader hittar en träff ({traffprocent} %)
             </span>
             {matchning.vansterUtan.length > 0 && (
-              <span class="slaihop__tal--okant">
+              <span class="vytal--okant">
                 <strong>{formatCount(matchning.vansterUtan.length)}</strong> hittar ingen
               </span>
             )}
@@ -392,7 +379,7 @@ export function SlaIhop(props: {
               <strong>{formatCount(matchning.hogerUtan.length)}</strong> blir över i {hoger.name}
             </span>
             {matchning.vansterFlera > 0 && (
-              <span class="slaihop__tal--okant">
+              <span class="vytal--okant">
                 <strong>{formatCount(matchning.vansterFlera)}</strong> matchar flera (som mest{' '}
                 {formatCount(matchning.storstaTraff)})
               </span>
@@ -717,8 +704,8 @@ function Filprov(props: {
   const antal = Math.min(FILPROVSRADER, frame.rowCount)
 
   return (
-    <div class="slaihop__ruta">
-      <div class="slaihop__ruta__rubrik">
+    <div class="ruta">
+      <div class="ruta__rubrik">
         {frame.name}
         <span class="panel__rubrik__antal">
           {antal === frame.rowCount
@@ -726,7 +713,7 @@ function Filprov(props: {
             : `${formatCount(antal)} av ${raderText(frame.rowCount)}`}
         </span>
       </div>
-      <div class="slaihop__ruta__kropp">
+      <div class="ruta__kropp ruta__kropp--tabell">
         <div class="fortab__omslag">
           <table class="fortab">
             <thead>
@@ -813,9 +800,9 @@ function Paren(props: {
   }, [matchning])
 
   return (
-    <div class="slaihop__ruta">
-      <div class="slaihop__ruta__rubrik">Så här paras de</div>
-      <div class="slaihop__ruta__kropp">
+    <div class="ruta">
+      <div class="ruta__rubrik">Så här paras de</div>
+      <div class="ruta__kropp">
         {!vanster || !hoger || !matchning ? (
           <p class="restlista__tom">Välj ett kolumnpar, så visas de första paren här.</p>
         ) : props.urval.length === 0 ? (
@@ -913,8 +900,8 @@ function Resultatet(props: {
   }, [forhand, props.vansterKolumner, props.nyckelnamn.join('|')])
 
   return (
-    <div class="slaihop__ruta">
-      <div class="slaihop__ruta__rubrik">
+    <div class="ruta">
+      <div class="ruta__rubrik">
         Så här blir resultatet
         {forhand && totaltAntal !== null && (
           <span class="panel__rubrik__antal">
@@ -922,7 +909,7 @@ function Resultatet(props: {
           </span>
         )}
       </div>
-      <div class="slaihop__ruta__kropp">
+      <div class="ruta__kropp ruta__kropp--tabell">
         {!forhand ? (
           <p class="restlista__tom">Välj ett kolumnpar, så visas resultatet här.</p>
         ) : (

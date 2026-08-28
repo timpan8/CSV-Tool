@@ -52,13 +52,41 @@
   padding-top: 4px;
 }
 
-.kombinera__karta {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/*
+ * Två rutor som skrollar var för sig: kartan och förhandsvisningen.
+ *
+ * Förhandsvisningen låg förut sist i samma skrollyta som kartan och två långa
+ * notiser. Med tolv kolumner och en varning var den utanför bild just när man
+ * arbetade — alltså osynlig i det enda läge den var till för. Nu står den
+ * still, och kartan skrollar under den.
+ *
+ * Kartan får resten. Bråkdelar åt båda hållen vore fel: kartans behov växer med
+ * antalet målkolumner, medan förhandsvisningens är begränsat till "visa några
+ * rader". Därför ett pixelgolv på den nedre och `1fr` på den övre.
+ */
+.kombinera__rutor {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(190px, 0.45fr);
+  gap: 1px;
+  background: var(--linje);
   min-height: 0;
-  overflow-y: auto;
-  padding: 12px 14px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.kombinera__massbeslut {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 0 12px 8px;
+}
+
+.kombinera__massbeslut__skal {
+  flex: 1 1 280px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-svag);
 }
 
 .kombinera__fot {
@@ -99,12 +127,16 @@
 }
 
 /*
- * Rubrikraden är medvetet inte klistrad. En sticky rubrik i en panel som
- * skrollar tillsammans med notiser och förhandsvisning lägger sig över
- * radernas knappar och fångar klicken — och en knapp man inte kan trycka på
- * är sämre än en rubrik som skrollar bort.
+ * Rubrikraden är klistrad, och det är omslaget som skrollar (`.ruta__kropp
+ * --tabell`, dialog.css). Förut delade kartan skrollyta med notiser och
+ * förhandsvisning, och en klistrad rubrik hade då lagt sig över radernas
+ * knappar. Nu äger kartan sin ruta — och med fem nästan likadana väljarspalter
+ * per rad säger en rad ingenting utan sina rubriker.
  */
 .aliaskarta thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   background: var(--yta-2);
   font-size: 11px;
   font-weight: 700;
@@ -174,4 +206,119 @@
   font-size: 11px;
   color: var(--text-svagast);
   font-style: italic;
+}
+
+/* ---------- Namncellen ---------- */
+
+.aliaskarta__namnrad {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/*
+ * En glyfknapp: kvadratisk, tyst, och utan den vanliga knappens sidopaddning.
+ * Samma roll som ✕ i verkstadens restlista.
+ */
+.knapp--ikon {
+  padding: 1px 5px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Beslutscellen bär två kontroller — kryssrutan och vägen tillbaka. */
+.aliaskarta__svar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.aliaskarta__standard {
+  width: 120px;
+}
+
+.aliaskarta__standardfalt {
+  width: 100%;
+  font-size: 11.5px;
+  padding: 3px 5px;
+}
+
+.aliaskarta__standardfalt:disabled {
+  background: var(--yta-2);
+  color: var(--text-svagast);
+}
+
+/*
+ * Provvärdet under väljaren.
+ *
+ * Rubriker ljuger — `Kontakt` kan vara ett namn i den ena filen och en adress i
+ * den andra. Provet står svagare än rubriken eftersom det är en ledtråd, inte
+ * ett löfte om vad hela kolumnen innehåller.
+ */
+.aliaskarta__prov {
+  display: block;
+  margin-top: 2px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-svagast);
+}
+
+/*
+ * "Alla tomma" är inte samma sak som ingen vald kolumn, och får inte se ut så.
+ * Det är den enda platsen i verktyget där man ser *vilken fil* som är tom.
+ */
+.aliaskarta__prov--tom {
+  color: var(--varning);
+  font-style: italic;
+}
+
+.aliaskarta__tomvarning {
+  display: block;
+  margin-top: 1px;
+  font-size: 11px;
+  color: var(--varning);
+}
+
+/* Handgjord hopslagning: vad raden svalt, och vägen att dela upp den igen. */
+.aliaskarta__ihopmed {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 1px;
+  font-size: 11px;
+  color: var(--text-svag);
+}
+
+.aliaskarta__ihop {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px solid var(--linje-stark);
+  border-radius: var(--radie);
+  background: var(--yta-2);
+  white-space: normal;
+}
+
+/* ---------- Förhandsvisningen ---------- */
+
+/*
+ * En kolumn som ännu inte beslutats visas ändå, märkt.
+ *
+ * Utan den skulle rutan visa allt utom det man ombeds besluta om — och frågan
+ * "ska Telefon vara med?" besvaras utan att Telefon syns någonstans.
+ */
+.fortab__obeslutad {
+  background: var(--varning-svag);
+}
+
+.fortab__marke {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--varning);
 }

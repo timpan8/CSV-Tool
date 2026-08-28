@@ -60,7 +60,7 @@ test('föreslår kolumnpar utifrån rubrikerna och räknar träffarna', async ({
   )
   await expect(vy(page)).toContainText('Föreslaget utifrån kolumnernas namn')
 
-  const siffror = page.locator('.slaihop__tal')
+  const siffror = page.locator('.slaihop .vytal')
   await expect(siffror).toContainText('hittar en träff')
   await expect(siffror).toContainText('blir över')
 })
@@ -84,10 +84,10 @@ test('visar båda källfilerna med nyckelkolumnen främst', async ({ page }) => 
   await oppnaVyn(page)
 
   // Fyra rutor: två källfiler, paren, resultatet.
-  await expect(page.locator('.slaihop__ruta')).toHaveCount(4)
+  await expect(page.locator('.slaihop__rutor .ruta')).toHaveCount(4)
 
-  const vansterfil = page.locator('.slaihop__ruta').nth(0)
-  const hogerfil = page.locator('.slaihop__ruta').nth(1)
+  const vansterfil = page.locator('.slaihop__rutor .ruta').nth(0)
+  const hogerfil = page.locator('.slaihop__rutor .ruta').nth(1)
   await expect(vansterfil).toContainText('exempel-kunder.csv')
   await expect(hogerfil).toContainText('exempel-order.csv')
 
@@ -108,7 +108,7 @@ test('visar den normaliserade nyckeln när den skiljer sig från värdet', async
 
   // ERIK ÖBERG jämförs som "erik öberg" — det är hela skillnaden mellan
   // jämförelsetyperna, och den syns ingen annanstans.
-  const hogerfil = page.locator('.slaihop__ruta').nth(1)
+  const hogerfil = page.locator('.slaihop__rutor .ruta').nth(1)
   await expect(hogerfil.locator('.fortab__norm', { hasText: 'erik öberg' }).first()).toBeVisible()
 
   // Med teckenexakt jämförelse normaliseras ingenting, så raden försvinner.
@@ -120,7 +120,7 @@ test('visar hur raderna paras ihop, och vilka som blev utan', async ({ page }) =
   await oppnaParet(page)
   await oppnaVyn(page)
 
-  const paren = page.locator('.slaihop__ruta').nth(2)
+  const paren = page.locator('.slaihop__rutor .ruta').nth(2)
   await expect(paren).toContainText('Så här paras de')
   // Ett riktigt par ur filerna, inte en siffra.
   await expect(paren.locator('.slaihop__paret', { hasText: 'Anna Karlsson' })).toContainText(
@@ -141,7 +141,7 @@ test('visar resultatet med sömmen först och tomma celler synliga', async ({ pa
   await oppnaParet(page)
   await oppnaVyn(page)
 
-  const resultat = page.locator('.slaihop__ruta').nth(3)
+  const resultat = page.locator('.slaihop__rutor .ruta').nth(3)
   await expect(resultat).toContainText('Så här blir resultatet')
   // Nyckeln först, sedan de hämtade kolumnerna — inte filens egen ordning.
   await expect(resultat.locator('th').nth(0)).toHaveText('Namn')
@@ -194,7 +194,7 @@ test('förhandsvisningen och körningen är eniga om radantalet', async ({ page 
   await oppnaVyn(page)
 
   // Rutan säger vad hela resultatet blir, inte bara vad den visar.
-  const resultat = page.locator('.slaihop__ruta').nth(3)
+  const resultat = page.locator('.slaihop__rutor .ruta').nth(3)
   await expect(resultat).toContainText('av 16 rader')
 
   await page.getByRole('radio', { name: 'En rad per träff' }).click()
@@ -216,7 +216,7 @@ test('matchning på e-post ger fler träffar än på namn', async ({ page }) => 
 
   // E-postadresserna är skrivna likadant i båda filerna, så de flesta order
   // hittar sin kund — även de vars namn är felstavade.
-  await expect(page.locator('.slaihop__tal')).toContainText('hittar en träff')
+  await expect(page.locator('.slaihop .vytal')).toContainText('hittar en träff')
   await kor(page).click()
   await expect(page.locator('.flik')).toHaveCount(3)
 })
@@ -241,7 +241,7 @@ test('byt håll gör den andra filen till stomme', async ({ page }) => {
     'true',
   )
   // Siffrorna räknas från stommens håll: kundfilen har 16 rader.
-  await expect(page.locator('.slaihop__tal')).toContainText('av 16 rader hittar en träff')
+  await expect(page.locator('.slaihop .vytal')).toContainText('av 16 rader hittar en träff')
 
   await page.getByRole('button', { name: '⇄ Byt håll' }).click()
 
@@ -250,8 +250,8 @@ test('byt håll gör den andra filen till stomme', async ({ page }) => {
     'aria-checked',
     'true',
   )
-  await expect(page.locator('.slaihop__tal')).toContainText('av 14 rader hittar en träff')
-  await expect(page.locator('.slaihop__ruta').nth(0)).toContainText('exempel-order.csv')
+  await expect(page.locator('.slaihop .vytal')).toContainText('av 14 rader hittar en träff')
+  await expect(page.locator('.slaihop__rutor .ruta').nth(0)).toContainText('exempel-order.csv')
   await kor(page).click()
   await expect(page.locator('.statusrad')).toContainText('14 rader')
 })
@@ -287,7 +287,7 @@ test('alla inställningar syns utan att rulla, även på en liten skärm', async
   }
 
   // Och rutorna ska ha kvar användbar höjd — inställningarna får inte äta dem.
-  for (const ruta of await page.locator('.slaihop__ruta').all()) {
+  for (const ruta of await page.locator('.slaihop__rutor .ruta').all()) {
     const lada = (await ruta.boundingBox())!
     expect(lada.height).toBeGreaterThan(90)
   }
@@ -346,4 +346,46 @@ test('namn mot förnamn + efternamn matchar över två högerkolumner', async ({
   await expect(page.getByRole('gridcell', { name: '10', exact: true })).toHaveCount(2)
   await expect(page.getByRole('gridcell', { name: '5', exact: true })).toHaveCount(1)
   await expect(page.getByRole('gridcell', { name: '7', exact: true })).toHaveCount(0)
+})
+
+test('rutnätets tangenter når inte fliken bakom en öppen vy', async ({ page }) => {
+  await oppnaParet(page)
+
+  // Markera en cell i rutnätet, och öppna sedan vyn ovanpå den. Exempelfilen
+  // har Anna Karlsson två gånger med flit — det är dess dubblett.
+  const anna = page.getByRole('gridcell', { name: 'Anna Karlsson', exact: true })
+  await expect(anna).toHaveCount(2)
+  await anna.first().click()
+  await oppnaVyn(page)
+
+  // Rutnätet finns inte på skärmen. Delete tömde annars en cell i en flik man
+  // inte tittar på, och Ctrl+Z ångrade där.
+  //
+  // Kvittot är kvittensen: varje ändring i en flik ger en toast. Att i stället
+  // läsa cellen efteråt skulle inte skilja lägena åt — ett Delete följt av ett
+  // Ctrl+Z lämnar samma text som två tangenter som inte gjorde någonting.
+  await page.locator('.slaihop__topp h2').click()
+  await page.keyboard.press('Delete')
+  await expect(page.locator('.toast', { hasText: 'Tömde' })).toHaveCount(0)
+  await page.keyboard.press('Control+z')
+  await expect(page.locator('.toast', { hasText: 'Ångrade' })).toHaveCount(0)
+  // Ingen bokstav startade en redigering i den dolda fliken heller.
+  await page.keyboard.press('x')
+
+  await page.getByRole('button', { name: 'Avbryt' }).click()
+  await expect(anna).toHaveCount(2)
+  await expect(page.locator('.rutnat__cell input')).toHaveCount(0)
+})
+
+test('Enter aktiverar knapparna i vyn', async ({ page }) => {
+  await oppnaParet(page)
+  await oppnaVyn(page)
+
+  // Rutnätets Enter startar cellredigering med preventDefault, vilket tog
+  // knapparnas inbyggda aktivering ifrån dem — vyn gick inte att köra med
+  // tangentbordet alls.
+  const byt = page.getByRole('button', { name: '⇄ Byt håll' })
+  await byt.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.slaihop__rutor .ruta').nth(0)).toContainText('exempel-order.csv')
 })
