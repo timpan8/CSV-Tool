@@ -243,14 +243,27 @@ export function fullmatchning(f: Verkstadsflikar, s: Verkstad, bas: Matchning): 
  *
  * Att en rad ligger här betyder att den saknar partner — inte att den saknas i
  * resultatet. En oparad vänsterrad följer ändå med, med tomma celler.
+ *
+ * **`osakra` är en tredje lista och inte en del av de två.** Rader med flera
+ * träffar har inte för få partners utan för många, och de två problemen har
+ * olika åtgärd: den ena behöver någon att paras med, den andra behöver ett
+ * val. De hålls därför isär här — men de visas tillsammans, eftersom en rad
+ * som med *Lämna tom* inte får några värden är precis lika mycket en rad att
+ * titta på som en rad utan partner. Före den här listan hamnade de i ingen
+ * lista alls: räknaren `vansterFlera` fanns, raderna gjorde det inte.
+ *
+ * `korRunda` och de luddiga förslagen läser bara `vanster`/`hoger`. En ny
+ * runda på en osäker rad skulle lägga till *ännu* en träff och göra den mer
+ * tvetydig, inte mindre.
  */
 export function restlistor(
   s: Verkstad,
   full: Matchning,
-): { vanster: number[]; hoger: number[] } {
+): { vanster: number[]; hoger: number[]; osakra: number[] } {
   return {
     vanster: full.vansterUtan.filter((r) => !s.avskrivnaVanster.has(r)),
     hoger: full.hogerUtan.filter((r) => !s.avskrivnaHoger.has(r)),
+    osakra: full.vansterOsakra.filter((r) => !s.avskrivnaVanster.has(r)),
   }
 }
 

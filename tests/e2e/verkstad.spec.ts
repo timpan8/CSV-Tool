@@ -68,10 +68,11 @@ test('ett rättat värde gör att raden hittar sin partner av sig själv', async
   await expect(rad).toBeVisible()
   await rad.click()
 
-  const detalj = page.locator('.raddetalj').nth(1)
-  await detalj.getByRole('button', { name: 'Nils Ödman (avliden)' }).click()
-  await detalj.getByLabel('Name').fill('Nils Ödman')
-  await detalj.getByLabel('Name').press('Enter')
+  // Rättningen sker i jämförelsen, på den sida värdet står.
+  const falt = page.locator('.jamforelse__rad', { hasText: 'Namn ↔ Name' })
+  await falt.getByRole('button', { name: 'Nils Ödman (avliden)' }).click()
+  await falt.getByLabel('Name i högerfilen').fill('Nils Ödman')
+  await falt.getByLabel('Name i högerfilen').press('Enter')
 
   // Ingen knapp trycktes för att koppla ihop dem — raden matchar nu själv.
   await expect(hoger(page).getByText('Nils Ödman (avliden)')).toHaveCount(0)
@@ -153,4 +154,66 @@ test('ett godkänt förslag blir ett par, ett avvisat lämnar raden kvar', async
   await expect(hoger(page).getByText('Zlatan Ekk')).toHaveCount(0)
   await expect(vanster(page).getByText('Zlatan Ek', { exact: true })).toHaveCount(0)
   await expect(page.locator('.verkstad__par')).toContainText('% lika')
+})
+
+test('bänken säger varför raderna inte blev ett par', async ({ page }) => {
+  await oppnaVerkstaden(page)
+  await vanster(page).locator('.restrad', { hasText: 'Nils Ödman' }).first().click()
+  await hoger(page).locator('.restrad', { hasText: 'Nils Ödman (avliden)' }).click()
+
+  // Fälten står mot varandra, och nyckelraden är märkt som den som fällde det.
+  const nyckelrad = page.locator('.jamforelse__rad--nyckel')
+  await expect(nyckelrad).toHaveAttribute('data-falt', 'Namn ↔ Name')
+  await expect(nyckelrad).toHaveClass(/jamforelse__rad--skiljer/)
+
+  // Den normaliserade nyckeln syns — det verkstaden aldrig visade förut — och
+  // just det som skiljer dem åt är markerat.
+  await expect(nyckelrad.locator('.jamforelse__norm').first()).toHaveText('nils ödman')
+  await expect(nyckelrad.locator('mark')).toHaveText('(avliden)')
+
+  // Ett fält som bara finns på ena sidan står för sig, inte parat på position.
+  await expect(page.locator('.jamforelse__rad[data-falt="Levererad"]')).toBeVisible()
+})
+
+test('bänken visar fälten även med bara en rad vald', async ({ page }) => {
+  await oppnaVerkstaden(page)
+  // Det vanligaste läget: man har markerat en rad och letar efter dess partner.
+  await vanster(page).locator('.restrad', { hasText: 'Carl-Johan Nilsson' }).click()
+
+  const nyckelrad = page.locator('.jamforelse__rad--nyckel')
+  await expect(nyckelrad).toContainText('Carl-Johan Nilsson')
+  // Ingen dom fälls om ett par som inte finns.
+  await expect(nyckelrad).not.toHaveClass(/jamforelse__rad--skiljer/)
+  await expect(page.locator('.jamforelse__cell--saknas').first()).toBeVisible()
+})
+
+test('restlistan skiljer på tom nyckel, ingen partner och flera träffar', async ({ page }) => {
+  await oppnaVerkstaden(page)
+
+  // ORD-1011 saknar namn: nyckeln är tom, och då hjälper ingen ny runda.
+  await expect(hoger(page).locator('.restrad[data-sort="tom"]')).toContainText('ORD-1011')
+  // Erik Öberg matchar två orderrader. Den raden syntes inte i någon lista alls
+  // förut — räknaren fanns, raderna gjorde det inte.
+  await expect(vanster(page).locator('.restrad[data-sort="flera"]')).toContainText('Erik Öberg')
+  await expect(page.locator('.inventering')).toContainText('matchar flera rader')
+  // Och de vanliga resterna är kvar som de var.
+  await expect(
+    vanster(page).locator('.restrad', { hasText: 'Carl-Johan Nilsson' }),
+  ).toHaveAttribute('data-sort', 'utan')
+})
+
+test('en rättning i bänken går till källfliken och är ångrabar', async ({ page }) => {
+  await oppnaVerkstaden(page)
+  await hoger(page).locator('.restrad', { hasText: 'Petra Sund' }).click()
+
+  const falt = page.locator('.jamforelse__rad[data-falt="Namn ↔ Name"]')
+  await falt.getByRole('button', { name: 'Petra Sund' }).click()
+  await falt.getByLabel('Name i högerfilen').fill('Petra Sundberg')
+  await falt.getByLabel('Name i högerfilen').press('Enter')
+
+  await expect(falt.getByRole('button', { name: 'Petra Sundberg' })).toBeVisible()
+  // Rättningen hör hemma i källfliken, inte i verkstaden.
+  await expect(page.locator('.toast', { hasText: 'Rättade' })).toContainText(
+    'Rättade Name i exempel-order.csv',
+  )
 })

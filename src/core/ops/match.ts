@@ -1,6 +1,6 @@
 import { Flag, type Column, type ColumnId, type Frame } from '../types.js'
 import { findColumn } from '../frame/frame.js'
-import { getCell } from '../frame/column.js'
+import { createColumn, getCell, intern } from '../frame/column.js'
 import { normalizeAlways, stripDiacritics } from '../locale/sv.js'
 import { delaEpost } from './email.js'
 
@@ -134,6 +134,98 @@ function normalisera(value: string, typ: Matchningstyp): string {
 }
 
 /**
+ * Slår ihop ett kolumnpars två normaliserade delar till en.
+ *
+ * Tom sträng betyder obrukbar. Båda delarna måste finnas: ett efternamn som
+ * saknas skulle annars låta `Anna` matcha vilken Anna som helst — samma fel
+ * som en tom nyckel, bara svårare att se.
+ *
+ * Delarna är redan normaliserade var för sig; hopslagningen sorterar om orden
+ * så att resultatet blir detsamma som för hela namnet.
+ *
+ * Bor här för att `byggNycklar` och `nyckelForRad` ska räkna *samma* nyckel.
+ * Två uträkningar av samma sak är två uträkningar som förr eller senare säger
+ * olika, och då visar gränssnittet en nyckel som matchningen aldrig hashade.
+ */
+function kombinera(del: string, del2: string | undefined): string {
+  if (del2 === undefined) return del
+  if (del === '' || del2 === '') return ''
+  return `${del} ${del2}`.split(' ').sort().join(' ')
+}
+
+/** En nyckeldel som den ser ut för en enskild rad. */
+export interface Nyckeldel {
+  /** Kolumnparets index i `par`. */
+  par: number
+  /** Värdet som det står i filen. Sammanfogat när paret läser två kolumner. */
+  varde: string
+  /** Den normaliserade formen — det som faktiskt jämförs. */
+  nyckel: string
+}
+
+/**
+ * Nyckeldelarna för EN rad, en per kolumnpar.
+ *
+ * `byggNycklar` svarar på samma fråga för hela filen och normaliserar därför
+ * varje kolumns hela ordbok. Det är rätt när alla rader ska ha ett svar, och
+ * fel när en enda ska det: uppmätt kostar ordbokssvepet 129 ms på 90 000
+ * poster för att besvara en fråga om en rad. Här kostar samma svar två till
+ * sex normaliseringar.
+ *
+ * Den delar `normalisera` och `kombinera` med `byggNycklar`, så en nyckel som
+ * visas här är per konstruktion den nyckel matchningen räknade.
+ */
+export function nyckelForRad(
+  frame: Frame,
+  par: readonly Matchningspar[],
+  sida: 'vanster' | 'hoger',
+  rad: number,
+): Nyckeldel[] {
+  return par.map((p, i) => {
+    const col = findColumn(frame, sida === 'vanster' ? p.vansterColId : p.hogerColId)
+    const tvaKravs = sida === 'hoger' && kraverTvaHoger(p.typ)
+    const col2 =
+      tvaKravs && p.hogerColId2 !== undefined ? findColumn(frame, p.hogerColId2) : undefined
+    if (!col || (tvaKravs && !col2)) return { par: i, varde: '', nyckel: '' }
+
+    const varde = col.dict[col.codes[rad] ?? 0] ?? ''
+    const varde2 = col2 ? (col2.dict[col2.codes[rad] ?? 0] ?? '') : undefined
+    return {
+      par: i,
+      varde: varde2 === undefined ? varde : `${varde} ${varde2}`.trim(),
+      nyckel: kombinera(
+        normalisera(varde, p.typ),
+        varde2 === undefined ? undefined : normalisera(varde2, p.typ),
+      ),
+    }
+  })
+}
+
+/**
+ * Var två nycklar börjar och slutar skilja sig.
+ *
+ * Gemensam början och gemensamt slut skalas av; det som blir kvar är
+ * avvikelsen. Det hanterar ett insatt tecken lika bra som ett utbytt — en
+ * jämförelse enbart framifrån hade målat hela resten av strängen röd så fort
+ * ett tecken lagts till i början.
+ *
+ * Ingen tröskel, ingen poäng, ingen gissning: det är den faktiska skillnaden
+ * mellan de två strängar matchningen jämförde.
+ */
+export function nyckelavvikelse(
+  a: string,
+  b: string,
+): { v: [number, number]; h: [number, number] } | null {
+  if (a === b) return null
+  let start = 0
+  const kortast = Math.min(a.length, b.length)
+  while (start < kortast && a[start] === b[start]) start += 1
+  let slut = 0
+  while (slut < kortast - start && a[a.length - 1 - slut] === b[b.length - 1 - slut]) slut += 1
+  return { v: [start, a.length - slut], h: [start, b.length - slut] }
+}
+
+/**
  * Nyckel per rad, räknad en gång per unikt värde och kolumn.
  *
  * Returnerar tom sträng för rader vars nyckel inte går att använda — alltså
@@ -179,20 +271,10 @@ export function byggNycklar(
         anvandbar = false
         break
       }
-      let del = t.ut[t.col.codes[r]!]!
-      if (t.col2 && t.ut2) {
-        const del2 = t.ut2[t.col2.codes[r]!]!
-        // Båda delarna måste finnas. Ett efternamn som saknas skulle annars
-        // låta ”Anna” matcha vilken Anna som helst — samma fel som en tom
-        // nyckel, bara svårare att se.
-        if (del === '' || del2 === '') {
-          anvandbar = false
-          break
-        }
-        // Delarna är redan normaliserade var för sig; hopslagningen sorterar
-        // om orden så att resultatet blir detsamma som för hela namnet.
-        del = `${del} ${del2}`.split(' ').sort().join(' ')
-      }
+      const del = kombinera(
+        t.ut[t.col.codes[r]!]!,
+        t.col2 && t.ut2 ? t.ut2[t.col2.codes[r]!]! : undefined,
+      )
       if (del === '') {
         anvandbar = false
         break
@@ -216,6 +298,15 @@ export interface Matchning {
   hogerMatchade: number
   /** Vänsterrader som matchar mer än en högerrad. Kardinaliteten. */
   vansterFlera: number
+  /**
+   * Just de raderna, i filens ordning.
+   *
+   * De hör inte hemma i `vansterUtan` — de har partner, de har för många. Men
+   * med *Lämna tom* får de ändå inga värden, och då är de precis lika mycket
+   * en rad att titta på som en rad utan partner. Utan listan hamnar de i
+   * ingen: räknaren fanns, raderna gjorde det inte.
+   */
+  vansterOsakra: number[]
   /** Högerrader som träffas av mer än en vänsterrad. */
   hogerFlera: number
   /** Rader vars nyckel är tom och som därför aldrig kan matcha. */
@@ -236,6 +327,7 @@ export const TOM_MATCHNING: Matchning = {
   vansterMatchade: 0,
   hogerMatchade: 0,
   vansterFlera: 0,
+  vansterOsakra: [],
   hogerFlera: 0,
   tommaVanster: 0,
   tommaHoger: 0,
@@ -303,6 +395,7 @@ export function matcha(
 
   const resultat: { v: number; h: number }[] = []
   const vansterUtan: number[] = []
+  const vansterOsakra: number[] = []
   const hogerTraffad = new Uint32Array(hoger.rowCount)
   let tommaVanster = 0
   let vansterMatchade = 0
@@ -324,7 +417,10 @@ export function matcha(
       continue
     }
     vansterMatchade += 1
-    if (traffar.length > 1) vansterFlera += 1
+    if (traffar.length > 1) {
+      vansterFlera += 1
+      vansterOsakra.push(r)
+    }
     if (traffar.length > storstaTraff) storstaTraff = traffar.length
     for (const h of traffar) {
       resultat.push({ v: r, h })
@@ -352,6 +448,7 @@ export function matcha(
     vansterMatchade,
     hogerMatchade,
     vansterFlera,
+    vansterOsakra,
     hogerFlera,
     tommaVanster,
     tommaHoger,
@@ -402,6 +499,7 @@ export function slaSamman(
   }
 
   const vansterUtan: number[] = []
+  const vansterOsakra: number[] = []
   let vansterMatchade = 0
   let vansterFlera = 0
   let storstaTraff = 0
@@ -412,7 +510,10 @@ export function slaSamman(
       continue
     }
     vansterMatchade += 1
-    if (n > 1) vansterFlera += 1
+    if (n > 1) {
+      vansterFlera += 1
+      vansterOsakra.push(r)
+    }
     if (n > storstaTraff) storstaTraff = n
   }
 
@@ -436,6 +537,7 @@ export function slaSamman(
     vansterMatchade,
     hogerMatchade,
     vansterFlera,
+    vansterOsakra,
     hogerFlera,
     tommaVanster: bas.tommaVanster,
     tommaHoger: bas.tommaHoger,
@@ -463,6 +565,21 @@ export const FLERTRAFF: { varde: Flertraff; etikett: string; beskrivning: string
     beskrivning: 'Osäkra rader lämnas ofyllda och hamnar i restlistan för granskning.',
   },
 ]
+
+/** Namnet på kolumnen som säger hur det gick för raden. */
+export const TRAFFKOLUMN = 'Träff'
+
+/**
+ * Vad kolumnen säger, med orden användaren ser.
+ *
+ * Tre värden och inte två, av samma skäl som `Planpost.flera` finns: en rad
+ * utan partner och en rad med för många är inte samma sak.
+ */
+export const TRAFFVARDEN = {
+  traff: 'träff',
+  utan: 'ingen träff',
+  flera: 'flera träffar',
+} as const
 
 export interface Sammanslagning {
   /** Kolumner ur högerfilen som ska följa med, i ordning. */
@@ -531,6 +648,15 @@ export function forhandsurval(matchning: Matchning, tak: number): number[] {
 export interface Planpost {
   v: number
   h: number | null
+  /**
+   * Sant när vänsterraden matchade mer än en högerrad.
+   *
+   * Skilt från `h === null`. En rad utan partner och en rad med tre möjliga
+   * partners får båda tomma celler under *Lämna tom* — men de har inte samma
+   * problem och inte samma åtgärd. Den ena saknar någon att para ihop med;
+   * den andra har för många och behöver ett val.
+   */
+  flera: boolean
 }
 
 /**
@@ -565,15 +691,15 @@ export function byggPlan(
     const r = vansterRader ? vansterRader[i]! : i
     const lista = traffar.get(r)
     if (!lista || lista.length === 0) {
-      plan.push({ v: r, h: null })
+      plan.push({ v: r, h: null, flera: false })
     } else if (lista.length === 1) {
-      plan.push({ v: r, h: lista[0]! })
+      plan.push({ v: r, h: lista[0]!, flera: false })
     } else if (flertraff === 'duplicera') {
-      for (const h of lista) plan.push({ v: r, h })
+      for (const h of lista) plan.push({ v: r, h, flera: true })
     } else if (flertraff === 'forsta') {
-      plan.push({ v: r, h: lista[0]! })
+      plan.push({ v: r, h: lista[0]!, flera: true })
     } else {
-      plan.push({ v: r, h: null })
+      plan.push({ v: r, h: null, flera: true })
     }
   }
   return plan
@@ -630,6 +756,39 @@ export function slaIhop(
     namn.add(unikt)
     const ny = kopieraColumn(col, antal, (i) => plan[i]!.h, unikt)
     kolumner.push(ny)
+  }
+
+  /*
+   * En kolumn som säger hur det gick för raden.
+   *
+   * Utan den går de omatchade raderna inte att få tag på i resultatet. Filtren
+   * räknas per ordbokspost, så `Flag.Padded` går inte att söka på, och *är
+   * tom* skiljer inte en saknad partner från ett tomt värde. Med kolumnen är
+   * raderna filtrerbara, sorterbara och exporterbara där de faktiskt hamnade
+   * — och den överlever en omladdning, eftersom den bara är data.
+   *
+   * Tre `intern`-anrop totalt, inte ett per rad. Koderna slås upp en gång och
+   * skrivs sedan som heltal, samma princip som resten av filen.
+   */
+  {
+    let unikt = TRAFFKOLUMN
+    let n = 2
+    while (namn.has(unikt)) {
+      unikt = `${TRAFFKOLUMN} (${n})`
+      n += 1
+    }
+    const col = createColumn(unikt, antal)
+    col.typeLocked = true
+    const koder = {
+      traff: intern(col, TRAFFVARDEN.traff),
+      utan: intern(col, TRAFFVARDEN.utan),
+      flera: intern(col, TRAFFVARDEN.flera),
+    }
+    for (let i = 0; i < antal; i++) {
+      const p = plan[i]!
+      col.codes[i] = p.flera ? koder.flera : p.h !== null ? koder.traff : koder.utan
+    }
+    kolumner.push(col)
   }
 
   const frame: Frame = {

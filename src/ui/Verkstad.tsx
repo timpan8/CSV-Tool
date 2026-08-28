@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks'
 import type { Column, ColumnId, Frame } from '../core/types.js'
 import { findColumn, visibleColumns } from '../core/frame/frame.js'
 import {
+  byggNycklar,
   cellText,
   MATCHNINGSTYPER,
   slaIhop,
@@ -31,8 +32,8 @@ import { EXCEL_FRIENDLY, encodeExport, urvalTillCsv } from '../core/csv/stringif
 import { notify, undo } from '../state/store.js'
 import { formatCount, rader as raderText } from '../core/locale/sv.js'
 import { Notis } from './parts.js'
-import { Restlista } from './Restlista.js'
-import { Raddetalj } from './Raddetalj.js'
+import { Restlista, type Restsort } from './Restlista.js'
+import { Jamforelse } from './Jamforelse.js'
 import { Forslagslista } from './Forslagslista.js'
 
 /**
@@ -101,6 +102,25 @@ export function Verkstad(props: {
     [bas, s?.extra],
   )
 
+  /*
+   * Nycklarna per rad, för att kunna säga *varför* en rad ligger i listan.
+   *
+   * En tom nyckel kan aldrig matcha, och ingen ny runda i världen hjälper —
+   * det är ett annat problem än att partnern saknas, och rätt åtgärd är att
+   * fylla i värdet. `byggNycklar` svarar för hela filen i ett svep över
+   * ordboken, samma anrop som matchningen själv gör.
+   */
+  const nycklar = useMemo(
+    () =>
+      f && s && s.par.length > 0
+        ? {
+            vanster: byggNycklar(f.vanster.frame, s.par, 'vanster'),
+            hoger: byggNycklar(f.hoger.frame, s.par, 'hoger'),
+          }
+        : null,
+    [s?.par, f?.vanster.dataRevision, f?.hoger.dataRevision],
+  )
+
   if (!s || !f || !bas || !full) return null
 
   const vanster = f.vanster.frame
@@ -125,6 +145,19 @@ export function Verkstad(props: {
    */
   const restVanster = new Set(rest.vanster)
   const restHoger = new Set(rest.hoger)
+
+  /*
+   * Visningslistan tar med de osäkra raderna; sökningen efter partner gör det
+   * inte. En rad med tre träffar behöver ett val, inte en fjärde träff — så
+   * `rest.vanster` går vidare orörd till rundorna och de luddiga förslagen.
+   */
+  const osakra = new Set(rest.osakra)
+  const vansterLista = [...rest.vanster, ...rest.osakra].sort((a, b) => a - b)
+  const sortFor = (sida: 'vanster' | 'hoger') => (rad: number): Restsort => {
+    if (sida === 'vanster' && osakra.has(rad)) return 'flera'
+    const n = nycklar?.[sida]?.[rad]
+    return n === '' ? 'tom' : 'utan'
+  }
   const synligaForslag = (forslag?.forslag ?? [])
     .filter((x) => restVanster.has(x.v) && restHoger.has(x.h) && !arAvvisat(s, x.v, x.h))
     .slice(0, 12)
@@ -181,12 +214,22 @@ export function Verkstad(props: {
                 av {formatCount(vanster.rowCount)} rader i {vanster.name} har en partner
               </td>
             </tr>
-            <tr class={rest.vanster.length + rest.hoger.length > 0 ? 'inventering--okant' : ''}>
+            <tr class={vansterLista.length + rest.hoger.length > 0 ? 'inventering--okant' : ''}>
               <td class="inventering__antal">
-                {formatCount(rest.vanster.length + rest.hoger.length)}
+                {formatCount(vansterLista.length + rest.hoger.length)}
               </td>
               <td>kvar att titta på</td>
             </tr>
+            {rest.osakra.length > 0 && (
+              <tr class="inventering--okant">
+                <td class="inventering__antal">{formatCount(rest.osakra.length)}</td>
+                <td>
+                  {s.sammanslagning.flertraff === 'lamna'
+                    ? 'matchar flera rader och får därför inga värden'
+                    : 'matchar flera rader — regeln valde åt dig'}
+                </td>
+              </tr>
+            )}
             {s.extra.length > 0 && (
               <tr>
                 <td class="inventering__antal">{formatCount(s.extra.length)}</td>
@@ -217,10 +260,11 @@ export function Verkstad(props: {
           titel="Kvar i vänsterfilen"
           filnamn={vanster.name}
           frame={vanster}
-          rader={rest.vanster}
+          rader={vansterLista}
           kolumner={listkolumner(vanster, s.par.map((p) => p.vansterColId))}
           vald={valdVanster}
           avskrivna={s.avskrivnaVanster.size}
+          sort={sortFor('vanster')}
           onValj={setValdVanster}
           onSkrivAv={(rad) => {
             skrivAv('vanster', rad)
@@ -231,21 +275,17 @@ export function Verkstad(props: {
         <div class="panel verkstad__mitt">
           <div class="panel__rubrik">Arbetsbänk</div>
           <div class="panel__innehall">
-            <Raddetalj
-              key={`v${valdVanster}`}
-              rubrik="Vald rad"
-              filnamn={vanster.name}
-              frame={vanster}
-              rad={valdVanster}
-              onRatta={valdVanster === null ? () => {} : ratta('vanster', valdVanster)}
-            />
-            <Raddetalj
-              key={`h${valdHoger}`}
-              rubrik="Vald rad"
-              filnamn={hoger.name}
-              frame={hoger}
-              rad={valdHoger}
-              onRatta={valdHoger === null ? () => {} : ratta('hoger', valdHoger)}
+            <Jamforelse
+              key={`${valdVanster}:${valdHoger}`}
+              vanster={vanster}
+              hoger={hoger}
+              vansterRad={valdVanster}
+              hogerRad={valdHoger}
+              par={s.par}
+              onRatta={(sida, col, varde) => {
+                const rad = sida === 'vanster' ? valdVanster : valdHoger
+                if (rad !== null) ratta(sida, rad)(col, varde)
+              }}
             />
 
             <button
@@ -316,11 +356,11 @@ export function Verkstad(props: {
               </div>
             )}
 
-            {rest.vanster.length + rest.hoger.length > 0 && (
+            {vansterLista.length + rest.hoger.length > 0 && (
               <button
                 class="knapp knapp--tyst verkstad__skrivalla"
                 onClick={() => {
-                  skrivAvAlla(rest.vanster, rest.hoger)
+                  skrivAvAlla(vansterLista, rest.hoger)
                   setValdVanster(null)
                   setValdHoger(null)
                 }}
@@ -345,6 +385,7 @@ export function Verkstad(props: {
           kolumner={listkolumner(hoger, s.par.map((p) => p.hogerColId))}
           vald={valdHoger}
           avskrivna={s.avskrivnaHoger.size}
+          sort={sortFor('hoger')}
           onValj={setValdHoger}
           onSkrivAv={(rad) => {
             skrivAv('hoger', rad)
@@ -359,10 +400,10 @@ export function Verkstad(props: {
         </span>
         <button
           class="knapp"
-          disabled={rest.vanster.length + rest.hoger.length === 0}
+          disabled={vansterLista.length + rest.hoger.length === 0}
           title="Skriver de kvarvarande raderna ur vardera filen som var sin CSV."
           onClick={() => {
-            exporteraRest(vanster, rest.vanster)
+            exporteraRest(vanster, vansterLista)
             exporteraRest(hoger, rest.hoger)
           }}
         >

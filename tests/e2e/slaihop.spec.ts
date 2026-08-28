@@ -389,3 +389,25 @@ test('Enter aktiverar knapparna i vyn', async ({ page }) => {
   await page.keyboard.press('Enter')
   await expect(page.locator('.slaihop__rutor .ruta').nth(0)).toContainText('exempel-order.csv')
 })
+
+test('resultatet säger per rad hur det gick', async ({ page }) => {
+  await oppnaParet(page)
+  await oppnaVyn(page)
+  await kor(page).click()
+  await expect(page.locator('.flik')).toHaveCount(3)
+
+  // Utan kolumnen går de omatchade raderna inte att få tag på i resultatet:
+  // filtren räknas per ordbokspost, så en utfylld cell går inte att söka på.
+  await expect(page.locator('.rubrik[title="Träff"]')).toBeVisible()
+  await expect(page.getByRole('gridcell', { name: 'ingen träff', exact: true }).first()).toBeVisible()
+
+  // Och den går att filtrera på, vilket är hela poängen: en utfylld cell går
+  // inte att söka på, så utan kolumnen fanns ingen väg till de omatchade.
+  await page.getByRole('button', { name: /^Filter/ }).click()
+  await page.getByRole('button', { name: '＋ Lägg till regel' }).click()
+  const regel = page.locator('.regel').first()
+  await regel.locator('select').first().selectOption({ label: 'Träff' })
+  await regel.locator('select').nth(1).selectOption({ label: 'är' })
+  await regel.locator('.regel__varde').first().fill('ingen träff')
+  await expect(page.locator('.statusrad')).toContainText('8 av 16 rader')
+})
