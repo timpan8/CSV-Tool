@@ -20,7 +20,7 @@ import {
   restlistor,
   saknadeKolumner,
   skrivAv,
-  stangVerkstad,
+  kastaVerkstad,
   synkaVerkstad,
   verkstad,
 } from '../../src/state/matchning.js'
@@ -73,7 +73,7 @@ function rest() {
 }
 
 beforeEach(() => {
-  stangVerkstad()
+  kastaVerkstad()
   tabs.value = []
 })
 
@@ -213,7 +213,7 @@ describe('invarianten', () => {
   it('en rad i restlistan har aldrig ett par, och tvärtom', () => {
     fc.assert(
       fc.property(fc.array(fc.tuple(fc.nat(2), fc.nat(2)), { maxLength: 10 }), (handpar) => {
-        stangVerkstad()
+        kastaVerkstad()
         tabs.value = []
         oppna()
         const f = flikarna()!

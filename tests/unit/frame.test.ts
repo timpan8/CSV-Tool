@@ -13,6 +13,8 @@ import {
   deleteRows,
   duplicateRows,
   insertRows,
+  newFrameId,
+  reserveraFrameId,
   restoreRows,
   createFrame,
   sammaInnehall,
@@ -267,5 +269,34 @@ describe('sammaInnehall', () => {
     const b = bygg()
     b.name = 'annat namn.csv'
     expect(sammaInnehall(a, b)).toBe(true)
+  })
+})
+
+describe('reserveraFrameId', () => {
+  it('delar aldrig ut ett id som redan finns', () => {
+    // Räknaren är modulnivå och börjar om vid varje sidladdning, medan ett
+    // sparat id inte gör det. Utan reservationen fick en fil som öppnades
+    // efter en återställning förr eller senare samma id som en återställd ram,
+    // och då pekade allt som bär ett ram-id på fel ram.
+    const hogt = `f${(5000).toString(36)}`
+    reserveraFrameId(hogt)
+    const nasta = newFrameId()
+    expect(nasta).not.toBe(hogt)
+    expect(Number.parseInt(nasta.slice(1), 36)).toBeGreaterThan(5000)
+  })
+
+  it('backar aldrig räknaren', () => {
+    const fore = newFrameId()
+    reserveraFrameId('f1')
+    expect(Number.parseInt(newFrameId().slice(1), 36)).toBeGreaterThan(
+      Number.parseInt(fore.slice(1), 36),
+    )
+  })
+
+  it('struntar i ett id som inte går att tolka', () => {
+    const fore = newFrameId()
+    reserveraFrameId('inte-ett-id')
+    const efter = newFrameId()
+    expect(Number.parseInt(efter.slice(1), 36)).toBe(Number.parseInt(fore.slice(1), 36) + 1)
   })
 })

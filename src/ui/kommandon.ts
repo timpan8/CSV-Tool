@@ -37,6 +37,8 @@ export interface Kommandolage {
   kanAngra: boolean
   kanGoraOm: boolean
   begransadVy: boolean
+  /** Den parkerade verkstadens filnamn, eller null när ingen finns att ta upp. */
+  parkerad: string | null
 }
 
 export interface Kommandohandlare {
@@ -48,6 +50,7 @@ export interface Kommandohandlare {
   filter: () => void
   dubbletter: () => void
   slaIhop: () => void
+  fortsattVerkstad: () => void
   kombinera: () => void
   mall: () => void
   sammanfatta: () => void
@@ -125,6 +128,19 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
       beskrivning: 'Rader som hör ihop läggs sida vid sida, matchat på en nyckel.',
       kor: h.slaIhop,
     })
+    if (lage.parkerad !== null) {
+      // Bara när det finns något att gå tillbaka till. En post som nästan
+      // alltid är avstängd lär sig man att hoppa över, och då hittar man den
+      // inte den gången den betyder något.
+      lagg({
+        id: 'fortsatt-verkstad',
+        grupp: 'Tabell',
+        etikett: 'Fortsätt beta av resten…',
+        ord: 'verkstad rest kvar matcha beta omatchade',
+        beskrivning: `Tar upp den påbörjade sammanslagningen ${lage.parkerad} igen.`,
+        kor: h.fortsattVerkstad,
+      })
+    }
     lagg({
       id: 'sammanfatta',
       grupp: 'Tabell',

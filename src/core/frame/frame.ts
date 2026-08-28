@@ -8,6 +8,23 @@ export function newFrameId(): FrameId {
   return `f${frameSeq.toString(36)}`
 }
 
+/**
+ * Ser till att ett återläst id aldrig delas ut igen.
+ *
+ * Räknaren är modulnivå och börjar om vid varje sidladdning, medan ett sparat
+ * id inte gör det. Utan det här kunde en fil som öppnades efter en
+ * återställning få samma id som en återställd ram — och då pekar allt som
+ * bär ett ram-id på fel ram, tyst.
+ */
+export function reserveraFrameId(id: FrameId): void {
+  // Hela svansen måste vara ett tal i bas 36. `parseInt` läser annars så långt
+  // den kommer och gör `finns-inte` till 30866 — ett tyst hopp framåt i
+  // räknaren, precis den sortens gissning resten av filen undviker.
+  if (!/^f[0-9a-z]+$/.test(id)) return
+  const n = Number.parseInt(id.slice(1), 36)
+  if (Number.isFinite(n) && n > frameSeq) frameSeq = n
+}
+
 /** Identitetsvyn: alla rader i ursprunglig ordning. */
 export function identityView(rowCount: number): Uint32Array {
   const view = new Uint32Array(rowCount)

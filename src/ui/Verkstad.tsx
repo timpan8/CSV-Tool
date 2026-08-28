@@ -22,7 +22,9 @@ import {
   saknadeKolumner,
   skrivAv,
   skrivAvAlla,
-  stangVerkstad,
+  kastaVerkstad,
+  lamnaVerkstad,
+  ogjortArbete,
   synkaVerkstad,
   taBortExtrapar,
   verkstad,
@@ -65,9 +67,10 @@ const VERKSTADSTYPER: { typ: Verkstadstyp; etikett: string; beskrivning: string 
  * ett värde som rättas så att raden matchar av sig själv, och att skriva av
  * raden när ingen partner finns.
  *
- * Sammanslagningen sker först när man är nöjd, och bara en gång. Att i stället
- * fylla på ett färdigt resultat i efterhand hade ändrat resultatfliken under
- * händerna på den som tittade på den.
+ * Varje körning lägger resultatet i en **ny** flik, och sessionen lever vidare
+ * så att man kan fortsätta beta av resten efteråt. Att i stället fylla på ett
+ * färdigt resultat i efterhand hade ändrat resultatfliken under händerna på
+ * den som tittade på den.
  */
 export function Verkstad(props: {
   onSlaIhop: (frame: Frame, text: string) => void
@@ -85,9 +88,17 @@ export function Verkstad(props: {
 
   // Kontrollen skriver till signalen och får därför inte köras under ritning.
   useEffect(() => {
-    if (synkaVerkstad() === 'omnumrerad') {
+    const svar = synkaVerkstad()
+    if (svar === 'omnumrerad') {
       notify(
         'Rader har lagts till eller tagits bort, så verkstadens par pekade inte längre på rätt rader. De har kastats.',
+        { ton: 'varning' },
+      )
+    } else if (svar === 'stangd') {
+      // Utan den här grenen försvann hela sessionen och ytan blev tom, utan
+      // ett ord — och foten hade just lovat att arbetet ligger kvar.
+      notify(
+        'En av filerna i sammanslagningen stängdes, så verkstaden gick inte att hålla öppen. Arbetet är borta.',
         { ton: 'varning' },
       )
     }
@@ -188,12 +199,21 @@ export function Verkstad(props: {
     setValdHoger(null)
   }
 
+  const kvarEfterat = vansterLista.length + rest.hoger.length
+
   const kor = () => {
+    const omgang = s.omgangar + 1
     const { frame, fyllda } = slaIhop(vanster, hoger, full, s.sammanslagning)
-    stangVerkstad()
+    // Varje omgång blir en egen flik. Namnet säger vilken, så att man ser
+    // vilken som är den senaste när man kört flera gånger.
+    if (omgang > 1) frame.name = `${frame.name} (omgång ${omgang})`
+    lamnaVerkstad()
+    const rest = kvarEfterat > 0 ? ` ${raderText(kvarEfterat)} ligger kvar att beta av.` : ''
+    // Namnet tas ur ramen och byggs inte om ur delarna — annars säger notisen
+    // en sak och fliken en annan så fort omgången numreras.
     props.onSlaIhop(
       frame,
-      `${vanster.name} + ${hoger.name} — ${formatCount(fyllda)} av ${raderText(frame.rowCount)} fick värden.`,
+      `${frame.name} — ${formatCount(fyllda)} av ${raderText(frame.rowCount)} fick värden.${rest}`,
     )
   }
 
@@ -396,7 +416,9 @@ export function Verkstad(props: {
 
       <div class="verkstad__fot">
         <span class="verkstad__fot__text">
-          Listorna står i filens ordning, inte i den du sorterat fram i fliken.
+          {s.omgangar > 0
+            ? `Omgång ${s.omgangar} ligger i en egen flik. En ny körning skapar en till — den gamla rörs aldrig.`
+            : 'Arbetet ligger kvar när du stänger. Du hittar tillbaka under Flera filer.'}
         </span>
         <button
           class="knapp"
@@ -409,11 +431,33 @@ export function Verkstad(props: {
         >
           Exportera restlistorna
         </button>
+        {/*
+          * Att lämna och att kasta är två olika saker, och de har två olika
+          * knappar. Förut var de samma: Escape, Avbryt och Slå ihop nollade
+          * alla sessionen, så trettio handgjorda par kunde försvinna utan att
+          * någon frågat.
+          */}
+        <button
+          class="knapp knapp--fara"
+          title="Paren, avvisningarna och avskrivningarna finns bara här och går inte att ångra."
+          onClick={() => {
+            const gjort = ogjortArbete(s)
+            if (
+              gjort > 0 &&
+              !window.confirm(`Kasta arbetet i verkstaden? ${gjort} beslut försvinner.`)
+            ) {
+              return
+            }
+            kastaVerkstad()
+          }}
+        >
+          Kasta arbetet
+        </button>
         <button class="knapp" onClick={props.onStang}>
-          Avbryt
+          Stäng
         </button>
         <button class="knapp knapp--primar" onClick={kor}>
-          Slå ihop
+          {s.omgangar > 0 ? 'Slå ihop igen' : 'Slå ihop'}
         </button>
       </div>
     </div>

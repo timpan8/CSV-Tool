@@ -1,4 +1,4 @@
-import { signal } from '@preact/signals'
+import { effect, signal } from '@preact/signals'
 import {
   matcha,
   slaSamman,
@@ -8,6 +8,7 @@ import {
   TOM_MATCHNING,
 } from '../core/ops/match.js'
 import { tabs, type Tab } from './store.js'
+import { laddaSession, sparaSession } from './lagring.js'
 import { findColumn } from '../core/frame/frame.js'
 import type { ColumnId, Frame } from '../core/types.js'
 
@@ -42,6 +43,30 @@ export interface Runda {
 export interface Verkstad {
   vansterTabId: string
   hogerTabId: string
+  /**
+   * Ramarnas id, som identitetskontroll.
+   *
+   * Flik-id räcker inte ensamt över en omladdning. Radformssignaturen räcker
+   * inte heller: den hashar radantal och `sourceRow`, och en nyinläst fil har
+   * alltid `sourceRow = 1..n` — två helt orelaterade filer med lika många
+   * rader får därför identisk signatur. Ram-id:t är det enda som säger att det
+   * är *samma* fil, och det överlever en omladdning genom `serializeFrame`.
+   */
+  vansterFrameId: string
+  hogerFrameId: string
+  /** Filnamnen som de såg ut när sessionen började. För menyn, även när
+   *  fliken är stängd och namnet inte går att slå upp längre. */
+  vansterNamn: string
+  hogerNamn: string
+  /**
+   * Hur många gånger sessionen körts.
+   *
+   * Varje körning skapar en **ny** flik — en färdig resultatflik skrivs aldrig
+   * i, och det är hela skälet att sessionen får leva vidare utan att bryta mot
+   * regeln i `Verkstad.tsx`. Numret skiljer flikarna åt så att man ser vilken
+   * som är den senaste.
+   */
+  omgangar: number
   /** Grundparen från dialogen. */
   par: Matchningspar[]
   sammanslagning: Sammanslagning
@@ -69,7 +94,18 @@ export interface Radform {
   signatur: number
 }
 
+/**
+ * Sessionen. Den lever längre än vyn.
+ *
+ * Att stänga vyn kastade förut arbetet, och en körning gjorde det innan
+ * resultatfliken ens fanns — trettio handgjorda par kunde försvinna på ett
+ * Escape. De två sakerna skiljs nu åt: `verkstadOppen` säger om vyn visas,
+ * den här signalen om det finns något att visa.
+ */
 export const verkstad = signal<Verkstad | null>(null)
+
+/** Om vyn är uppe. Sant betyder alltid att `verkstad` också finns. */
+export const verkstadOppen = signal(false)
 
 export interface Verkstadsflikar {
   vanster: Tab
@@ -82,7 +118,44 @@ export function flikarna(): Verkstadsflikar | null {
   if (!s) return null
   const vanster = tabs.value.find((t) => t.id === s.vansterTabId)
   const hoger = tabs.value.find((t) => t.id === s.hogerTabId)
-  return vanster && hoger ? { vanster, hoger } : null
+  if (!vanster || !hoger) return null
+  // Ram-id:t är kontrollen. Ett flik-id kan i värsta fall peka på en annan fil
+  // än den sessionen började med, och då är varje radindex i sessionen fel.
+  if (vanster.frame.id !== s.vansterFrameId || hoger.frame.id !== s.hogerFrameId) return null
+  return { vanster, hoger }
+}
+
+/**
+ * Hur mycket arbete som bara finns i sessionen.
+ *
+ * Paren, avvisningarna och avskrivningarna hör ingen annanstans hemma — de
+ * går inte att räkna fram på nytt ur filerna. Talet är därför måttet på vad
+ * som går förlorat, och det räknas på ett ställe så att frågan innan man
+ * kastar och frågan innan man skriver över säger samma sak.
+ */
+export function ogjortArbete(s: Verkstad): number {
+  return s.extra.length + s.avvisade.size + s.avskrivnaVanster.size + s.avskrivnaHoger.size
+}
+
+/** Vad menyn och paletten behöver veta om den parkerade sessionen. */
+export type Sessionslage =
+  | { lage: 'ingen' }
+  | { lage: 'stangd'; namn: string; ogjort: number }
+  | { lage: 'redo'; namn: string; ogjort: number }
+
+/**
+ * Sessionens läge, som ett svar i stället för tre.
+ *
+ * "Ingen session" och "sessionens fil är stängd" är två helt olika saker, och
+ * att svara `null` på båda vore att säga tomt när det är saknat. Det andra
+ * läget kostar användaren sitt arbete, och då ska hen få veta varför.
+ */
+export function sessionslage(): Sessionslage {
+  const s = verkstad.value
+  if (!s) return { lage: 'ingen' }
+  const namn = `${s.vansterNamn} ↔ ${s.hogerNamn}`
+  const ogjort = ogjortArbete(s)
+  return flikarna() ? { lage: 'redo', namn, ogjort } : { lage: 'stangd', namn, ogjort }
 }
 
 export function oppnaVerkstad(
@@ -94,6 +167,10 @@ export function oppnaVerkstad(
   verkstad.value = {
     vansterTabId: vanster.id,
     hogerTabId: hoger.id,
+    vansterFrameId: vanster.frame.id,
+    hogerFrameId: hoger.frame.id,
+    vansterNamn: vanster.frame.name,
+    hogerNamn: hoger.frame.name,
     par: par.map((p) => ({ ...p })),
     sammanslagning: { ...sammanslagning, hogerKolumner: [...sammanslagning.hogerKolumner] },
     extra: [],
@@ -101,9 +178,40 @@ export function oppnaVerkstad(
     avskrivnaVanster: new Set(),
     avskrivnaHoger: new Set(),
     rundor: [],
+    omgangar: 0,
     vansterForm: radform(vanster.frame),
     hogerForm: radform(hoger.frame),
   }
+  verkstadOppen.value = true
+}
+
+/**
+ * Öppnar vyn igen på den parkerade sessionen.
+ *
+ * Falskt när det inte finns någon session, eller när en av källfilerna
+ * stängts sedan sist — då finns inga rader att para ihop, och att öppna en
+ * tom verkstad vore att låtsas att arbetet är kvar.
+ */
+export function aterupptaVerkstad(): Synkning {
+  if (!verkstad.value) return 'ingen'
+  /*
+   * Synkningen sker i ingången och inte bara i vyns effekt.
+   *
+   * Effekten körs efter målningen, och när vyn varit stängd har filerna
+   * kunnat ändras under tiden. Utan kontrollen här ritas de gamla paren en
+   * gång mot en ny radnumrering — alltså mot andra personer — innan de
+   * kastas. Det här är dessutom det enda ställe som kör när vyn är stängd,
+   * och därför den enda plats där 'stangd' kan upptäckas alls.
+   */
+  const svar = synkaVerkstad()
+  if (svar === 'ingen' || svar === 'stangd') return svar
+  verkstadOppen.value = true
+  return svar
+}
+
+/** Räknar upp omgången. Varje körning lägger sitt resultat i en egen flik. */
+export function antecknaOmgang(): void {
+  skriv((s) => ({ ...s, omgangar: s.omgangar + 1 }))
 }
 
 /**
@@ -131,8 +239,26 @@ function samma(frame: Frame, form: Radform): boolean {
   return radformssignatur(frame) === form.signatur
 }
 
-export function stangVerkstad(): void {
+/**
+ * Stänger vyn. Arbetet ligger kvar.
+ *
+ * Det här är vad Escape, *Avbryt* och en körning gör. Att de förut kastade
+ * sessionen var inte ett beslut någon skrivit ner — det var samma funktion
+ * använd till två olika saker.
+ */
+export function lamnaVerkstad(): void {
+  verkstadOppen.value = false
+}
+
+/**
+ * Kastar arbetet.
+ *
+ * Egen handling med egen knapp, eftersom den inte går att ångra: paren,
+ * avvisningarna och avskrivningarna finns bara här.
+ */
+export function kastaVerkstad(): void {
   verkstad.value = null
+  verkstadOppen.value = false
 }
 
 export type Synkning = 'ingen' | 'ok' | 'stangd' | 'omnumrerad'
@@ -163,7 +289,7 @@ export function synkaVerkstad(): Synkning {
   if (!s) return 'ingen'
   const f = flikarna()
   if (!f) {
-    verkstad.value = null
+    kastaVerkstad()
     return 'stangd'
   }
   const vOk = samma(f.vanster.frame, s.vansterForm)
@@ -371,3 +497,144 @@ export function korRunda(par: Matchningspar[]): number {
   }
   return m.par.length
 }
+
+/* ---------- Sessionen mellan besök ---------- */
+
+/**
+ * Sessionen i ett skick som går att skriva till IndexedDB.
+ *
+ * Nästan allt är redan ren data. Tre saker skiljer sig:
+ *
+ * **Mängderna blir listor.** Structured clone klarar `Set`, men en list-form
+ * är den som går att läsa i en felsökare och den som inte ändrar betydelse om
+ * lagringen någon gång byts ut.
+ *
+ * **`sourceRow` sparas inte.** Vid 100 000 rader är den 400 kB per sida, och
+ * den är dessutom meningslös efter en omladdning: `deserializeFrame` bygger
+ * alltid en ny array, så identitetsgenvägen i `samma` kan aldrig slå till mot
+ * en inläst form. Bara signaturen behövs — fyra byte som svarar på den enda
+ * fråga fältet ställs: betyder radindexen fortfarande samma sak?
+ *
+ * **Ram-id:na följer med.** De är det som säger att det är samma *fil*.
+ * Signaturen kan inte svara på det: en nyinläst fil har alltid
+ * `sourceRow = 1..n`, så två orelaterade filer med lika många rader hashar
+ * likadant.
+ */
+export interface SparadVerkstad {
+  vansterTabId: string
+  hogerTabId: string
+  vansterFrameId: string
+  hogerFrameId: string
+  vansterNamn: string
+  hogerNamn: string
+  omgangar: number
+  par: Matchningspar[]
+  sammanslagning: Sammanslagning
+  extra: Extrapar[]
+  avvisade: string[]
+  avskrivnaVanster: number[]
+  avskrivnaHoger: number[]
+  rundor: Runda[]
+  vansterSignatur: number
+  hogerSignatur: number
+}
+
+export function sparadVerkstad(s: Verkstad): SparadVerkstad {
+  return {
+    vansterTabId: s.vansterTabId,
+    hogerTabId: s.hogerTabId,
+    vansterFrameId: s.vansterFrameId,
+    hogerFrameId: s.hogerFrameId,
+    vansterNamn: s.vansterNamn,
+    hogerNamn: s.hogerNamn,
+    omgangar: s.omgangar,
+    par: s.par.map((p) => ({ ...p })),
+    sammanslagning: { ...s.sammanslagning, hogerKolumner: [...s.sammanslagning.hogerKolumner] },
+    extra: s.extra.map((p) => ({ ...p })),
+    avvisade: [...s.avvisade],
+    avskrivnaVanster: [...s.avskrivnaVanster],
+    avskrivnaHoger: [...s.avskrivnaHoger],
+    rundor: s.rundor.map((r) => ({ traffar: r.traffar, par: r.par.map((p) => ({ ...p })) })),
+    vansterSignatur: s.vansterForm.signatur,
+    hogerSignatur: s.hogerForm.signatur,
+  }
+}
+
+/**
+ * Läser tillbaka sessionen.
+ *
+ * **Måste köras efter att flikarna lagts i `tabs`.** `flikarna()` slår upp
+ * flik-id:na där; körs det här först finns de inte, och nästa `synkaVerkstad`
+ * skulle kasta arbetet permanent med motiveringen att filen är stängd.
+ *
+ * Vyn öppnas aldrig av sig själv. Vägen tillbaka in är menyposten — en vy som
+ * poppar upp av sig själv efter en omladdning vore inte hjälpsam utan
+ * påträngande.
+ *
+ * Radformerna får en tom array med flit. Kontrollen i `samma` tar annars
+ * identitetsgenvägen mot den levande ramens array och svarar "oförändrad"
+ * utan att ha jämfört någonting — alltså skulle kontrollen alltid säga ja.
+ */
+export async function aterstallVerkstad(): Promise<boolean> {
+  const data = (await laddaSession()) as SparadVerkstad | null
+  if (!data) {
+    laddad = true
+    return false
+  }
+  const tom = new Uint32Array(0)
+  verkstad.value = {
+    vansterTabId: data.vansterTabId,
+    hogerTabId: data.hogerTabId,
+    vansterFrameId: data.vansterFrameId,
+    hogerFrameId: data.hogerFrameId,
+    vansterNamn: data.vansterNamn,
+    hogerNamn: data.hogerNamn,
+    omgangar: data.omgangar,
+    par: data.par,
+    sammanslagning: data.sammanslagning,
+    extra: data.extra,
+    avvisade: new Set(data.avvisade),
+    avskrivnaVanster: new Set(data.avskrivnaVanster),
+    avskrivnaHoger: new Set(data.avskrivnaHoger),
+    rundor: data.rundor,
+    vansterForm: { sourceRow: tom, signatur: data.vansterSignatur },
+    hogerForm: { sourceRow: tom, signatur: data.hogerSignatur },
+  }
+  verkstadOppen.value = false
+  laddad = true
+  return flikarna() !== null
+}
+
+/**
+ * Sant först när återställningen körts.
+ *
+ * Utan den skulle den första skrivningen ske innan läsningen hunnit klart och
+ * radera det som låg där — en tom session skulle skriva över en sparad.
+ */
+let laddad = false
+
+let sessionsTimer: ReturnType<typeof setTimeout> | null = null
+let sparad: string | null = null
+
+/**
+ * Skriver sessionen när den ändrats, en stund efter sista ändringen.
+ *
+ * Egen fördröjning och egen transaktion, skild från flikarnas. Ett handgjort
+ * par ändrar varken flikens `dataRevision` eller dess lätta signatur, så
+ * flikskrivningens avbrottsvillkor hade hoppat över skrivningen helt — och en
+ * avbruten sessionsskrivning ska inte rulla tillbaka ramarna.
+ */
+effect(() => {
+  const s = verkstad.value
+  // Läs signalen innan vi eventuellt hoppar av, annars prenumererar effekten
+  // inte på nästa ändring.
+  if (!laddad) return
+  const nasta = s === null ? null : JSON.stringify(sparadVerkstad(s))
+  if (nasta === sparad) return
+  sparad = nasta
+  if (sessionsTimer !== null) clearTimeout(sessionsTimer)
+  sessionsTimer = setTimeout(() => {
+    sessionsTimer = null
+    void sparaSession(nasta === null ? null : (JSON.parse(nasta) as SparadVerkstad))
+  }, 800)
+})

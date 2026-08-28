@@ -52,7 +52,15 @@ export function Restlista(props: {
         {props.titel}
         <span class="panel__rubrik__antal">{formatCount(props.rader.length)}</span>
       </div>
-      <div class="restlista__fil">{props.filnamn}</div>
+      {/*
+        * Ordningsnoten hör hemma här, vid listan den beskriver. Den som
+        * sorterat sin flik och sedan ser restlistan i en annan ordning ställer
+        * sig frågan varje gång, och svaret ska stå där frågan uppstår.
+        */}
+      <div class="restlista__fil">
+        {props.filnamn}
+        <span class="restlista__ordning">filens ordning</span>
+      </div>
       <div class="panel__innehall">
         {props.rader.length === 0 && (
           <p class="restlista__tom">
