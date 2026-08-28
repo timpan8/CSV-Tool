@@ -60,7 +60,7 @@ test('föreslår kolumnpar utifrån rubrikerna och räknar träffarna', async ({
   )
   await expect(vy(page)).toContainText('Föreslaget utifrån kolumnernas namn')
 
-  const siffror = page.locator('.inventering')
+  const siffror = page.locator('.slaihop__tal')
   await expect(siffror).toContainText('hittar en träff')
   await expect(siffror).toContainText('blir över')
 })
@@ -71,7 +71,7 @@ test('räknar kardinalitet och tomma nycklar före körningen', async ({ page })
 
   // Anna Karlsson finns två gånger i kundfilen och Erik har två order.
   await expect(vy(page)).toContainText('används av flera')
-  await expect(vy(page)).toContainText('matchar mer än en rad')
+  await expect(vy(page)).toContainText('matchar flera (som mest 2)')
   // ORD-1011 saknar namn och kan aldrig matcha.
   await expect(vy(page)).toContainText('har tom nyckel och kan aldrig matcha')
 
@@ -216,7 +216,7 @@ test('matchning på e-post ger fler träffar än på namn', async ({ page }) => 
 
   // E-postadresserna är skrivna likadant i båda filerna, så de flesta order
   // hittar sin kund — även de vars namn är felstavade.
-  await expect(page.locator('.inventering')).toContainText('hittar en träff')
+  await expect(page.locator('.slaihop__tal')).toContainText('hittar en träff')
   await kor(page).click()
   await expect(page.locator('.flik')).toHaveCount(3)
 })
@@ -235,15 +235,62 @@ test('varnar när nästan inget matchar', async ({ page }) => {
 test('byt håll gör den andra filen till stomme', async ({ page }) => {
   await oppnaParet(page)
   await oppnaVyn(page)
-  await expect(vy(page)).toContainText('av 16 rader i exempel-kunder.csv hittar en träff')
+  const stomme = page.locator('.slaihop__topp .falt').first()
+  await expect(stomme.getByRole('radio', { name: /exempel-kunder/ })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  )
+  // Siffrorna räknas från stommens håll: kundfilen har 16 rader.
+  await expect(page.locator('.slaihop__tal')).toContainText('av 16 rader hittar en träff')
 
   await page.getByRole('button', { name: '⇄ Byt håll' }).click()
 
-  // Nu är orderfilen stommen, och siffrorna räknas från dess håll.
-  await expect(vy(page)).toContainText('av 14 rader i exempel-order.csv hittar en träff')
+  // Nu är orderfilen stommen — 14 rader — och den står först bland rutorna.
+  await expect(stomme.getByRole('radio', { name: /exempel-order/ })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  )
+  await expect(page.locator('.slaihop__tal')).toContainText('av 14 rader hittar en träff')
   await expect(page.locator('.slaihop__ruta').nth(0)).toContainText('exempel-order.csv')
   await kor(page).click()
   await expect(page.locator('.statusrad')).toContainText('14 rader')
+})
+
+test('alla inställningar syns utan att rulla, även på en liten skärm', async ({ page }) => {
+  /*
+   * Det här är buggen som blev rapporterad: "Slå ihop verkar inte fungera
+   * alls nu. Det finns inga filter osv."
+   *
+   * Inställningarna låg i en 260 px-rail som rymde 870 px innehåll. Allt från
+   * *Kolumner att hämta* och nedåt hamnade under vikkanten i en panel som inte
+   * såg ut att gå att rulla — så halva verktyget var osynligt. På en 720 px
+   * hög skärm låg namnprefixet 400 px nedanför fönsterkanten.
+   */
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await oppnaParet(page)
+  await oppnaVyn(page)
+
+  const hojd = 720
+  for (const kontroll of [
+    page.locator('.slaihop__topp .falt').first(), // stommen
+    page.getByRole('button', { name: '⇄ Byt håll' }),
+    parrad(page).locator('select').first(), // kolumnparet
+    page.getByRole('radio', { name: 'En rad per träff' }), // flerträff
+    page.getByRole('checkbox', { name: /Summa/ }), // kolumner att hämta
+    page.getByPlaceholder(/t\.ex\./), // namnprefix
+    kor(page),
+  ]) {
+    const lada = await kontroll.boundingBox()
+    expect(lada, 'kontrollen ska finnas').not.toBeNull()
+    expect(lada!.y).toBeGreaterThanOrEqual(0)
+    expect(lada!.y + lada!.height).toBeLessThanOrEqual(hojd)
+  }
+
+  // Och rutorna ska ha kvar användbar höjd — inställningarna får inte äta dem.
+  for (const ruta of await page.locator('.slaihop__ruta').all()) {
+    const lada = (await ruta.boundingBox())!
+    expect(lada.height).toBeGreaterThan(90)
+  }
 })
 
 test('Escape stänger vyn', async ({ page }) => {
