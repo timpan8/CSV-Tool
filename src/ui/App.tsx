@@ -794,6 +794,15 @@ export function App() {
      * stället: den vanliga vägen är oförändrad, och alternativet är ett klick
      * bort just när det är aktuellt.
      */
+    /*
+     * Två olika mått, med flit.
+     *
+     * Här räcker "flera rader och flera kolumner", eftersom notisens knapp
+     * inte står i vägen för någon: den syns en stund och försvinner. Dialogen
+     * använder den strängare regeln — att första raden ser ut som en
+     * rubrikrad — för att avgöra vilken knapp som är *förvald*, och det är
+     * ett starkare påstående som förtjänar ett starkare tecken.
+     */
     const bredd = Math.max(...rows.map((r) => r.length), 0)
     const serUtSomFil = rows.length >= 2 && bredd >= 2
     const somNyFil = {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
-import { parseCsvBytes, parseCsvText } from '../../src/core/csv/parse.js'
+import { parseCsvBytes, parseCsvText, serUtSomRubrikrad } from '../../src/core/csv/parse.js'
 import { decodeBytes } from '../../src/core/csv/decode.js'
 import { cp1252EncodeString } from '../../src/core/csv/cp1252.js'
 import { getCell } from '../../src/core/frame/column.js'
@@ -242,5 +242,37 @@ describe('rundgång', () => {
       ),
       { numRuns: 200 },
     )
+  })
+})
+
+describe('rubrikrad i det inklistrade', () => {
+  it('ser kolumnnamn på första raden', () => {
+    expect(
+      serUtSomRubrikrad([
+        ['Namn', 'Ort'],
+        ['Anna', 'Lund'],
+      ]),
+    ).toBe(true)
+  })
+
+  it('säger nej till en rad med tal i', () => {
+    // Mätvärden är data, hur snyggt de än står först.
+    expect(
+      serUtSomRubrikrad([
+        ['Namn', '2026'],
+        ['Anna', '2025'],
+      ]),
+    ).toBe(false)
+  })
+
+  it('säger nej till tomma och upprepade namn', () => {
+    expect(serUtSomRubrikrad([['Namn', ''], ['Anna', 'Lund']])).toBe(false)
+    expect(serUtSomRubrikrad([['Namn', 'namn'], ['Anna', 'Bo']])).toBe(false)
+  })
+
+  it('säger nej till en ensam rad eller en ensam kolumn', () => {
+    expect(serUtSomRubrikrad([['Namn', 'Ort']])).toBe(false)
+    expect(serUtSomRubrikrad([['Namn'], ['Anna']])).toBe(false)
+    expect(serUtSomRubrikrad([])).toBe(false)
   })
 })

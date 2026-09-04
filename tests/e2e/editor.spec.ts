@@ -250,20 +250,51 @@ test('dialogen för en inklistring som inte får plats kan öppna den som ny fil
   await sista.click()
   await expect(sista).toHaveClass(/rutnat__cell--fokus/)
 
+  // Kolumnnamn på första raden: det här är ett eget dokument, inte celler.
   await page.evaluate(() => {
     const data = new DataTransfer()
-    data.setData('text/plain', 'a\tb\nc\td\ne\tf\ng\th')
+    data.setData('text/plain', 'Grupp\tKod\nEkonomi\tE1\nIT\tI1\nHR\tH1')
     window.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true }))
   })
 
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await page.getByRole('button', { name: 'Öppna som ny fil' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toContainText('kolumnnamn på första raden')
+  // Och då är det den knappen fingret landar på.
+  await expect(dialog.getByRole('button', { name: 'Öppna som ny fil' })).toHaveClass(
+    /knapp--primar/,
+  )
+
+  await dialog.getByRole('button', { name: 'Öppna som ny fil' }).click()
   await page.getByRole('button', { name: 'Öppna filen' }).click()
 
   await expect(page.locator('.flik')).toHaveCount(2)
   // Kundfilen växte inte.
   await page.locator('.flik__namn', { hasText: 'exempel-kunder.csv' }).click()
   await expect(page.locator('.statusrad')).toContainText('16 rader')
+})
+
+test('utan rubrikrad är det fortfarande tabellen som är förvalet', async ({ page }) => {
+  await oppnaExempel(page)
+  const sista = cell(page, 'Skellefteå')
+  await sista.click()
+  await expect(sista).toHaveClass(/rutnat__cell--fokus/)
+
+  // Rena värden ur en annan kolumn — inga kolumnnamn med.
+  await page.evaluate(() => {
+    const data = new DataTransfer()
+    data.setData('text/plain', 'Visby\nEnköping\nYstad\nSala')
+    window.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true }))
+  })
+
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await expect(dialog).not.toContainText('kolumnnamn på första raden')
+  await expect(dialog.getByRole('button', { name: 'Lägg till plats' })).toHaveClass(
+    /knapp--primar/,
+  )
+  // Och pluralen stämmer: en kolumn, inte "1 kolumner".
+  await expect(dialog).toContainText('4 rader och 1 kolumn,')
 })
 
 test('klistrar in i tomma läget som en ny fil', async ({ page }) => {
