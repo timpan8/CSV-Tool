@@ -165,6 +165,8 @@ interface MenyLage {
 interface PasteState {
   plan: PasteRequest
   sel: Selection
+  /** Råtexten, så att dialogen kan erbjuda att öppna den som en egen fil. */
+  text: string
 }
 
 /**
@@ -745,6 +747,34 @@ export function App() {
     })
   }
 
+  /** Öppnar urklippstexten som en egen flik, som i det tomma läget. */
+  const klistraInSomNyFil = (text: string) => {
+    if (text.trim() === '') return
+    oppnaText(text, 'inklistrat.csv')
+  }
+
+  /**
+   * Läser urklippet själv och öppnar det som en ny fil.
+   *
+   * För paletten och menyerna, som inte kommer via webbläsarens
+   * paste-händelse. Nekas läsningen sägs det rakt ut — samma väg som
+   * `klistraInFranMeny`.
+   */
+  const klistraInSomNyFilFranMeny = async () => {
+    try {
+      const text = await navigator.clipboard.readText()
+      if (text.trim() === '') {
+        notify('Urklippet är tomt.')
+        return
+      }
+      klistraInSomNyFil(text)
+    } catch {
+      notify('Webbläsaren tillät inte att urklippet lästes. Tryck Ctrl+Skift+V i stället.', {
+        ton: 'varning',
+      })
+    }
+  }
+
   const forbereKlistraIn = (text: string) => {
     const nu = nuLage()
     if (!nu || !nu.sel) return
@@ -752,14 +782,37 @@ export function App() {
     const { rows } = parseDelimitedText(text)
     if (rows.length === 0) return
     const plan = planeraInklistring(tab, sel, rows)
+    /*
+     * En inklistring som ser ut som en hel tabell kan lika gärna ha varit
+     * tänkt som en ny fil.
+     *
+     * I det tomma läget blir en inklistring alltid en ny fil, och det är
+     * uppenbart. Med en fil öppen hamnar den i tabellen — vilket är rätt för
+     * en cell eller en kolumn ur Excel, men fel för den som just kopierat ett
+     * helt nytt underlag. Att fråga varje gång skulle kosta ett Enter i det
+     * arbetsflöde verktyget är byggt för, så svaret ligger i notisen i
+     * stället: den vanliga vägen är oförändrad, och alternativet är ett klick
+     * bort just när det är aktuellt.
+     */
+    const bredd = Math.max(...rows.map((r) => r.length), 0)
+    const serUtSomFil = rows.length >= 2 && bredd >= 2
+    const somNyFil = {
+      etikett: 'Öppna som ny fil i stället',
+      kor: () => {
+        undo(tab)
+        klistraInSomNyFil(text)
+      },
+    }
+
     if (plan.extraRader === 0 && plan.extraKolumner === 0) {
       const andrade = klistraIn(tab, sel, plan, false)
+      const angra = { etikett: 'Ångra', kor: () => undo(tab) }
       notify(`Klistrade in ${celler(andrade)}.`, {
-        atgard: { etikett: 'Ångra', kor: () => undo(tab) },
+        atgard: serUtSomFil ? [angra, somNyFil] : angra,
       })
       return
     }
-    setInklistring({ plan, sel })
+    setInklistring({ plan, sel, text })
   }
 
   /* ---------- Rader ---------- */
@@ -990,6 +1043,12 @@ export function App() {
       { etikett: 'Klipp ut', genvag: 'Ctrl+X', kor: () => void klippUtMarkering() },
       { etikett: 'Kopiera', genvag: 'Ctrl+C', kor: () => void kopieraMarkering() },
       { etikett: 'Klistra in', genvag: 'Ctrl+V', kor: () => void klistraInFranMeny() },
+      {
+        etikett: 'Klistra in som ny fil',
+        genvag: 'Ctrl+Skift+V',
+        skal: 'lämnar den här tabellen orörd',
+        kor: () => void klistraInSomNyFilFranMeny(),
+      },
       'avdelare',
       {
         etikett: flera ? 'Fyll markeringen med ett värde…' : 'Skriv ett värde…',
@@ -1325,7 +1384,22 @@ export function App() {
   /* ---------- Urklipp och släpp ---------- */
 
   useEffect(() => {
+    /*
+     * Skift-tangenten läses ur tangentnedslaget, inte ur inklistringen.
+     *
+     * `ClipboardEvent` bär inga modifierare, och urklippet går bara att läsa
+     * ur just den händelsen utan att be om behörighet. Nedslaget kommer
+     * omedelbart före, så flaggan sätts där och läses här. Den nollställs
+     * efter varje inklistring, så en gammal skift-tryckning kan inte leva
+     * kvar och kapa nästa Ctrl+V.
+     */
+    const skift = { pa: false }
+    const onKeydown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') skift.pa = e.shiftKey
+    }
     const onPaste = (e: ClipboardEvent) => {
+      const somNyFil = skift.pa
+      skift.pa = false
       const target = e.target as HTMLElement | null
       if (target && /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)) return
       const text = e.clipboardData?.getData('text/plain') ?? ''
@@ -1334,11 +1408,15 @@ export function App() {
       // Samma spärr som tangentbordskedjan: i en egen vy finns rutnätet inte
       // på skärmen, och en inklistring får inte skriva i celler man inte ser.
       // Texten blir en ny flik i stället — som när ingen fil är öppen.
-      if (!tab || lagen.current.stangEgenVy) oppnaText(text, 'inklistrat.csv')
+      if (somNyFil || !tab || lagen.current.stangEgenVy) klistraInSomNyFil(text)
       else forbereKlistraIn(text)
     }
+    window.addEventListener('keydown', onKeydown, true)
     window.addEventListener('paste', onPaste)
-    return () => window.removeEventListener('paste', onPaste)
+    return () => {
+      window.removeEventListener('keydown', onKeydown, true)
+      window.removeEventListener('paste', onPaste)
+    }
   }, [tab, markering, rev])
 
   useEffect(() => {
@@ -1967,6 +2045,7 @@ export function App() {
               taBortKolumn: () => palettKolumn && taBortKolumn(palettKolumn.id),
               infogaKolumn: () => infogaKolumn(),
               lopnummer: laggTillNummerkolumn,
+              klistraSomFil: () => void klistraInSomNyFilFranMeny(),
               filtreraKolumn: () => palettKolumn && filtreraKolumn(palettKolumn.id),
               visaOgiltiga: () => palettKolumn && visaOgiltiga(palettKolumn.id),
               infogaRadOvan: () =>
@@ -2034,6 +2113,11 @@ export function App() {
           markeradeRader={rect(inklistring.sel).r2 - rect(inklistring.sel).r1 + 1}
           markeradeKolumner={rect(inklistring.sel).k2 - rect(inklistring.sel).k1 + 1}
           onAvbryt={() => setInklistring(null)}
+          onNyFil={() => {
+            const text = inklistring.text
+            setInklistring(null)
+            klistraInSomNyFil(text)
+          }}
           onKlistraIn={(utoka) => {
             const andrade = klistraIn(tab, inklistring.sel, inklistring.plan, utoka)
             setInklistring(null)

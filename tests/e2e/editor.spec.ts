@@ -186,6 +186,86 @@ test('frågar innan en inklistring som inte får plats', async ({ page }) => {
   await expect(cell(page, 'd')).toBeVisible()
 })
 
+test('en tabellinklistring erbjuder att bli en ny fil i stället', async ({ page }) => {
+  /*
+   * I det tomma läget blir en inklistring alltid en ny fil. Med en fil öppen
+   * hamnar den i tabellen, vilket är rätt för celler ur Excel och fel för den
+   * som just kopierat ett helt nytt underlag. Valet ligger i notisen, så att
+   * den vanliga vägen är oförändrad.
+   */
+  await oppnaExempel(page)
+  const mal = cell(page, 'Lund').first()
+  await mal.click()
+  await expect(mal).toHaveClass(/rutnat__cell--fokus/)
+
+  await page.evaluate(() => {
+    const data = new DataTransfer()
+    data.setData('text/plain', 'Grupp\tKod\nEkonomi\tE1\nIT\tI1')
+    window.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true }))
+  })
+
+  const notis = page.locator('.toast').last()
+  await expect(notis).toContainText('Klistrade in')
+  await notis.getByRole('button', { name: 'Öppna som ny fil i stället' }).click()
+
+  // Inklistringen backades, och texten kom som en egen fil.
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await expect(page.locator('.flik')).toHaveCount(2)
+  await expect(page.locator('.statusrad')).toContainText('2 rader')
+  await expect(cell(page, 'Ekonomi')).toBeVisible()
+
+  // Och kundfilen står orörd.
+  await page.locator('.flik__namn', { hasText: 'exempel-kunder.csv' }).click()
+  await expect(cell(page, 'Lund').first()).toBeVisible()
+  await expect(cell(page, 'Ekonomi')).toHaveCount(0)
+})
+
+test('Ctrl+Skift+V klistrar in som en ny fil direkt', async ({ page }) => {
+  await oppnaExempel(page)
+  const mal = cell(page, 'Lund').first()
+  await mal.click()
+  await expect(mal).toHaveClass(/rutnat__cell--fokus/)
+
+  // Skiftläget läses ur tangentnedslaget; inklistringen bär inga modifierare.
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, shiftKey: true, bubbles: true }),
+    )
+    const data = new DataTransfer()
+    data.setData('text/plain', 'Grupp\tKod\nEkonomi\tE1')
+    window.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true }))
+  })
+
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await expect(page.locator('.flik')).toHaveCount(2)
+  await expect(cell(page, 'Ekonomi')).toBeVisible()
+  // Ingenting skrevs i kundfilen.
+  await page.locator('.flik__namn', { hasText: 'exempel-kunder.csv' }).click()
+  await expect(cell(page, 'Lund').first()).toBeVisible()
+})
+
+test('dialogen för en inklistring som inte får plats kan öppna den som ny fil', async ({ page }) => {
+  await oppnaExempel(page)
+  const sista = cell(page, 'Skellefteå')
+  await sista.click()
+  await expect(sista).toHaveClass(/rutnat__cell--fokus/)
+
+  await page.evaluate(() => {
+    const data = new DataTransfer()
+    data.setData('text/plain', 'a\tb\nc\td\ne\tf\ng\th')
+    window.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true }))
+  })
+
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.getByRole('button', { name: 'Öppna som ny fil' }).click()
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+
+  await expect(page.locator('.flik')).toHaveCount(2)
+  // Kundfilen växte inte.
+  await page.locator('.flik__namn', { hasText: 'exempel-kunder.csv' }).click()
+  await expect(page.locator('.statusrad')).toContainText('16 rader')
+})
+
 test('klistrar in i tomma läget som en ny fil', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByText('Släpp dina filer här')).toBeVisible()

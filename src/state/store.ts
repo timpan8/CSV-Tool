@@ -563,12 +563,24 @@ export function undoThrough(tab: Tab, stepIndex: number): void {
 
 /* ---------- Notiser ---------- */
 
+export interface Atgard {
+  etikett: string
+  kor: () => void
+}
+
 export interface Toast {
   id: number
   message: string
   ton: 'info' | 'varning' | 'fara'
-  /** Åtgärdsknapp, nästan alltid "Ångra". */
-  atgard?: { etikett: string; kor: () => void }
+  /**
+   * Åtgärdsknapp, nästan alltid "Ångra" — eller flera.
+   *
+   * Flera behövs när notisen inte bara rapporterar utan erbjuder ett annat
+   * beslut: en inklistring som gick in i tabellen kan lika gärna ha varit
+   * tänkt som en ny fil, och då ska svaret ligga i notisen i stället för att
+   * kräva att man vet att genvägen finns.
+   */
+  atgard?: Atgard | Atgard[]
 }
 
 export const toasts = signal<Toast[]>([])

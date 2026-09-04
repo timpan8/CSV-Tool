@@ -15,6 +15,8 @@ export function PasteDialog(props: {
   markeradeRader: number
   markeradeKolumner: number
   onAvbryt: () => void
+  /** Öppnar det inklistrade som en egen flik i stället. */
+  onNyFil: () => void
   onKlistraIn: (utoka: boolean) => void
 }) {
   const { plan } = props
@@ -29,6 +31,15 @@ export function PasteDialog(props: {
         <>
           <button class="knapp" onClick={props.onAvbryt}>
             Avbryt
+          </button>
+          {/*
+            Att det inklistrade inte får plats är det tydligaste tecknet på
+            att det kanske aldrig var tänkt för den här tabellen. Då ska
+            valet stå här, bredvid de andra, och inte kräva att man avbryter
+            och letar reda på en genväg.
+          */}
+          <button class="knapp" onClick={props.onNyFil}>
+            Öppna som ny fil
           </button>
           <button class="knapp" onClick={() => props.onKlistraIn(false)}>
             Klipp av
@@ -49,6 +60,8 @@ export function PasteDialog(props: {
       </Notis>
 
       <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+        <strong>Öppna som ny fil</strong> lämnar den här tabellen orörd och lägger det
+        inklistrade i en egen flik.{' '}
         <strong>Lägg till plats</strong> utökar tabellen med{' '}
         {plan.extraRader > 0 && `${formatCount(plan.extraRader)} rader`}
         {plan.extraRader > 0 && plan.extraKolumner > 0 && ' och '}

@@ -43,6 +43,7 @@ export interface Kommandolage {
 
 export interface Kommandohandlare {
   oppnaFil: () => void
+  klistraSomFil: () => void
   exportera: () => void
   profiler: () => void
   sok: () => void
@@ -84,6 +85,16 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
   const kol = lage.kolumn
 
   lagg({ id: 'oppna', grupp: 'Fil', etikett: 'Öppna fil…', ord: 'open csv excel', kor: h.oppnaFil })
+  lagg({
+    id: 'klistrasomfil',
+    grupp: 'Fil',
+    etikett: 'Klistra in som ny fil',
+    genvag: 'Ctrl+Skift+V',
+    ord: 'paste urklipp klippbord ny flik dokument',
+    beskrivning:
+      'Öppnar det du kopierat som en egen flik i stället för att skriva in det i tabellen du står i.',
+    kor: h.klistraSomFil,
+  })
   lagg({
     id: 'glomsparat',
     grupp: 'Fil',

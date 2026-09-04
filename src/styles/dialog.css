@@ -778,7 +778,9 @@
 .toast {
   display: flex;
   align-items: center;
-  gap: 12px;
+  /* Två åtgärder får lägga sig på egen rad hellre än att svämma över kanten. */
+  flex-wrap: wrap;
+  gap: 4px 12px;
   padding: 9px 12px;
   border-radius: var(--radie);
   background: var(--yta);
@@ -786,6 +788,12 @@
   box-shadow: var(--skugga-hog);
   font-size: 13px;
   max-width: 460px;
+}
+
+/* Texten tar plats först; knapparna knuffas inte ut ur rutan av den. */
+.toast > span {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .toast--varning { border-left: 3px solid var(--varning); }
