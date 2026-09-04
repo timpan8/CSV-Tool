@@ -324,17 +324,18 @@ export function Toastar() {
       {toasts.value.map((t) => (
         <div class={`toast toast--${t.ton}`} key={t.id}>
           <span>{t.message}</span>
-          {t.atgard && (
+          {(Array.isArray(t.atgard) ? t.atgard : t.atgard ? [t.atgard] : []).map((a) => (
             <button
+              key={a.etikett}
               class="toast__atgard"
               onClick={() => {
-                t.atgard!.kor()
+                a.kor()
                 dismiss(t.id)
               }}
             >
-              {t.atgard.etikett}
+              {a.etikett}
             </button>
-          )}
+          ))}
         </div>
       ))}
     </div>

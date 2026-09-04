@@ -13,6 +13,7 @@ function handlare(): { h: Kommandohandlare; korda: string[] } {
   const r = (n: string) => () => korda.push(n)
   const h: Kommandohandlare = {
     oppnaFil: r('oppnaFil'),
+    klistraSomFil: r('klistraSomFil'),
     exportera: r('exportera'),
     profiler: r('profiler'),
     sok: r('sok'),
@@ -66,8 +67,14 @@ describe('byggKommandon', () => {
     const { h } = handlare()
     const lista = byggKommandon({ ...LAGE, harFil: false, kolumn: null }, h)
     // Att glömma det sparade hör hit: det går att göra även när ingen fil är
-    // öppen, och är då kanske just det man vill.
-    expect(lista.map((k) => k.id)).toEqual(['oppna', 'glomsparat', 'tema'])
+    // öppen, och är då kanske just det man vill. Detsamma gäller att klistra
+    // in ett dokument — det är en av vägarna in i verktyget.
+    expect(lista.map((k) => k.id)).toEqual([
+      'oppna',
+      'klistrasomfil',
+      'glomsparat',
+      'tema',
+    ])
   })
 
   it('kolumnkommandon dyker upp först när det finns en kolumn', () => {
