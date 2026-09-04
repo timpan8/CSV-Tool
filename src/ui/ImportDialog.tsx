@@ -4,7 +4,7 @@ import { DELIMITER_NAMES } from '../core/csv/sniff.js'
 import type { Delimiter, Encoding } from '../core/types.js'
 import { dataWorker } from '../worker/client.js'
 import type { ParsePreview } from '../worker/protocol.js'
-import { formatCount } from '../core/locale/sv.js'
+import { formatByte, formatCount } from '../core/locale/sv.js'
 
 const DELIMITER_VAL: { varde: Delimiter; etikett: string }[] = [
   { varde: ';', etikett: 'Semikolon  ;' },
@@ -82,9 +82,7 @@ export function ImportDialog(props: {
   const uppdatera = (delta: Partial<ImportSettings>) =>
     setSettings((current) => ({ ...current, ...delta }))
 
-  const storlek = props.file.size >= 1024 * 1024
-    ? `${(props.file.size / 1024 / 1024).toFixed(1)} MB`
-    : `${Math.max(1, Math.round(props.file.size / 1024))} kB`
+  const storlek = formatByte(props.file.size)
 
   return (
     <Modal

@@ -77,6 +77,7 @@ export interface Kommandohandlare {
   goraOm: () => void
   vaxlaTema: () => void
   glomSparat: () => void
+  borjaOm: () => void
 }
 
 export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando[] {
@@ -103,6 +104,15 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
     beskrivning:
       'Tömmer det verktyget sparat i webbläsaren. Flikarna du har öppna står kvar.',
     kor: h.glomSparat,
+  })
+  lagg({
+    id: 'borjaom',
+    grupp: 'Fil',
+    etikett: 'Börja om…',
+    ord: 'rensa allt stäng nollställ minne töm reset start om',
+    beskrivning:
+      'Stänger alla filer, kastar en påbörjad sammanslagning och tömmer webbläsarens lagring. Sidan laddas om.',
+    kor: h.borjaOm,
   })
   if (lage.harFil) {
     lagg({
