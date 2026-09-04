@@ -274,3 +274,67 @@ describe('beskrivSortering', () => {
     )
   })
 })
+
+describe('kolumnens egen ordning', () => {
+  const traff = ['träff', 'flera träffar', 'ingen träff', 'bara i den andra filen']
+
+  const medOrdning = (rader: string[]) => {
+    const frame = frameOf(['Träff'], rader.map((v) => [v]))
+    frame.columns[0]!.sortordning = traff
+    return frame
+  }
+
+  it('sorterar i den ordningen i stället för i bokstavsordning', () => {
+    const frame = medOrdning([
+      'ingen träff',
+      'bara i den andra filen',
+      'träff',
+      'flera träffar',
+    ])
+    const niva: Sorteringsniva[] = [{ colId: frame.columns[0]!.id, riktning: 'stigande' }]
+    expect(varden(frame, 0, sorteraRader(frame, niva))).toEqual(traff)
+    // Bokstavsordningen hade gett den omvända listan — det är hela poängen.
+    expect([...traff].sort((a, b) => a.localeCompare(b, 'sv'))).not.toEqual(traff)
+  })
+
+  it('vänder med riktningen', () => {
+    const frame = medOrdning(['träff', 'bara i den andra filen', 'ingen träff'])
+    const niva: Sorteringsniva[] = [{ colId: frame.columns[0]!.id, riktning: 'fallande' }]
+    expect(varden(frame, 0, sorteraRader(frame, niva))).toEqual([
+      'bara i den andra filen',
+      'ingen träff',
+      'träff',
+    ])
+  })
+
+  it('lägger värden utanför listan efter dem, i bokstavsordning', () => {
+    // En städning kan skriva om värdena. Då hör de inte längre till
+    // berättelsen kolumnen är gjord för, och ska inte sorteras in mitt i.
+    const frame = medOrdning(['Ö-värde', 'ingen träff', 'A-värde', 'träff'])
+    const niva: Sorteringsniva[] = [{ colId: frame.columns[0]!.id, riktning: 'stigande' }]
+    expect(varden(frame, 0, sorteraRader(frame, niva))).toEqual([
+      'träff',
+      'ingen träff',
+      'A-värde',
+      'Ö-värde',
+    ])
+  })
+
+  it('tomma celler hamnar sist ändå', () => {
+    const frame = medOrdning(['ingen träff', '', 'träff'])
+    for (const riktning of ['stigande', 'fallande'] as const) {
+      const ut = varden(frame, 0, sorteraRader(frame, [{ colId: frame.columns[0]!.id, riktning }]))
+      expect(ut[ut.length - 1]).toBe('')
+    }
+  })
+
+  it('rangcachen märker att ordningen bytts', () => {
+    const frame = frameOf(['Träff'], [['träff'], ['ingen träff']])
+    const col = frame.columns[0]!
+    const utan = kolumnrang(col).rang.slice()
+    col.sortordning = traff
+    const med = kolumnrang(col).rang
+    // Utan kontrollen i cachen hade den gamla rangen kommit tillbaka.
+    expect(Array.from(med)).not.toEqual(Array.from(utan))
+  })
+})

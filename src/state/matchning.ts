@@ -79,6 +79,15 @@ export interface Verkstad {
   /** Radformen på vardera sidan när radindexen senast stämde. */
   vansterForm: Radform
   hogerForm: Radform
+  /**
+   * Flikarna sessionens körningar har skapat.
+   *
+   * Bokförs för att chippet i statusraden ska synas även när man står i det
+   * färdiga resultatet — det är ofta där man är när man undrar över raderna
+   * som saknas, och verkstaden är svaret på just den frågan. Flikar som
+   * stängts sedan dess städas bort av `synkaVerkstad`.
+   */
+  resultatTabIds: string[]
 }
 
 /**
@@ -181,8 +190,16 @@ export function oppnaVerkstad(
     omgangar: 0,
     vansterForm: radform(vanster.frame),
     hogerForm: radform(hoger.frame),
+    resultatTabIds: [],
   }
   verkstadOppen.value = true
+}
+
+/** Bokför fliken en körning skapade, så att verkstaden går att hitta därifrån. */
+export function bokforResultatflik(tabId: string): void {
+  skriv((s) =>
+    s.resultatTabIds.includes(tabId) ? s : { ...s, resultatTabIds: [...s.resultatTabIds, tabId] },
+  )
 }
 
 /**
@@ -397,6 +414,74 @@ export function restlistor(
   }
 }
 
+/**
+ * Antal rader som ligger kvar att beta av.
+ *
+ * Cachad på sessionens identitet och båda filernas `dataRevision`. Talet
+ * kräver en hashjoin, och statusraden ritas om vid varje tangenttryck — utan
+ * cachen hade siffran kostat en join per tecken. Med den betalas den en gång
+ * per ändring, alltså samma pris som verkstadsvyn redan betalar när den är
+ * öppen. `skriv` byter ut sessionsobjektet vid varje ändring, så
+ * identitetsjämförelsen fångar även ett godkänt par eller en avskriven rad.
+ */
+let restcache: { s: Verkstad; v: number; h: number; kvar: number } | null = null
+
+export function kvarAttBeta(): number | null {
+  const s = verkstad.value
+  const f = flikarna()
+  if (!s || !f) return null
+  if (
+    restcache &&
+    restcache.s === s &&
+    restcache.v === f.vanster.dataRevision &&
+    restcache.h === f.hoger.dataRevision
+  ) {
+    return restcache.kvar
+  }
+  const rest = restlistor(s, fullmatchning(f, s, grundmatchning(f, s)))
+  const kvar = rest.vanster.length + rest.osakra.length + rest.hoger.length
+  restcache = { s, v: f.vanster.dataRevision, h: f.hoger.dataRevision, kvar }
+  return kvar
+}
+
+/** Vad en flik har för roll i den parkerade sessionen. */
+export interface Flikensverkstad {
+  /** "kunder.csv ↔ order.csv" */
+  namn: string
+  /** Rader kvar att beta av. */
+  kvar: number
+  /** Källfil eller ett färdigt resultat ur sessionen. */
+  roll: 'kalla' | 'resultat'
+}
+
+/**
+ * Sessionen sedd från en enskild flik.
+ *
+ * Poängen är att den som öppnar en fil ska *se* att det ligger arbete och
+ * väntar. Förut fanns vägen tillbaka bara under *Flera filer* i
+ * verktygsraden, och den som inte redan visste att verkstaden fanns hittade
+ * den aldrig — arbetet låg kvar utan att någon kom och hämtade det.
+ *
+ * Returnerar null när fliken inte hör till sessionen, när det inte finns
+ * någon session, och när en källfil är stängd: då finns inga rader att beta
+ * av, och ett chip som lovade motsatsen vore ett löfte verktyget inte kan
+ * hålla.
+ */
+export function verkstadForFlik(tabId: string): Flikensverkstad | null {
+  const s = verkstad.value
+  if (!s || !flikarna()) return null
+  const roll: 'kalla' | 'resultat' | null =
+    tabId === s.vansterTabId || tabId === s.hogerTabId
+      ? 'kalla'
+      : s.resultatTabIds.includes(tabId)
+        ? 'resultat'
+        : null
+  if (roll === null) return null
+  const kvar = kvarAttBeta()
+  if (kvar === null || kvar === 0) return null
+  return { namn: `${s.vansterNamn} ↔ ${s.hogerNamn}`, kvar, roll }
+}
+
 /* ---------- Åtgärder ---------- */
 
 function skriv(andra: (s: Verkstad) => Verkstad): void {
@@ -535,6 +620,12 @@ export interface SparadVerkstad {
   rundor: Runda[]
   vansterSignatur: number
   hogerSignatur: number
+  /**
+   * Valfritt med flit: en session sparad innan fältet fanns läses tillbaka
+   * med en tom lista, alltså inga resultatflikar att känna igen. Att höja
+   * `SESSIONSVERSION` för det hade kastat varje påbörjad sammanslagning.
+   */
+  resultatTabIds?: string[]
 }
 
 /**
@@ -564,6 +655,7 @@ export function verkstadAvSparad(data: SparadVerkstad): Verkstad {
     rundor: data.rundor,
     vansterForm: { sourceRow: tom, signatur: data.vansterSignatur },
     hogerForm: { sourceRow: tom, signatur: data.hogerSignatur },
+    resultatTabIds: data.resultatTabIds ?? [],
   }
 }
 
@@ -585,6 +677,7 @@ export function sparadVerkstad(s: Verkstad): SparadVerkstad {
     rundor: s.rundor.map((r) => ({ traffar: r.traffar, par: r.par.map((p) => ({ ...p })) })),
     vansterSignatur: s.vansterForm.signatur,
     hogerSignatur: s.hogerForm.signatur,
+    resultatTabIds: [...s.resultatTabIds],
   }
 }
 

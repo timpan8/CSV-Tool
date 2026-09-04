@@ -1,6 +1,7 @@
 import type { Frame } from '../core/types.js'
 import { DELIMITER_NAMES } from '../core/csv/sniff.js'
-import { formatCount, formatSum } from '../core/locale/sv.js'
+import { formatCount, formatSum, rader } from '../core/locale/sv.js'
+import type { Flikensverkstad } from '../state/matchning.js'
 import { beskrivSortering } from '../core/ops/sort.js'
 import { aggregera } from '../state/selection.js'
 import { selectableColumns } from '../state/edits.js'
@@ -18,9 +19,12 @@ export function Statusrad(props: {
   begransad: boolean
   sorterat: string
   sorteringInaktuell: boolean
+  /** Den parkerade sammanslagningen, när fliken hör till den. */
+  verkstad: Flikensverkstad | null
   onRensaVy: () => void
   onSorteraOm: () => void
   onRensaSortering: () => void
+  onFortsattVerkstad: () => void
   onRadmeny: (x: number, y: number) => void
 }) {
   const tab = props.tab
@@ -74,6 +78,32 @@ export function Statusrad(props: {
             onClick={props.onRensaSortering}
           >
             ✕
+          </button>
+        </span>
+      )}
+
+      {/*
+        Den påbörjade sammanslagningen.
+
+        Vägen tillbaka in i verkstaden låg förut bara under *Flera filer* i
+        verktygsraden. Den som inte redan visste att den fanns hittade den
+        aldrig, och arbetet låg kvar utan att någon kom och hämtade det.
+        Chippet dyker upp i just de filer sammanslagningen gäller — de två
+        källorna och resultaten den skapat — och bara när det faktiskt finns
+        rader kvar.
+      */}
+      {props.verkstad && (
+        <span
+          class="verkstadchip"
+          title={`Sammanslagningen ${props.verkstad.namn} är påbörjad och har rader kvar att beta av.`}
+        >
+          <span class="verkstadchip__text">
+            {props.verkstad.roll === 'resultat'
+              ? `${rader(props.verkstad.kvar)} kom inte med`
+              : `${rader(props.verkstad.kvar)} kvar att beta av`}
+          </span>
+          <button class="verkstadchip__knapp" onClick={props.onFortsattVerkstad}>
+            Fortsätt
           </button>
         </span>
       )}

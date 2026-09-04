@@ -101,12 +101,14 @@ import {
   antecknaOmgang,
   aterstallVerkstad,
   aterupptaVerkstad,
+  bokforResultatflik,
   kastaVerkstad,
   lamnaVerkstad,
   ogjortArbete,
   oppnaVerkstad,
   sessionslage,
   verkstad,
+  verkstadForFlik,
   verkstadOppen,
   type Sessionslage,
 } from '../state/matchning.js'
@@ -1595,7 +1597,12 @@ export function App() {
       {tabs.value.length > 0 && (
         <div class="flikrad">
           {tabs.value.map((t) => (
-            <FlikKnapp key={t.id} tab={t} aktiv={t.id === tab?.id} />
+            <FlikKnapp
+              key={t.id}
+              tab={t}
+              aktiv={t.id === tab?.id}
+              iVerkstad={verkstadForFlik(t.id) !== null}
+            />
           ))}
         </div>
       )}
@@ -1705,7 +1712,10 @@ export function App() {
             // Alltid en ny flik, aldrig en skrivning i en befintlig. Det är
             // det som gör att sessionen får leva vidare utan att en färdig
             // resultatflik kan ändras under händerna på den som tittar.
-            openFrame(resultat)
+            const flik = openFrame(resultat)
+            // Bokför fliken i sessionen, så att vägen tillbaka till resten
+            // syns även när man står i det färdiga resultatet.
+            bokforResultatflik(flik.id)
             // Skriv fliken direkt: omgångsräknaren nedan sparas efter 800 ms
             // och får inte hinna före resultatet den påstår finns.
             sparaNu()
@@ -1868,6 +1878,8 @@ export function App() {
         begransad={begransad}
         sorterat={tab && frame ? beskrivSortering(frame, tab.viewSpec.sortering ?? []) : ''}
         sorteringInaktuell={sorteringenArInaktuell(tab)}
+        verkstad={tab ? verkstadForFlik(tab.id) : null}
+        onFortsattVerkstad={aterta}
         onSorteraOm={() => tab && sorteraOm(tab)}
         onRensaSortering={() => tab && rensaSortering(tab)}
         onRensaVy={() => {
@@ -2233,7 +2245,16 @@ function FilValjare({ onFiler }: { onFiler: (files: File[]) => void }) {
   )
 }
 
-function FlikKnapp({ tab, aktiv }: { tab: Tab; aktiv: boolean }) {
+function FlikKnapp({
+  tab,
+  aktiv,
+  iVerkstad,
+}: {
+  tab: Tab
+  aktiv: boolean
+  /** Fliken hör till en påbörjad sammanslagning med rader kvar. */
+  iVerkstad: boolean
+}) {
   return (
     <span class={`flik${aktiv ? ' flik--aktiv' : ''}`}>
       <button
@@ -2252,6 +2273,16 @@ function FlikKnapp({ tab, aktiv }: { tab: Tab; aktiv: boolean }) {
         {tab.smutsig && '● '}
         {tab.frame.name || 'Namnlös'}
       </button>
+      {/*
+        Märket följer med fliken, så att det syns även när man står i en helt
+        annan fil. Utan det vore chippet i statusraden osynligt tills man
+        råkade klicka på rätt flik.
+      */}
+      {iVerkstad && (
+        <span class="flik__verkstad" title="Påbörjad sammanslagning med rader kvar att beta av">
+          ⟡
+        </span>
+      )}
       <span class="flik__antal">{formatCount(tab.frame.rowCount)}</span>
       <button
         class="flik__stang"

@@ -57,6 +57,20 @@ export interface Column {
   flags: Uint8Array
   /** Uppslagning värde → dict-index. Hålls synkad med `dict`. */
   dictIndex: Map<string, number>
+  /**
+   * Värden i den ordning de ska sorteras, för kolumner vars ordning inte är
+   * alfabetisk.
+   *
+   * Träff-kolumnen ur en sammanslagning är exemplet: bokstavsordningen ger
+   * *bara i den andra filen* → *flera träffar* → *ingen träff* → *träff*,
+   * vilket inte betyder någonting. Ordningen som betyder något är den kolumnen
+   * berättar, från lyckad till helt utan partner.
+   *
+   * Värden som inte står i listan sorteras efter dem, sinsemellan i
+   * bokstavsordning — en städning som skriver om värdena tappar alltså
+   * ordningen i stället för att hamna i en gissad.
+   */
+  sortordning?: readonly string[]
 }
 
 /**

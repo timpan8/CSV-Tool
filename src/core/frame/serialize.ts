@@ -20,6 +20,14 @@ export interface SerializedColumn {
   dict: string[]
   codes: ArrayBuffer
   flags: ArrayBuffer
+  /**
+   * Kolumnens egen sorteringsordning, om den har en.
+   *
+   * Valfri med flit: en rad sparad före fältet fanns läses tillbaka med
+   * `undefined`, alltså bokstavsordning som förut, och `RADVERSION` behövde
+   * därför inte höjas — en höjning kastar allt användaren har sparat.
+   */
+  sortordning?: readonly string[]
 }
 
 export interface SerializedFrame {
@@ -63,6 +71,7 @@ export function serializeFrame(frame: Frame): SerializedPayload {
       dict: col.dict,
       codes,
       flags,
+      ...(col.sortordning ? { sortordning: col.sortordning } : {}),
     }
   })
   const sourceRow = bufferOf(frame.sourceRow)
@@ -95,6 +104,7 @@ export function deserializeFrame(payload: SerializedFrame): Frame {
       codes: new Uint32Array(c.codes),
       flags: new Uint8Array(c.flags),
       dictIndex,
+      ...(c.sortordning ? { sortordning: c.sortordning } : {}),
     }
   })
   return {

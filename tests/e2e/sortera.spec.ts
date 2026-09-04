@@ -163,3 +163,28 @@ test('export av alla rader följer sorteringen', async ({ page }) => {
   // Utan ordningen skulle den första dataraden vara Malmö, som i filen.
   expect(rader[1]).toContain('Boden')
 })
+
+test('pilen säger om kolumnen är sorterad eller bara går att sortera', async ({ page }) => {
+  /*
+   * Förut var tecknet ↑ även när kolumnen inte var sorterad. Pilen syns
+   * alltid på den aktiva kolumnen, så ett klick på rubriknamnet — som bara
+   * *markerar* kolumnen — lämnade ett ↑ efter sig. Då läser man filens egen
+   * ordning som en sorterad ordning.
+   */
+  await oppnaExempel(page)
+  const pil = sortpil(page, 'Ort')
+
+  // Markera kolumnen genom att klicka på namnet. Ingen sortering ska ske.
+  await page.locator('.rubrik').filter({ hasText: 'Ort' }).locator('.rubrik__namn span').click()
+  await expect(pil).toHaveText('↕')
+  await expect(page.locator('.statusrad')).not.toContainText('Sorterat')
+
+  await pil.click()
+  await expect(pil).toHaveText('↑')
+  await pil.click()
+  await expect(pil).toHaveText('↓')
+
+  // Och när sorteringen tas bort går tecknet tillbaka.
+  await page.locator('.sortchip__stang').click()
+  await expect(pil).toHaveText('↕')
+})

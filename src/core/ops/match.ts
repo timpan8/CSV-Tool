@@ -1,6 +1,7 @@
 import { Flag, type Column, type ColumnId, type Frame } from '../types.js'
-import { findColumn, newFrameId } from '../frame/frame.js'
-import { createColumn, getCell, intern } from '../frame/column.js'
+import { findColumn, newFrameId, visibleColumns } from '../frame/frame.js'
+import { codeCounts, createColumn, getCell, intern } from '../frame/column.js'
+import { rubriknyckel, synonymgrupp } from './rubriker.js'
 import { normalizeAlways, stripDiacritics } from '../locale/sv.js'
 import { delaEpost } from './email.js'
 
@@ -605,6 +606,22 @@ export const TRAFFVARDEN = {
   bara: 'bara i den andra filen',
 } as const
 
+/**
+ * Kolumnens egen sorteringsordning: från lyckad till helt utan partner.
+ *
+ * Bokstavsordningen ger *bara i den andra filen* → *flera träffar* → *ingen
+ * träff* → *träff*, vilket är fyra ord i alfabetisk ordning och ingenting
+ * mer. Den här ordningen är den kolumnen faktiskt berättar, så *sortera
+ * A→Ö* lägger de lyckade raderna först och *Ö→A* lägger dem som behöver
+ * ses över först.
+ */
+export const TRAFFORDNING: readonly string[] = [
+  TRAFFVARDEN.traff,
+  TRAFFVARDEN.flera,
+  TRAFFVARDEN.utan,
+  TRAFFVARDEN.bara,
+]
+
 export interface Sammanslagning {
   /** Kolumner ur högerfilen som ska följa med, i ordning. */
   hogerKolumner: ColumnId[]
@@ -881,6 +898,7 @@ export function slaIhop(
     }
     const col = createColumn(unikt, antal)
     col.typeLocked = true
+    col.sortordning = TRAFFORDNING
     // Det fjärde värdet interneras bara när det behövs. Annars hade varje
     // resultat fått en ordbokspost ingen rad använder, som sedan dykt upp som
     // ett alternativ med noll rader i snabbfiltrets värdelista.
@@ -986,6 +1004,9 @@ function kopieraColumn(
     dictIndex,
     codes,
     flags,
+    // En kopierad Träff-kolumn — en sammanslagning av en sammanslagning —
+    // ska sortera likadant som originalet gjorde.
+    ...(kalla.sortordning ? { sortordning: kalla.sortordning } : {}),
   }
 }
 
@@ -993,4 +1014,199 @@ function kopieraColumn(
 export function cellText(frame: Frame, colId: ColumnId, row: number): string {
   const col = findColumn(frame, colId)
   return col ? getCell(col, row) : ''
+}
+
+/* ---------- Att hitta kolumnparet ---------- */
+
+/**
+ * Hur bra ett kolumnpar är som nyckel.
+ *
+ * `traffar` är talet vyn redan visar: vänsterrader som hittar minst en
+ * partner. `poang` är det som *rangordnar*, och de två är med flit olika
+ * saker. En Status-kolumn mot en annan Status-kolumn ger nästan alltid 100 %
+ * träffar — varje `Aktiv` möter varenda `Aktiv` i den andra filen — och vore
+ * ändå det sämsta tänkbara paret. Därför väger varje vänsterrad `1 / antalet
+ * partners den fick`: en rad med en entydig partner räknas som hel, en rad
+ * som möter trehundra räknas som en trehundradel. Det är samma tanke som
+ * bär hela vyn — en matchning är bara värd något när den pekar ut *en* rad.
+ */
+export interface Parbetyg {
+  par: Matchningspar
+  /** Vänsterrader som hittar minst en partner. */
+  traffar: number
+  /** Av dem: de som hittar mer än en. */
+  flertraffar: number
+  /** Rangordningstalet. Se ovan. */
+  poang: number
+}
+
+/** Varför förslaget blev som det blev. Vyn säger det rakt ut. */
+export type Forslagsskal =
+  | 'namn'
+  | 'flest'
+  | 'inget'
+  /** För många kolumner för att prova alla par. Namnen fick avgöra. */
+  | 'namn-for-stort'
+
+export interface Parforslag {
+  par: Matchningspar[]
+  skal: Forslagsskal
+  /** Betyget för det föreslagna paret, när det provats fram. */
+  betyg: Parbetyg | null
+}
+
+/**
+ * Taket för hur mycket provandet får kosta.
+ *
+ * Arbetet är summan över kolumnparen av den mindre nyckelmängdens storlek —
+ * uppslagningarna som faktiskt görs. Åtta kolumner mot fem med tusen unika
+ * värden styck landar på fyrtiotusen; taket är alltså inte i vägen för
+ * vanliga filer. Det finns för att femtio kolumner mot femtio med hundratusen
+ * unika värden vore 250 miljoner uppslagningar i en vy som ritas om medan man
+ * skriver. Slår det i taket säger panelen det i stället för att bli seg.
+ */
+const PROVTAK = 5_000_000
+
+/**
+ * Nyckel → antal rader, räknat på ordboken.
+ *
+ * Ett svep över raderna för att räkna koder, sedan ett svep över de unika
+ * värdena för att normalisera dem. Det dyra — normaliseringen — sker alltså
+ * en gång per unikt värde, precis som i `byggNycklar`.
+ */
+function nyckelantal(col: Column, typ: Matchningstyp): Map<string, number> {
+  const antal = codeCounts(col)
+  const ut = new Map<string, number>()
+  for (let kod = 1; kod < col.dict.length; kod++) {
+    const n = antal[kod] ?? 0
+    if (n === 0) continue
+    const nyckel = normalisera(col.dict[kod]!, typ)
+    // Tomma nycklar matchar aldrig, här lika lite som i hashjoinen.
+    if (nyckel === '') continue
+    ut.set(nyckel, (ut.get(nyckel) ?? 0) + n)
+  }
+  return ut
+}
+
+function betygsatt(
+  par: Matchningspar,
+  v: Map<string, number>,
+  h: Map<string, number>,
+): Parbetyg {
+  let traffar = 0
+  let flertraffar = 0
+  let poang = 0
+  // Svep alltid den mindre mängden och slå upp i den större.
+  const vansterArMindre = v.size <= h.size
+  for (const [nyckel, n] of vansterArMindre ? v : h) {
+    const m = (vansterArMindre ? h : v).get(nyckel)
+    if (m === undefined) continue
+    const vAntal = vansterArMindre ? n : m
+    const hAntal = vansterArMindre ? m : n
+    traffar += vAntal
+    if (hAntal > 1) flertraffar += vAntal
+    poang += vAntal / hAntal
+  }
+  return { par, traffar, flertraffar, poang }
+}
+
+/**
+ * Provar alla kolumnpar och rangordnar dem.
+ *
+ * Alltid med den vanliga jämförelsen. Förslagets uppgift är att hitta rätt
+ * *kolumner* — vilken jämförelse som passar är en egen fråga, den står som
+ * ett eget val i panelen, och att prova alla sex mot alla par vore sex gånger
+ * kostnaden för ett svar användaren ändå ska titta på.
+ *
+ * Returnerar null när provandet skulle kosta mer än `PROVTAK`.
+ */
+export function provaKolumnpar(vanster: Frame, hoger: Frame): Parbetyg[] | null {
+  const v = visibleColumns(vanster).map((col) => ({ col, nycklar: nyckelantal(col, 'oberoende') }))
+  const h = visibleColumns(hoger).map((col) => ({ col, nycklar: nyckelantal(col, 'oberoende') }))
+
+  let arbete = 0
+  for (const a of v) for (const b of h) arbete += Math.min(a.nycklar.size, b.nycklar.size)
+  if (arbete > PROVTAK) return null
+
+  const betyg: Parbetyg[] = []
+  for (const a of v) {
+    for (const b of h) {
+      if (a.nycklar.size === 0 || b.nycklar.size === 0) continue
+      betyg.push(
+        betygsatt(
+          { vansterColId: a.col.id, hogerColId: b.col.id, typ: 'oberoende' },
+          a.nycklar,
+          b.nycklar,
+        ),
+      )
+    }
+  }
+  // Bäst poäng först; vid lika vinner färre flerträffar, sedan fler träffar.
+  betyg.sort((x, y) => y.poang - x.poang || x.flertraffar - y.flertraffar || y.traffar - x.traffar)
+  return betyg
+}
+
+/** Kolumnparet rubrikerna pekar ut, eller null. Namn först, synonymer sedan. */
+function namnparet(vanster: Frame, hoger: Frame): Matchningspar | null {
+  const v = visibleColumns(vanster)
+  const h = visibleColumns(hoger)
+
+  for (const vc of v) {
+    const vn = rubriknyckel(vc.name)
+    const traff = h.find((hc) => rubriknyckel(hc.name) === vn)
+    if (traff) return { vansterColId: vc.id, hogerColId: traff.id, typ: 'oberoende' }
+  }
+  for (const vc of v) {
+    const grupp = synonymgrupp(rubriknyckel(vc.name))
+    if (grupp === -1) continue
+    const traff = h.find((hc) => synonymgrupp(rubriknyckel(hc.name)) === grupp)
+    if (traff) return { vansterColId: vc.id, hogerColId: traff.id, typ: 'oberoende' }
+  }
+  return null
+}
+
+/**
+ * Hur nära det bästa paret namnparet måste komma för att ändå vinna.
+ *
+ * Att rubrikerna heter samma sak är ett uttalat besked om vad filerna handlar
+ * om, och det beskedet ska inte förloras för att ett annat par råkar ge en
+ * halv procent mer. Är skillnaden större än så är namnet fel spår, och då
+ * ska siffrorna få bestämma.
+ */
+const NAMNETS_FORSPRANG = 0.95
+
+/**
+ * Kolumnparet vyn börjar med.
+ *
+ * Förut gissades det bara på rubriknamnen, och hittade det ingenting fick
+ * användaren en tom lista — nästa klick gav då första kolumnen i vardera
+ * filen, vilket nästan aldrig är den man vill ha. Nu provas alla par mot
+ * varandra och det som faktiskt matchar bäst vinner. Namnen är fortfarande
+ * ett tungt vägande skäl, men de är inte längre det enda.
+ *
+ * Vyn får `skal` med sig och säger det rakt ut, eftersom ett förslag som inte
+ * går att förstå är ett förslag man inte vågar ändra.
+ */
+export function foreslaPar(vanster: Frame, hoger: Frame): Parforslag {
+  const namn = namnparet(vanster, hoger)
+  const betyg = provaKolumnpar(vanster, hoger)
+
+  if (betyg === null) {
+    return namn
+      ? { par: [namn], skal: 'namn-for-stort', betyg: null }
+      : { par: [], skal: 'inget', betyg: null }
+  }
+
+  const bast = betyg.find((b) => b.traffar > 0) ?? null
+  if (!bast) return namn ? { par: [namn], skal: 'namn', betyg: null } : { par: [], skal: 'inget', betyg: null }
+
+  if (namn) {
+    const namnbetyg = betyg.find(
+      (b) => b.par.vansterColId === namn.vansterColId && b.par.hogerColId === namn.hogerColId,
+    )
+    if (namnbetyg && namnbetyg.poang >= bast.poang * NAMNETS_FORSPRANG) {
+      return { par: [namn], skal: 'namn', betyg: namnbetyg }
+    }
+  }
+  return { par: [bast.par], skal: 'flest', betyg: bast }
 }

@@ -209,6 +209,13 @@ input[type='radio'] {
   font-size: 12px;
 }
 
+/* Märket på fliken: samma besked som chippet, men synligt från en annan fil. */
+.flik__verkstad {
+  color: var(--accent);
+  font-size: 11px;
+  line-height: 1;
+}
+
 .flik__stang {
   border: 0;
   background: transparent;
@@ -482,6 +489,42 @@ input[type='radio'] {
   border-radius: 999px;
   padding: 2px 8px;
   background: var(--varning);
+  color: var(--text-invers);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/*
+ * Den påbörjade sammanslagningen.
+ *
+ * Samma form som sorteringschippet — det är samma sorts besked: "så här ser
+ * det ut just nu, och här är knappen som gör något åt det". Accentfärgen
+ * skiljer det från varningstonen: det ligger arbete och väntar, ingenting
+ * har gått fel.
+ */
+.verkstadchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 3px 1px 7px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent-svag);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.verkstadchip__text {
+  color: var(--accent-text);
+}
+
+.verkstadchip__knapp {
+  border: 0;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--accent);
   color: var(--text-invers);
   font: inherit;
   font-size: 11px;
