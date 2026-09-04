@@ -81,6 +81,18 @@ export function plural(n: number, ental: string, flertal: string): string {
 }
 
 export const celler = (n: number) => plural(n, 'cell', 'celler')
+/**
+ * Byte som kB eller MB.
+ *
+ * Aldrig "0 kB": en fil som finns har alltid någon storlek, och en nolla
+ * skulle läsas som att den är tom. Under en kilobyte visas byten själva.
+ */
+export function formatByte(n: number): string {
+  if (n >= 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`
+  if (n >= 1024) return `${Math.round(n / 1024)} kB`
+  return `${formatCount(n)} byte`
+}
+
 export const rader = (n: number) => plural(n, 'rad', 'rader')
 export const kolumner = (n: number) => plural(n, 'kolumn', 'kolumner')
 export const filer = (n: number) => plural(n, 'fil', 'filer')

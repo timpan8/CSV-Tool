@@ -57,6 +57,7 @@ import {
   undoThrough,
   viewIsLimited,
   glomSparat,
+  borjaOm,
   type Tab,
 } from '../state/store.js'
 import {
@@ -88,6 +89,7 @@ import { ImportDialog, type ImportSettings } from './ImportDialog.jsx'
 import { ExportDialog } from './ExportDialog.jsx'
 import { SearchBar } from './SearchBar.jsx'
 import { PasteDialog } from './PasteDialog.jsx'
+import { BorjaOmDialog } from './BorjaOmDialog.jsx'
 import { Verktyg, ordnaVerktyg, type Verktygsnamn } from './verktyg.jsx'
 import { innehallsprofil } from '../core/frame/innehall.js'
 import { Statusrad } from './Statusrad.jsx'
@@ -213,6 +215,7 @@ export function App() {
   const [slappOver, setSlappOver] = useState(false)
   const [sokOppen, setSokOppen] = useState(false)
   const [inklistring, setInklistring] = useState<PasteState | null>(null)
+  const [borjaOmOppen, setBorjaOmOppen] = useState(false)
   /**
    * Vilket städverktyg som är öppet, och på vilka kolumner.
    *
@@ -1967,6 +1970,7 @@ export function App() {
         sorteringInaktuell={sorteringenArInaktuell(tab)}
         verkstad={tab ? verkstadForFlik(tab.id) : null}
         onFortsattVerkstad={aterta}
+        onBorjaOm={() => setBorjaOmOppen(true)}
         onSorteraOm={() => tab && sorteraOm(tab)}
         onRensaSortering={() => tab && rensaSortering(tab)}
         onRensaVy={() => {
@@ -2008,6 +2012,7 @@ export function App() {
             {
               fortsattVerkstad: aterta,
               oppnaFil: () => palettFil.current?.click(),
+              borjaOm: () => setBorjaOmOppen(true),
               glomSparat: () => {
                 void glomSparat().then(() =>
                   notify(
@@ -2112,6 +2117,17 @@ export function App() {
             setExportOppen(false)
             if (tab) tab.smutsig = false
             notify('Filen laddades ner.')
+          }}
+        />
+      )}
+
+      {borjaOmOppen && (
+        <BorjaOmDialog
+          onAvbryt={() => setBorjaOmOppen(false)}
+          onBorjaOm={() => {
+            // Rutan stängs inte: sidan laddas om, och en ruta som försvinner
+            // strax innan allt ritas om ser bara ut som ett hack.
+            void borjaOm()
           }}
         />
       )}

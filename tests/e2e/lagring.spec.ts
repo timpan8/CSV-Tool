@@ -1,5 +1,11 @@
 import { expect, test, type Page } from '@playwright/test'
-import { sparatInnehall, vantaPaBorttaget, vantaPaSparat } from './lagringshjalp.js'
+import {
+  markeraForeOmladdning,
+  sparatInnehall,
+  vantaPaBorttaget,
+  vantaPaOmladdning,
+  vantaPaSparat,
+} from './lagringshjalp.js'
 
 async function oppnaExempel(page: Page) {
   await page.goto('/')
@@ -169,4 +175,48 @@ test('en uppgradering av databasen kastar inte det som redan är sparat', async 
   await expect(page.locator('.flik')).toHaveCount(1)
   await expect(page.locator('.statusrad')).toContainText('16 rader')
   await expect(page.getByRole('gridcell', { name: 'Anna Karlsson', exact: true }).first()).toBeVisible()
+})
+
+test('Börja om stänger allt, tömmer lagringen och laddar om', async ({ page }) => {
+  await oppnaExempel(page)
+  await vantaPaSparat(page, 'Anna Karlsson')
+
+  await markeraForeOmladdning(page)
+
+  // Märket i statusraden är vägen in: frågan om vad verktyget håller och
+  // svaret "ta bort alltihop" hör ihop.
+  await page.getByRole('button', { name: '● Allt lokalt' }).click()
+
+  const ruta = page.getByRole('dialog')
+  await expect(ruta).toBeVisible()
+  await expect(ruta).toContainText('öppna filer')
+  await expect(ruta).toContainText('16 rader')
+  await expect(ruta).toContainText('sparat i webbläsaren')
+  // Löftet om minnet står i rutan, eftersom det är därför man klickar.
+  await expect(ruta).toContainText('Sidan laddas om')
+
+  await ruta.getByRole('button', { name: 'Rensa allt' }).click()
+
+  // Sidan laddas om, och först då står det tomma läget där på riktigt.
+  await vantaPaOmladdning(page)
+  await expect(page.getByText('Släpp dina filer här')).toBeVisible()
+  await expect(page.locator('.flik')).toHaveCount(0)
+  await vantaPaBorttaget(page, 'Anna Karlsson')
+
+  // Och det stannar borta: ingen skrivning lägger tillbaka det som raderats.
+  await page.reload()
+  await expect(page.getByText('Släpp dina filer här')).toBeVisible()
+  await expect(page.locator('.flik')).toHaveCount(0)
+})
+
+test('Avbryt i Börja om rör ingenting', async ({ page }) => {
+  await oppnaExempel(page)
+  await vantaPaSparat(page, 'Anna Karlsson')
+
+  await page.getByRole('button', { name: '● Allt lokalt' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Avbryt' }).click()
+
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.locator('.statusrad')).toContainText('16 rader')
+  await expect(await sparatInnehall(page)).toContain('Anna Karlsson')
 })

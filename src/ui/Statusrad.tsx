@@ -14,6 +14,16 @@ import type { Tab } from '../state/store.js'
  * hur filen lästes, vad markeringen summerar till — och sedan etapp 4 också
  * vilken ordning raderna ligger i, och om den ordningen fortfarande stämmer.
  */
+/*
+ * Märket är också vägen till att rensa.
+ *
+ * Frågan "vad håller verktyget om mig?" och svaret "ta bort alltihop" hör
+ * ihop, och märket är redan den plats där den första frågan ställs. Förut
+ * hänvisade det till ett kommando man fick leta upp i paletten.
+ */
+const LOKALTITEL =
+  'Verktyget kan inte skicka data någonstans. Filerna sparas i din egen webbläsare så att de finns kvar nästa gång. Klicka för att se vad som ligger där och rensa alltihop.'
+
 export function Statusrad(props: {
   tab: Tab | null
   begransad: boolean
@@ -25,6 +35,7 @@ export function Statusrad(props: {
   onSorteraOm: () => void
   onRensaSortering: () => void
   onFortsattVerkstad: () => void
+  onBorjaOm: () => void
   onRadmeny: (x: number, y: number) => void
 }) {
   const tab = props.tab
@@ -32,7 +43,9 @@ export function Statusrad(props: {
     return (
       <div class="statusrad">
         <span>Ingen fil öppen</span>
-        <span class="statusrad__lokal">● Allt lokalt</span>
+        <button class="statusrad__lokal" onClick={props.onBorjaOm} title={LOKALTITEL}>
+          ● Allt lokalt
+        </button>
       </div>
     )
   }
@@ -130,12 +143,9 @@ export function Statusrad(props: {
       >
         Rader ▾
       </button>
-      <span
-        class="statusrad__lokal"
-        title="Verktyget kan inte skicka data någonstans. Filerna sparas i din egen webbläsare så att de finns kvar nästa gång — sök upp ”Glöm sparade filer” i paletten för att tömma det."
-      >
+      <button class="statusrad__lokal" onClick={props.onBorjaOm} title={LOKALTITEL}>
         ● Allt lokalt
-      </span>
+      </button>
     </div>
   )
 }

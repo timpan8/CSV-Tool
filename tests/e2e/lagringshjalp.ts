@@ -67,3 +67,36 @@ export async function vantaPaBorttaget(page: Page, nagel: string): Promise<void>
     )
     .toBe(true)
 }
+
+/**
+ * Väntar tills sidan faktiskt laddats om.
+ *
+ * *Börja om* tömmer flikarna i minnet först och laddar om sist, så det tomma
+ * läget ritas ut långt innan omladdningen sker — att vänta på det vore att
+ * mäta fel sak. Naglen på `window` överlever inte en omladdning, och att den
+ * är borta är därför det enda säkra beskedet. `evaluate` kastar under själva
+ * navigeringen; det räknas som "inte klar än".
+ */
+export async function vantaPaOmladdning(page: Page): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        try {
+          return await page.evaluate(
+            () => (window as unknown as { __fore?: boolean }).__fore === undefined,
+          )
+        } catch {
+          return false
+        }
+      },
+      { timeout: 20_000 },
+    )
+    .toBe(true)
+}
+
+/** Sätter naglen som `vantaPaOmladdning` letar efter. */
+export async function markeraForeOmladdning(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    ;(window as unknown as { __fore?: boolean }).__fore = true
+  })
+}

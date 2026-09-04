@@ -12,7 +12,7 @@ import type { Profilsteg } from '../core/ops/profil.js'
 import { laddaFlikar, lagringsfel, rensaLagring, sparaFlikar } from './lagring.js'
 // Cirkeln store ↔ matchning är ofarlig: båda sidor använder den andres
 // exporter först vid anrop, aldrig under modulinitieringen.
-import { glomdSession } from './matchning.js'
+import { glomdSession, kastaVerkstad } from './matchning.js'
 
 let seq = 0
 const nextId = () => `t${(seq += 1).toString(36)}`
@@ -280,6 +280,70 @@ export async function glomSparat(): Promise<void> {
   skrivet.clear()
   await rensaLagring()
   glomdSession()
+}
+
+/** Vad en omstart skulle kosta, för rutan som frågar innan. */
+export interface Omstartslage {
+  filer: number
+  rader: number
+  /** Filer med ändringar som inte exporterats. */
+  osparade: number
+  /** Ungefärligt antal byte i webbläsarens lagring, eller null när det inte går att mäta. */
+  lagrat: number | null
+}
+
+/**
+ * Mäter vad som skulle försvinna.
+ *
+ * `navigator.storage.estimate()` svarar för hela ursprunget och inte bara för
+ * verktygets databas, men det är ändå det ärligaste tal som finns att ge: det
+ * är det webbläsaren själv räknar. Saknas API:et — Safari i privat läge, äldre
+ * webbläsare — blir svaret null, och rutan säger då ingenting om byte i
+ * stället för att gissa.
+ */
+export async function omstartslage(): Promise<Omstartslage> {
+  const lista = tabs.value
+  let lagrat: number | null = null
+  try {
+    const est = await navigator.storage?.estimate?.()
+    lagrat = typeof est?.usage === 'number' ? est.usage : null
+  } catch {
+    lagrat = null
+  }
+  return {
+    filer: lista.length,
+    rader: lista.reduce((n, t) => n + t.frame.rowCount, 0),
+    osparade: lista.filter((t) => t.smutsig).length,
+    lagrat,
+  }
+}
+
+/**
+ * Stänger allt och börjar om.
+ *
+ * Tre saker som hör ihop men som verktyget hittills bara kunde göra var för
+ * sig: stänga flikarna, kasta den parkerade sammanslagningen och tömma
+ * webbläsarens lagring. *Glöm sparade filer* gör med flit bara det sista och
+ * låter flikarna stå kvar — vilket betyder att nästa skrivning lägger tillbaka
+ * dem, så den kan aldrig bli den här knappen.
+ *
+ * **Sidan laddas om till sist, och det är hela poängen med minnet.** Att
+ * släppa referenserna gör ordböckerna och de typade arrayerna oåtkomliga, men
+ * *när* webbläsaren faktiskt lämnar tillbaka minnet bestämmer den själv. En
+ * omladdning river hela högen och är det enda som ger ett svar man kan se i
+ * aktivitetshanteraren.
+ *
+ * Ordningen är inte godtycklig: flikarna töms i minnet **före** lagringen, så
+ * att en skrivning som redan hunnit schemaläggas skriver en tom lista i
+ * stället för att lägga tillbaka det som just raderats.
+ */
+export async function borjaOm(): Promise<void> {
+  tabs.value = []
+  activeTabId.value = null
+  toasts.value = []
+  kastaVerkstad()
+  await glomSparat()
+  window.location.reload()
 }
 
 /**

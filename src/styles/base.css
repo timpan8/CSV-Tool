@@ -253,13 +253,24 @@ input[type='radio'] {
   font-variant-numeric: tabular-nums;
 }
 
+/* Märket är en knapp: det är också vägen till att se och rensa det sparade. */
 .statusrad__lokal {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  border: 0;
+  background: transparent;
+  padding: 2px 6px;
+  border-radius: var(--radie-liten);
+  font: inherit;
   color: var(--lyckat);
   font-weight: 550;
+  cursor: pointer;
+}
+
+.statusrad__lokal:hover {
+  background: var(--yta-hover);
 }
 
 .statusrad__knapp {
