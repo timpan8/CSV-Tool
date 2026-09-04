@@ -1044,7 +1044,18 @@ export interface Parbetyg {
 export type Forslagsskal =
   | 'namn'
   | 'flest'
+  /** Ingen av filerna har någon synlig kolumn med värden att jämföra. */
   | 'inget'
+  /**
+   * Varje kolumnpar provades med varje jämförelse, och inget hittade en enda
+   * gemensam rad.
+   *
+   * Ett eget skäl och inte `inget`, eftersom svaret är ett helt annat: här
+   * har verktyget letat färdigt och funnit noll. Då ska det säga det, inte
+   * lämna över ett par som matchar ingenting och låta siffran noll upptäckas
+   * av användaren.
+   */
+  | 'ingen-traff'
   /** För många kolumner för att prova alla par. Namnen fick avgöra. */
   | 'namn-for-stort'
 
@@ -1053,6 +1064,14 @@ export interface Parforslag {
   skal: Forslagsskal
   /** Betyget för det föreslagna paret, när det provats fram. */
   betyg: Parbetyg | null
+  /**
+   * Samtliga par som hittade minst en träff, bäst först.
+   *
+   * Vyn använder listan när användaren lägger till ett kolumnpar för hand:
+   * nästa par ska vara det näst bästa, inte första kolumnen i vardera filen.
+   * Tom när provningen slog i taket.
+   */
+  alla: Parbetyg[]
 }
 
 /**
@@ -1111,38 +1130,83 @@ function betygsatt(
 }
 
 /**
- * Provar alla kolumnpar och rangordnar dem.
+ * Jämförelserna provningen går igenom, från strängast till lösast.
  *
- * Alltid med den vanliga jämförelsen. Förslagets uppgift är att hitta rätt
- * *kolumner* — vilken jämförelse som passar är en egen fråga, den står som
- * ett eget val i panelen, och att prova alla sex mot alla par vore sex gånger
- * kostnaden för ett svar användaren ändå ska titta på.
+ * `namndelar` och `epostNamn` står inte med: den första kräver en andra
+ * högerkolumn och den andra är gjord för ett bestämt fall — båda hör hemma
+ * som val i panelen, inte i en automatisk provning.
+ *
+ * Ordningen är betydelsefull. Den lösare jämförelsen hittar per definition
+ * minst lika mycket som den strängare, så vid nära nog lika poäng ska den
+ * strängaste vinna. `A-100` och `B-100` blir samma nyckel under *bara
+ * siffror*, och det ska bara väljas när det faktiskt hittar mer.
+ */
+const PROVTYPER: readonly Matchningstyp[] = ['oberoende', 'accentoberoende', 'siffror']
+
+/**
+ * Hur mycket bättre en lösare jämförelse måste vara för att vinna.
+ *
+ * Samma tanke som `NAMNETS_FORSPRANG`: ett besked som redan finns — här att
+ * den strängare jämförelsen räcker — släpps inte för några promille.
+ */
+const STRANGHETENS_FORSPRANG = 0.95
+
+/**
+ * Provar alla kolumnpar mot varandra och rangordnar dem.
+ *
+ * Tre jämförelser, inte en. Ett par kolumner med kundnummer skrivna som
+ * `1234` i den ena filen och `00-1234` i den andra matchar inte alls med den
+ * vanliga jämförelsen och till hundra procent med *bara siffror* — och ett
+ * förslag som bara provar den vanliga hade sagt att filerna inte hör ihop.
+ * Kostnaden är tre svep i stället för ett; det dyra är fortfarande
+ * normaliseringen, och den sker en gång per unikt värde.
  *
  * Returnerar null när provandet skulle kosta mer än `PROVTAK`.
  */
 export function provaKolumnpar(vanster: Frame, hoger: Frame): Parbetyg[] | null {
-  const v = visibleColumns(vanster).map((col) => ({ col, nycklar: nyckelantal(col, 'oberoende') }))
-  const h = visibleColumns(hoger).map((col) => ({ col, nycklar: nyckelantal(col, 'oberoende') }))
-
-  let arbete = 0
-  for (const a of v) for (const b of h) arbete += Math.min(a.nycklar.size, b.nycklar.size)
-  if (arbete > PROVTAK) return null
+  const vKol = visibleColumns(vanster)
+  const hKol = visibleColumns(hoger)
 
   const betyg: Parbetyg[] = []
-  for (const a of v) {
-    for (const b of h) {
-      if (a.nycklar.size === 0 || b.nycklar.size === 0) continue
-      betyg.push(
-        betygsatt(
-          { vansterColId: a.col.id, hogerColId: b.col.id, typ: 'oberoende' },
+  let arbete = 0
+
+  for (const typ of PROVTYPER) {
+    const v = vKol.map((col) => ({ col, nycklar: nyckelantal(col, typ) }))
+    const h = hKol.map((col) => ({ col, nycklar: nyckelantal(col, typ) }))
+
+    // Taket gäller hela provningen, inte varje jämförelse för sig — annars
+    // hade tre jämförelser fått kosta tre gånger så mycket som en.
+    for (const a of v) for (const b of h) arbete += Math.min(a.nycklar.size, b.nycklar.size)
+    if (arbete > PROVTAK) return null
+
+    for (const a of v) {
+      for (const b of h) {
+        if (a.nycklar.size === 0 || b.nycklar.size === 0) continue
+        const p = betygsatt(
+          { vansterColId: a.col.id, hogerColId: b.col.id, typ },
           a.nycklar,
           b.nycklar,
-        ),
-      )
+        )
+        if (p.traffar > 0) betyg.push(p)
+      }
     }
   }
-  // Bäst poäng först; vid lika vinner färre flerträffar, sedan fler träffar.
-  betyg.sort((x, y) => y.poang - x.poang || x.flertraffar - y.flertraffar || y.traffar - x.traffar)
+
+  /*
+   * Bäst poäng först. Vid nära nog lika poäng vinner den strängaste
+   * jämförelsen — annars hade *bara siffror* tagit hem varje par där den
+   * råkar ge en hårsmån mer, och användaren fått en nyckel som slår ihop
+   * `A-100` och `B-100` utan att någon bett om det.
+   */
+  betyg.sort((x, y) => {
+    const nara =
+      Math.min(x.poang, y.poang) >= Math.max(x.poang, y.poang) * STRANGHETENS_FORSPRANG
+    if (nara) {
+      const skillnad = PROVTYPER.indexOf(x.par.typ) - PROVTYPER.indexOf(y.par.typ)
+      if (skillnad !== 0) return skillnad
+    }
+    return y.poang - x.poang || x.flertraffar - y.flertraffar || y.traffar - x.traffar
+  })
   return betyg
 }
 
@@ -1193,20 +1257,32 @@ export function foreslaPar(vanster: Frame, hoger: Frame): Parforslag {
 
   if (betyg === null) {
     return namn
-      ? { par: [namn], skal: 'namn-for-stort', betyg: null }
-      : { par: [], skal: 'inget', betyg: null }
+      ? { par: [namn], skal: 'namn-for-stort', betyg: null, alla: [] }
+      : { par: [], skal: 'inget', betyg: null, alla: [] }
   }
 
-  const bast = betyg.find((b) => b.traffar > 0) ?? null
-  if (!bast) return namn ? { par: [namn], skal: 'namn', betyg: null } : { par: [], skal: 'inget', betyg: null }
+  const bast = betyg[0]
+  if (!bast) {
+    /*
+     * Ingenting matchade — inte ett enda par, inte med någon jämförelse.
+     *
+     * Förut föll det här tillbaka på namnparet och sa att det "också är paret
+     * som matchar bäst", vilket är osant när ingenting matchar. Har filerna
+     * inte ett värde gemensamt är svaret att säga det, inte att räcka över en
+     * nyckel som ger noll.
+     */
+    const harKolumner =
+      visibleColumns(vanster).length > 0 && visibleColumns(hoger).length > 0
+    return { par: [], skal: harKolumner ? 'ingen-traff' : 'inget', betyg: null, alla: [] }
+  }
 
   if (namn) {
     const namnbetyg = betyg.find(
       (b) => b.par.vansterColId === namn.vansterColId && b.par.hogerColId === namn.hogerColId,
     )
     if (namnbetyg && namnbetyg.poang >= bast.poang * NAMNETS_FORSPRANG) {
-      return { par: [namn], skal: 'namn', betyg: namnbetyg }
+      return { par: [namnbetyg.par], skal: 'namn', betyg: namnbetyg, alla: betyg }
     }
   }
-  return { par: [bast.par], skal: 'flest', betyg: bast }
+  return { par: [bast.par], skal: 'flest', betyg: bast, alla: betyg }
 }
