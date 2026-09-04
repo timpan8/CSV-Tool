@@ -147,45 +147,76 @@ export function stegetsKolumner(steg: Profilsteg): string[] {
  * sparat `label` skulle vara den text som gällde när steget kördes, och den
  * kan mycket väl nämna en kolumn eller ett antal som inte stämmer i nästa fil.
  */
-export function beskrivSteg(steg: Profilsteg): string {
+/**
+ * Steget i klartext, delat i mall och delar.
+ *
+ * Samma uppdelning som `beskrivRegelDelar` i `filter.ts`, och av samma skäl:
+ * mallen är den enda konstanta biten och därmed den enda som går att slå upp
+ * i en ordbok. `etiketter` pekar ut vilka delar som är husets egna ord;
+ * kolumnnamn och värden står inte med, eftersom en kolumn som råkar heta
+ * ”Tal” annars skulle döpas om mitt i en mening om användarens eget data.
+ */
+export function beskrivStegDelar(steg: Profilsteg): {
+  mall: string
+  delar: string[]
+  etiketter: number[]
+} {
+  const utan = (mall: string, ...delar: string[]) => ({ mall, delar, etiketter: [] })
   switch (steg.typ) {
     case 'stada': {
       const namn = stadningarEfterId(steg.stadning)?.etikett ?? steg.stadning
-      return `${namn} i ${steg.kolumner.join(', ')}`
+      return { mall: '{0} i {1}', delar: [namn, steg.kolumner.join(', ')], etiketter: [0] }
     }
     case 'datum':
       return steg.nyKolumn !== undefined
-        ? `Läs ${kolumnlista(steg.kolumn).join(', ')} som ${MALFORMAT[steg.inst.mal]} i ${steg.nyKolumn}`
-        : `Skriv om ${kolumnlista(steg.kolumn).join(', ')} till ${MALFORMAT[steg.inst.mal]}`
+        ? {
+            mall: 'Läs {0} som {1} i {2}',
+            delar: [kolumnlista(steg.kolumn).join(', '), MALFORMAT[steg.inst.mal], steg.nyKolumn],
+            etiketter: [1],
+          }
+        : {
+            mall: 'Skriv om {0} till {1}',
+            delar: [kolumnlista(steg.kolumn).join(', '), MALFORMAT[steg.inst.mal]],
+            etiketter: [1],
+          }
     case 'tal':
-      return `Städa tal i ${kolumnlista(steg.kolumn).join(', ')}`
+      return utan('Städa tal i {0}', kolumnlista(steg.kolumn).join(', '))
     case 'telefon':
-      return `Normalisera telefonnummer i ${kolumnlista(steg.kolumn).join(', ')}`
+      return utan('Normalisera telefonnummer i {0}', kolumnlista(steg.kolumn).join(', '))
     case 'epost': {
       const namn = Array.isArray(steg.namn) ? steg.namn : [steg.namn]
-      return `Läs ${steg.falt} ur ${steg.kolumn} till ”${namn.join('” och ”')}”`
+      return utan('Läs {0} ur {1} till ”{2}”', steg.falt, steg.kolumn, namn.join('” och ”'))
     }
     case 'ersatt':
-      return `Ersätt ”${steg.inst.sok}” i ${kolumnlista(steg.kolumn).join(', ')}`
+      return utan('Ersätt ”{0}” i {1}', steg.inst.sok, kolumnlista(steg.kolumn).join(', '))
     case 'dela':
-      return `Dela ${steg.kolumn} i ${steg.namn.join(', ')}`
+      return utan('Dela {0} i {1}', steg.kolumn, steg.namn.join(', '))
     case 'mall':
-      return `Slå ihop kolumner till ”${steg.namn}”`
+      return utan('Slå ihop kolumner till ”{0}”', steg.namn)
     case 'formel':
-      return `Räkna ut ”${steg.namn}” som ${steg.uttryck}`
+      return utan('Räkna ut ”{0}” som {1}', steg.namn, steg.uttryck)
     case 'dopOm':
-      return `Döp om ${steg.kolumn} till ${steg.till}`
+      return utan('Döp om {0} till {1}', steg.kolumn, steg.till)
     case 'taBortKolumn':
-      return `Ta bort kolumnen ${steg.kolumn}`
+      return utan('Ta bort kolumnen {0}', steg.kolumn)
     case 'doljKolumn':
-      return `${steg.dold ? 'Dölj' : 'Visa'} kolumnen ${steg.kolumn}`
+      return {
+        mall: '{0} kolumnen {1}',
+        delar: [steg.dold ? 'Dölj' : 'Visa', steg.kolumn],
+        etiketter: [0],
+      }
     case 'sattTyp':
-      return `Sätt typen på ${steg.kolumn} till ${steg.kolumntyp}`
+      return utan('Sätt typen på {0} till {1}', steg.kolumn, steg.kolumntyp)
     case 'tommaRader':
-      return 'Ta bort helt tomma rader'
+      return utan('Ta bort helt tomma rader')
     case 'tommaKolumner':
-      return 'Ta bort helt tomma kolumner'
+      return utan('Ta bort helt tomma kolumner')
     case 'lopnummer':
-      return `Lägg till ${steg.namn} med löpnummer`
+      return utan('Lägg till {0} med löpnummer', steg.namn)
   }
+}
+
+export function beskrivSteg(steg: Profilsteg): string {
+  const { mall, delar } = beskrivStegDelar(steg)
+  return mall.replace(/\{(\d+)\}/g, (traff, i: string) => delar[Number(i)] ?? traff)
 }

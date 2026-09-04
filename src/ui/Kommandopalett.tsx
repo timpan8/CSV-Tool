@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { sokKommandon, type Kommando } from './kommandon.js'
+import { t, tf } from './sprak.js'
 
 /**
  * Kommandopaletten.
@@ -69,13 +70,13 @@ export function Kommandopalett(props: { kommandon: readonly Kommando[]; onStang:
       class="overlagg overlagg--palett"
       onMouseDown={(e) => e.target === e.currentTarget && props.onStang()}
     >
-      <div class="palett" role="dialog" aria-modal="true" aria-label="Kommandon">
+      <div class="palett" role="dialog" aria-modal="true" aria-label={t('Kommandon')}>
         <input
           ref={faltet}
           class="palett__falt"
           value={fraga}
-          placeholder="Vad vill du göra?"
-          aria-label="Sök bland kommandon"
+          placeholder={t('Vad vill du göra?')}
+          aria-label={t('Sök bland kommandon')}
           role="combobox"
           aria-expanded="true"
           aria-controls="palettlista"
@@ -86,7 +87,9 @@ export function Kommandopalett(props: { kommandon: readonly Kommando[]; onStang:
           onKeyDown={onKey}
         />
         <div class="palett__lista" id="palettlista" role="listbox" ref={listan}>
-          {traffar.length === 0 && <p class="palett__tomt">Inget kommando matchar ”{fraga}”.</p>}
+          {traffar.length === 0 && (
+            <p class="palett__tomt">{tf('Inget kommando matchar ”{0}”.', fraga)}</p>
+          )}
           {traffar.map((k, i) => {
             const nyGrupp = k.grupp !== senasteGrupp
             senasteGrupp = k.grupp

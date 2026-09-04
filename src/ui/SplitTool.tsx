@@ -12,7 +12,8 @@ import {
   type Delningssatt,
 } from '../core/ops/columns.js'
 import { beraknaForhandsvisning, type Forhandsvisning } from '../state/preview.js'
-import { celler, formatCount } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
+import { celler, sprak, t, tf, tj } from './sprak.js'
 
 const AVGRANSARE = [
   { varde: ' ', etikett: 'Mellanslag' },
@@ -63,14 +64,14 @@ export function SplitTool(props: {
   const forh = useMemo(
     () =>
       beraknaForhandsvisning(col, {
-        etikett: `Delade ”${col.name}” i ${formatCount(antal)} kolumner`,
+        etikett: tf('Delade ”{0}” i {1} kolumner', col.name, formatCount(antal)),
         kind: 'split',
         profil: { typ: 'dela', kolumn: col.name, delning: inst, namn: malnamn },
         delar: (v) => delaVarde(v, inst),
         arProblem: (v) => delaVarde(v, inst).filter((d) => d !== '').length < 2,
         nyaKolumner: malnamn,
       }),
-    [col, props.dataRevision, satt, avgransare, position, antal, malnamn],
+    [col, props.dataRevision, satt, avgransare, position, antal, malnamn, sprak.value],
   )
 
   useEffect(() => {
@@ -89,27 +90,27 @@ export function SplitTool(props: {
 
   return (
     <Verktygspanel
-      titel="Dela kolumn"
+      titel={t('Dela kolumn')}
       underrubrik={col.name}
       onStang={props.onStang}
       fot={
         <>
           <button class="knapp" onClick={props.onStang}>
-            Avbryt
+            {t('Avbryt')}
           </button>
           <button
             class="knapp knapp--primar"
             disabled={forh.andrade === 0}
-            title={forh.andrade === 0 ? 'Delningen ger inga värden.' : undefined}
+            title={forh.andrade === 0 ? t('Delningen ger inga värden.') : undefined}
             onClick={() => props.onTillampa([forh])}
           >
-            Skapa {formatCount(antal)} kolumner
+            {tf('Skapa {0} kolumner', formatCount(antal))}
           </button>
         </>
       }
     >
       <div class="falt">
-        <span class="falt__etikett">Dela</span>
+        <span class="falt__etikett">{t('Dela')}</span>
         <Val
           varden={DELNINGSSATT.map((d) => ({ varde: d.varde, etikett: d.etikett, titel: d.titel }))}
           valt={satt}
@@ -119,7 +120,7 @@ export function SplitTool(props: {
 
       {satt === 'position' ? (
         <div class="falt">
-          <span class="falt__etikett">Efter hur många tecken</span>
+          <span class="falt__etikett">{t('Efter hur många tecken')}</span>
           <input
             type="number"
             min={1}
@@ -131,7 +132,7 @@ export function SplitTool(props: {
         </div>
       ) : (
         <div class="falt">
-          <span class="falt__etikett">Vid vilket tecken</span>
+          <span class="falt__etikett">{t('Vid vilket tecken')}</span>
           <Val varden={AVGRANSARE} valt={avgransarval} onValj={setAvgransarval} />
           {avgransarval === 'eget' && (
             <input
@@ -143,7 +144,7 @@ export function SplitTool(props: {
       )}
 
       <div class="falt">
-        <span class="falt__etikett">Antal nya kolumner</span>
+        <span class="falt__etikett">{t('Antal nya kolumner')}</span>
         <Val
           varden={[2, 3, 4, 5].map((n) => ({ varde: String(n), etikett: String(n) }))}
           valt={String(antal)}
@@ -151,14 +152,16 @@ export function SplitTool(props: {
         />
         {inv.flest > antal && (
           <Notis ton="varning">
-            Något värde delas i {formatCount(inv.flest)} delar. Överskottet hamnar i den sista
-            kolumnen i stället för att försvinna — höj antalet om du vill ha det för sig.
+            {tf(
+              'Något värde delas i {0} delar. Överskottet hamnar i den sista kolumnen i stället för att försvinna — höj antalet om du vill ha det för sig.',
+              formatCount(inv.flest),
+            )}
           </Notis>
         )}
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Namn på de nya kolumnerna</span>
+        <span class="falt__etikett">{t('Namn på de nya kolumnerna')}</span>
         {malnamn.map((n, i) => (
           <input
             key={i}
@@ -170,13 +173,18 @@ export function SplitTool(props: {
 
       {inv.exempel && (
         <p class="verktyg__sammanfattning">
-          <code>{inv.exempel.fore}</code> blir{' '}
-          {inv.exempel.efter.map((d, i) => (
-            <span key={i}>
-              {i > 0 && ' · '}
-              <strong>{d === '' ? '(tomt)' : d}</strong>
-            </span>
-          ))}
+          {tj(
+            '{0} blir {1}',
+            <code>{inv.exempel.fore}</code>,
+            <>
+              {inv.exempel.efter.map((d, i) => (
+                <span key={i}>
+                  {i > 0 && ' · '}
+                  <strong>{d === '' ? t('(tomt)') : d}</strong>
+                </span>
+              ))}
+            </>,
+          )}
         </p>
       )}
 
@@ -188,14 +196,16 @@ export function SplitTool(props: {
         etikettAndrade="Bara ifyllda"
         etikettProblem="Bara odelade"
       >
-        <strong>{formatCount(forh.andrade)}</strong> av {celler(forh.ifyllda)} ger värden
-        {inv.utanAvgransare > 0 && (
-          <>
-            {' · '}
-            <strong class="verktyg__problem">{formatCount(inv.utanAvgransare)}</strong> saknar
-            avgränsare
-          </>
+        {tj(
+          '{0} av {1} ger värden',
+          <strong>{formatCount(forh.andrade)}</strong>,
+          celler(forh.ifyllda),
         )}
+        {inv.utanAvgransare > 0 &&
+          tj(
+            ' · {0} saknar avgränsare',
+            <strong class="verktyg__problem">{formatCount(inv.utanAvgransare)}</strong>,
+          )}
         .
       </Resultat>
     </Verktygspanel>

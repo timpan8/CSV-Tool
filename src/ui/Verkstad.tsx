@@ -32,11 +32,12 @@ import {
 import { redigeraCellFysisk } from '../state/edits.js'
 import { EXCEL_FRIENDLY, encodeExport, urvalTillCsv } from '../core/csv/stringify.js'
 import { notify, undo } from '../state/store.js'
-import { formatCount, rader as raderText } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
 import { Notis } from './parts.js'
 import { Restlista, type Restsort } from './Restlista.js'
 import { Jamforelse } from './Jamforelse.js'
 import { Forslagslista } from './Forslagslista.js'
+import { rader as raderText, t, tf } from './sprak.js'
 
 /**
  * Verkstadens jämförelser: matchningens ekvivalenstyper plus den luddiga.
@@ -202,7 +203,7 @@ export function Verkstad(props: {
   const valdArOsaker = valdVanster !== null && osakra.has(valdVanster)
   const paraIhop = () => {
     if (valdVanster === null || valdHoger === null || valdArOsaker) return
-    laggExtrapar(valdVanster, valdHoger, 'hand', 'för hand')
+    laggExtrapar(valdVanster, valdHoger, 'hand', t('för hand'))
     setValdVanster(null)
     setValdHoger(null)
   }
@@ -247,7 +248,7 @@ export function Verkstad(props: {
     <div class="verkstad">
       <div class="verkstad__topp">
         <div class="verkstad__rubrik">
-          <h2>Matchningsverkstaden</h2>
+          <h2>{t('Matchningsverkstaden')}</h2>
           <span class="verkstad__underrubrik">
             {vanster.name} ↔ {hoger.name} · {beskrivPar(vanster, hoger, s.par)}
           </span>
@@ -257,35 +258,41 @@ export function Verkstad(props: {
             <tr>
               <td class="inventering__antal">{formatCount(full.vansterMatchade)}</td>
               <td>
-                av {formatCount(vanster.rowCount)} rader i {vanster.name} har en partner
+                {tf(
+                  'av {0} rader i {1} har en partner',
+                  formatCount(vanster.rowCount),
+                  vanster.name,
+                )}
               </td>
             </tr>
             <tr class={vansterLista.length + rest.hoger.length > 0 ? 'inventering--okant' : ''}>
               <td class="inventering__antal">
                 {formatCount(vansterLista.length + rest.hoger.length)}
               </td>
-              <td>kvar att titta på</td>
+              <td>{t('kvar att titta på')}</td>
             </tr>
             {rest.osakra.length > 0 && (
               <tr class="inventering--okant">
                 <td class="inventering__antal">{formatCount(rest.osakra.length)}</td>
                 <td>
-                  {s.sammanslagning.flertraff === 'lamna'
-                    ? 'matchar flera rader och får därför inga värden'
-                    : 'matchar flera rader — regeln valde åt dig'}
+                  {t(
+                    s.sammanslagning.flertraff === 'lamna'
+                      ? 'matchar flera rader och får därför inga värden'
+                      : 'matchar flera rader — regeln valde åt dig',
+                  )}
                 </td>
               </tr>
             )}
             {s.extra.length > 0 && (
               <tr>
                 <td class="inventering__antal">{formatCount(s.extra.length)}</td>
-                <td>par gjorda här</td>
+                <td>{t('par gjorda här')}</td>
               </tr>
             )}
             {avskrivna > 0 && (
               <tr>
                 <td class="inventering__antal">{formatCount(avskrivna)}</td>
-                <td>avskrivna — de följer med i resultatet precis som förut</td>
+                <td>{t('avskrivna — de följer med i resultatet precis som förut')}</td>
               </tr>
             )}
           </tbody>
@@ -295,15 +302,16 @@ export function Verkstad(props: {
       {saknade.length > 0 && (
         <div class="verkstad__larm">
           <Notis ton="fara">
-            En kolumn som matchningen bygger på finns inte längre. Varje rad ser därför ut att
-            sakna partner. Stäng verkstaden och ställ in matchningen på nytt.
+            {t(
+              'En kolumn som matchningen bygger på finns inte längre. Varje rad ser därför ut att sakna partner. Stäng verkstaden och ställ in matchningen på nytt.',
+            )}
           </Notis>
         </div>
       )}
 
       <div class="verkstad__listor">
         <Restlista
-          titel="Kvar i stommen (vänsterfilen)"
+          titel={t('Kvar i stommen (vänsterfilen)')}
           filnamn={vanster.name}
           frame={vanster}
           rader={vansterLista}
@@ -319,7 +327,7 @@ export function Verkstad(props: {
         />
 
         <div class="panel verkstad__mitt">
-          <div class="panel__rubrik">Arbetsbänk</div>
+          <div class="panel__rubrik">{t('Arbetsbänk')}</div>
           <div class="panel__innehall">
             <Jamforelse
               key={`${valdVanster}:${valdHoger}`}
@@ -339,14 +347,16 @@ export function Verkstad(props: {
               disabled={valdVanster === null || valdHoger === null || valdArOsaker}
               title={
                 valdArOsaker
-                  ? 'Raden matchar redan flera rader och behöver ett val bland sina träffar — ett par till hade gjort den mer tvetydig, inte mindre.'
+                  ? t(
+                      'Raden matchar redan flera rader och behöver ett val bland sina träffar — ett par till hade gjort den mer tvetydig, inte mindre.',
+                    )
                   : valdVanster === null || valdHoger === null
-                    ? 'Markera en rad i varje lista först.'
+                    ? t('Markera en rad i varje lista först.')
                     : undefined
               }
               onClick={paraIhop}
             >
-              Para ihop
+              {t('Para ihop')}
             </button>
 
             <Nastasteg
@@ -372,7 +382,7 @@ export function Verkstad(props: {
                     x.v,
                     x.h,
                     'forslag',
-                    `${Math.round(x.poang.poang * 100)} % lika`,
+                    tf('{0} % lika', Math.round(x.poang.poang * 100)),
                   )
                 }
                 onAvvisa={(x) => avvisaForslag(x.v, x.h)}
@@ -381,7 +391,7 @@ export function Verkstad(props: {
 
             {s.extra.length > 0 && (
               <div class="falt">
-                <span class="falt__etikett">Par gjorda här</span>
+                <span class="falt__etikett">{t('Par gjorda här')}</span>
                 <div class="vardelista__poster">
                   {s.extra.map((p) => (
                     <div class="verkstad__par" key={`${p.v}:${p.h}`}>
@@ -390,10 +400,10 @@ export function Verkstad(props: {
                         {' ↔ '}
                         {kortText(hoger, s.par.map((x) => x.hogerColId), p.h)}
                       </span>
-                      <span class="verkstad__par__notis">{p.notis}</span>
+                      <span class="verkstad__par__notis">{t(p.notis)}</span>
                       <button
                         class="restrad__skriv"
-                        aria-label="Ta bort paret"
+                        aria-label={t('Ta bort paret')}
                         onClick={() => taBortExtrapar(p.v, p.h)}
                       >
                         ✕
@@ -413,22 +423,27 @@ export function Verkstad(props: {
                   setValdHoger(null)
                 }}
               >
-                Skriv av allt som är kvar
+                {t('Skriv av allt som är kvar')}
               </button>
             )}
 
             <Notis ton="info">
-              Att skriva av en rad tar bort den ur listan — inget annat. Rader ur{' '}
-              {vanster.name} utan partner följer ändå med i resultatet, med tomma celler.{' '}
+              {tf(
+                'Att skriva av en rad tar bort den ur listan — inget annat. Rader ur {0} utan partner följer ändå med i resultatet, med tomma celler.',
+                vanster.name,
+              )}{' '}
               {hogerRester
-                ? `Rader ur ${hoger.name} utan partner följer också med, sist i resultatet — utom de du skrivit av.`
-                : `Rader ur ${hoger.name} utan partner blir kvar i sin egen flik.`}
+                ? tf(
+                    'Rader ur {0} utan partner följer också med, sist i resultatet — utom de du skrivit av.',
+                    hoger.name,
+                  )
+                : tf('Rader ur {0} utan partner blir kvar i sin egen flik.', hoger.name)}
             </Notis>
           </div>
         </div>
 
         <Restlista
-          titel="Kvar i högerfilen"
+          titel={t('Kvar i högerfilen')}
           filnamn={hoger.name}
           frame={hoger}
           rader={rest.hoger}
@@ -447,19 +462,22 @@ export function Verkstad(props: {
       <div class="verkstad__fot">
         <span class="verkstad__fot__text">
           {s.omgangar > 0
-            ? `Omgång ${s.omgangar} ligger i en egen flik. En ny körning skapar en till — den gamla rörs aldrig.`
-            : 'Arbetet ligger kvar när du stänger. Du hittar tillbaka under Flera filer.'}
+            ? tf(
+                'Omgång {0} ligger i en egen flik. En ny körning skapar en till — den gamla rörs aldrig.',
+                s.omgangar,
+              )
+            : t('Arbetet ligger kvar när du stänger. Du hittar tillbaka under Flera filer.')}
         </span>
         <button
           class="knapp"
           disabled={vansterLista.length + rest.hoger.length === 0}
-          title="Skriver de kvarvarande raderna ur vardera filen som var sin CSV."
+          title={t('Skriver de kvarvarande raderna ur vardera filen som var sin CSV.')}
           onClick={() => {
             exporteraRest(vanster, vansterLista)
             exporteraRest(hoger, rest.hoger)
           }}
         >
-          Exportera restlistorna
+          {t('Exportera restlistorna')}
         </button>
         {/*
           * Att lämna och att kasta är två olika saker, och de har två olika
@@ -469,25 +487,25 @@ export function Verkstad(props: {
           */}
         <button
           class="knapp knapp--fara"
-          title="Paren, avvisningarna och avskrivningarna finns bara här och går inte att ångra."
+          title={t('Paren, avvisningarna och avskrivningarna finns bara här och går inte att ångra.')}
           onClick={() => {
             const gjort = ogjortArbete(s)
             if (
               gjort > 0 &&
-              !window.confirm(`Kasta arbetet i verkstaden? ${gjort} beslut försvinner.`)
+              !window.confirm(tf('Kasta arbetet i verkstaden? {0} beslut försvinner.', gjort))
             ) {
               return
             }
             kastaVerkstad()
           }}
         >
-          Kasta arbetet
+          {t('Kasta arbetet')}
         </button>
         <button class="knapp" onClick={props.onStang}>
-          Stäng
+          {t('Stäng')}
         </button>
         <button class="knapp knapp--primar" onClick={kor}>
-          {s.omgangar > 0 ? 'Slå ihop igen' : 'Slå ihop'}
+          {t(s.omgangar > 0 ? 'Slå ihop igen' : 'Slå ihop')}
         </button>
       </div>
     </div>
@@ -516,7 +534,7 @@ function exporteraRest(frame: Frame, rader: readonly number[]): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${frame.name.replace(/\.[^.]+$/, '')} — kvar.csv`
+  a.download = `${frame.name.replace(/\.[^.]+$/, '')}${t(' — kvar')}.csv`
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 2000)
 }
@@ -543,15 +561,15 @@ function Nastasteg(props: {
   const [typ, setTyp] = useState<Verkstadstyp>('oberoende')
 
   if (v.length === 0 || h.length === 0) return null
-  const post = VERKSTADSTYPER.find((t) => t.typ === typ)
+  const post = VERKSTADSTYPER.find((v) => v.typ === typ)
 
   return (
     <div class="falt">
-      <span class="falt__etikett">Nytt försök på en annan kolumn</span>
+      <span class="falt__etikett">{t('Nytt försök på en annan kolumn')}</span>
       <div class="regel">
         <select
           class="nivarad__kolumn"
-          aria-label="Kolumn i vänsterfilen"
+          aria-label={t('Kolumn i vänsterfilen')}
           value={vansterColId}
           onChange={(e) => setVansterColId((e.currentTarget as HTMLSelectElement).value)}
         >
@@ -566,7 +584,7 @@ function Nastasteg(props: {
         </span>
         <select
           class="nivarad__kolumn"
-          aria-label="Kolumn i högerfilen"
+          aria-label={t('Kolumn i högerfilen')}
           value={hogerColId}
           onChange={(e) => setHogerColId((e.currentTarget as HTMLSelectElement).value)}
         >
@@ -578,21 +596,21 @@ function Nastasteg(props: {
         </select>
         <select
           class="nivarad__kolumn"
-          aria-label="Så här jämförs värdena"
+          aria-label={t('Så här jämförs värdena')}
           value={typ}
           onChange={(e) => setTyp((e.currentTarget as HTMLSelectElement).value as Verkstadstyp)}
         >
-          {VERKSTADSTYPER.map((t) => (
-            <option key={t.typ} value={t.typ} title={t.beskrivning}>
-              {t.etikett}
+          {VERKSTADSTYPER.map((v) => (
+            <option key={v.typ} value={v.typ} title={t(v.beskrivning)}>
+              {t(v.etikett)}
             </option>
           ))}
         </select>
       </div>
-      <p class="verktyg__sammanfattning">{post?.beskrivning}</p>
+      <p class="verktyg__sammanfattning">{t(post?.beskrivning ?? '')}</p>
       <button class="knapp" onClick={() => props.onKor(vansterColId, hogerColId, typ)}>
-        {typ === 'luddig' ? 'Visa liknande rader' : 'Kör runda'}
-        {typ !== 'luddig' && props.rundor > 0 ? ` (${props.rundor} körda)` : ''}
+        {t(typ === 'luddig' ? 'Visa liknande rader' : 'Kör runda')}
+        {typ !== 'luddig' && props.rundor > 0 ? ` ${tf('({0} körda)', props.rundor)}` : ''}
       </button>
     </div>
   )
@@ -618,11 +636,11 @@ function kortText(frame: Frame, nycklar: readonly ColumnId[], rad: number): stri
     const text = cellText(frame, id, rad)
     if (text !== '') return text
   }
-  return `rad ${frame.sourceRow[rad] || rad + 1}`
+  return tf('rad {0}', frame.sourceRow[rad] || rad + 1)
 }
 
 function beskrivPar(vanster: Frame, hoger: Frame, par: readonly Matchningspar[]): string {
-  if (par.length === 0) return 'inga kolumnpar'
+  if (par.length === 0) return t('inga kolumnpar')
   return par
     .map((p) => {
       const v = findColumn(vanster, p.vansterColId)?.name ?? '?'

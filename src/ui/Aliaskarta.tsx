@@ -9,6 +9,7 @@ import {
   type Malkolumn,
 } from '../core/ops/stapla.js'
 import { formatCount } from '../core/locale/sv.js'
+import { t, tf } from './sprak.js'
 
 /** Så lång en ledtråd får bli innan den klipps. */
 const PROVLANGD = 26
@@ -77,14 +78,14 @@ export function Aliaskarta(props: {
       <table class="aliaskarta">
         <thead>
           <tr>
-            <th class="aliaskarta__mal">Målkolumn</th>
+            <th class="aliaskarta__mal">{t('Målkolumn')}</th>
             {props.kallor.map((k) => (
               <th key={k.id}>{k.frame.name}</th>
             ))}
-            <th class="aliaskarta__standard" title="Värde för de filer som inte ger något.">
-              Standard
+            <th class="aliaskarta__standard" title={t('Värde för de filer som inte ger något.')}>
+              {t('Standard')}
             </th>
-            <th class="aliaskarta__beslut">Med</th>
+            <th class="aliaskarta__beslut">{t('Med')}</th>
           </tr>
         </thead>
         <tbody>
@@ -120,15 +121,15 @@ export function Aliaskarta(props: {
                       <input
                         class="aliaskarta__namnfalt"
                         value={kol.namn}
-                        aria-label={`Namn på målkolumn ${i + 1}`}
+                        aria-label={tf('Namn på målkolumn {0}', i + 1)}
                         onInput={(e) => props.onNamn(i, (e.currentTarget as HTMLInputElement).value)}
                       />
                     )}
                     {props.kolumner.length > 1 && (
                       <button
                         class="knapp knapp--tyst knapp--ikon"
-                        aria-label={`Samma spalt som en annan målkolumn: ${kol.namn}`}
-                        title="Samma spalt som…"
+                        aria-label={tf('Samma spalt som en annan målkolumn: {0}', kol.namn)}
+                        title={t('Samma spalt som…')}
                         onClick={() =>
                           letar === kol.forslagsnamn ? setLetar(null) : borja(i)
                         }
@@ -138,15 +139,15 @@ export function Aliaskarta(props: {
                     )}
                   </div>
                   {kol.ledtrad ? (
-                    <span class="aliaskarta__ledtrad">t.ex. {kol.ledtrad}</span>
+                    <span class="aliaskarta__ledtrad">{tf('t.ex. {0}', kol.ledtrad)}</span>
                   ) : null}
                   {ihopmed.length > 0 && (
                     <span class="aliaskarta__ihopmed">
                       + {ihopmed.join(', ')}
                       <button
                         class="knapp knapp--tyst knapp--ikon"
-                        aria-label={`Dela upp ${kol.namn} igen`}
-                        title="Dela upp igen"
+                        aria-label={tf('Dela upp {0} igen', kol.namn)}
+                        title={t('Dela upp igen')}
                         onClick={() => props.onDelaUpp(i)}
                       >
                         ✕
@@ -154,14 +155,14 @@ export function Aliaskarta(props: {
                     </span>
                   )}
                   <span class="aliaskarta__not">
-                    finns i {formatCount(fyllda)} av {formatCount(props.kallor.length)}
+                    {tf('finns i {0} av {1}', formatCount(fyllda), formatCount(props.kallor.length))}
                     {tomma > 0 &&
                       (standard === ''
-                        ? ` · ${formatCount(tomma)} rader blir tomma`
-                        : ` · ${formatCount(tomma)} rader fylls med ${standard}`)}
+                        ? ` · ${tf('{0} rader blir tomma', formatCount(tomma))}`
+                        : ` · ${tf('{0} rader fylls med {1}', formatCount(tomma), standard)}`)}
                   </span>
                   {props.blirTomma[i] && (
-                    <span class="aliaskarta__tomvarning">Blir tom i hela resultatet</span>
+                    <span class="aliaskarta__tomvarning">{t('Blir tom i hela resultatet')}</span>
                   )}
                   {letar === kol.forslagsnamn && (
                     <Spaltkamrat
@@ -185,7 +186,7 @@ export function Aliaskarta(props: {
                     <td key={kalla.id}>
                       <select
                         class="nivarad__kolumn"
-                        aria-label={`${kol.namn} ur ${kalla.frame.name}`}
+                        aria-label={tf('{0} ur {1}', kol.namn, kalla.frame.name)}
                         value={h.fran === 'kolumn' ? h.colId : ''}
                         onChange={(e) => {
                           const varde = (e.currentTarget as HTMLSelectElement).value
@@ -204,7 +205,7 @@ export function Aliaskarta(props: {
                         ))}
                       </select>
                       {prov === 'tom' ? (
-                        <span class="aliaskarta__prov aliaskarta__prov--tom">alla tomma</span>
+                        <span class="aliaskarta__prov aliaskarta__prov--tom">{t('alla tomma')}</span>
                       ) : prov ? (
                         <span class="aliaskarta__prov">{kapa(prov.varde)}</span>
                       ) : null}
@@ -222,14 +223,14 @@ export function Aliaskarta(props: {
                   <input
                     class="aliaskarta__standardfalt"
                     value={standard}
-                    placeholder="tomt"
+                    placeholder={t('tomt')}
                     disabled={!luckor}
-                    aria-label={`Standardvärde för ${kol.namn}`}
-                    title={
+                    aria-label={tf('Standardvärde för {0}', kol.namn)}
+                    title={t(
                       luckor
                         ? 'Fyller bara de filer som inte ger något. Celler som finns men är tomma rörs inte.'
-                        : 'Alla filer ger något — inget att fylla i.'
-                    }
+                        : 'Alla filer ger något — inget att fylla i.',
+                    )}
                     onInput={(e) => props.onStandard(i, (e.currentTarget as HTMLInputElement).value)}
                   />
                 </td>
@@ -238,13 +239,13 @@ export function Aliaskarta(props: {
                   {kol.med === null ? (
                     <div class="aliaskarta__svar">
                       <button class="knapp knapp--liten" onClick={() => props.onBeslut(i, true)}>
-                        Ta med
+                        {t('Ta med')}
                       </button>
                       <button
                         class="knapp knapp--liten knapp--tyst"
                         onClick={() => props.onBeslut(i, false)}
                       >
-                        Hoppa över
+                        {t('Hoppa över')}
                       </button>
                     </div>
                   ) : (
@@ -253,7 +254,7 @@ export function Aliaskarta(props: {
                         <input
                           type="checkbox"
                           checked={kol.med}
-                          aria-label={`Ta med ${kol.namn}`}
+                          aria-label={tf('Ta med {0}', kol.namn)}
                           onChange={(e) =>
                             props.onBeslut(i, (e.currentTarget as HTMLInputElement).checked)
                           }
@@ -268,8 +269,8 @@ export function Aliaskarta(props: {
                       {kol.fraga === true && (
                         <button
                           class="knapp knapp--tyst knapp--ikon"
-                          aria-label={`Fråga igen om ${kol.namn}`}
-                          title="Fråga igen"
+                          aria-label={tf('Fråga igen om {0}', kol.namn)}
+                          title={t('Fråga igen')}
                           onClick={() => props.onBeslut(i, null)}
                         >
                           ↺
@@ -309,7 +310,7 @@ function Spaltkamrat(props: {
     <div class="aliaskarta__ihop">
       <select
         class="nivarad__kolumn"
-        aria-label="Målkolumn som hör till samma spalt"
+        aria-label={t('Målkolumn som hör till samma spalt')}
         value={props.motpart === null ? '' : String(props.motpart)}
         onChange={(e) => props.onMotpart(Number((e.currentTarget as HTMLSelectElement).value))}
       >
@@ -327,16 +328,20 @@ function Spaltkamrat(props: {
           disabled={props.motpart === null}
           onClick={() => props.motpart !== null && props.onKlar(props.motpart)}
         >
-          Samma spalt
+          {t('Samma spalt')}
         </button>
         <button class="knapp knapp--liten knapp--tyst" onClick={props.onAvbryt}>
-          Avbryt
+          {t('Avbryt')}
         </button>
       </div>
       <span class="aliaskarta__not">
         {krockar.length > 0
-          ? `${formatCount(krockar.length)} ${krockar.length === 1 ? 'fil har' : 'filer har'} båda kolumnerna. Där ryms bara en, så resten står kvar som en egen rad att besluta om.`
-          : `Värdena flyttas hit och ${andra ? andra.namn : 'raden'} tas bort.`}
+          ? tf(
+              '{0} {1} båda kolumnerna. Där ryms bara en, så resten står kvar som en egen rad att besluta om.',
+              formatCount(krockar.length),
+              t(krockar.length === 1 ? 'fil har' : 'filer har'),
+            )
+          : tf('Värdena flyttas hit och {0} tas bort.', andra ? andra.namn : t('raden'))}
       </span>
     </div>
   )

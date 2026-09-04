@@ -1,7 +1,8 @@
 import { Modal, Notis } from './parts.js'
-import { formatCount, kolumner as kolumnerText, rader as raderText } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
 import { serUtSomRubrikrad } from '../core/csv/parse.js'
 import type { PasteRequest } from '../state/edits.js'
+import { kolumner as kolumnerText, rader as raderText, t, tf, tj } from './sprak.js'
 
 /**
  * Frågar innan inklistring som inte får plats.
@@ -34,13 +35,13 @@ export function PasteDialog(props: {
 
   return (
     <Modal
-      titel="Klistra in"
+      titel={t('Klistra in')}
       underrubrik={`${raderText(plan.rader.length)} × ${kolumnerText(bredd)}`}
       onStang={props.onAvbryt}
       fot={
         <>
           <button class="knapp" onClick={props.onAvbryt}>
-            Avbryt
+            {t('Avbryt')}
           </button>
           {/*
             Att det inklistrade inte får plats är det tydligaste tecknet på
@@ -52,53 +53,58 @@ export function PasteDialog(props: {
             class={`knapp${harRubriker ? ' knapp--primar' : ''}`}
             onClick={props.onNyFil}
           >
-            Öppna som ny fil
+            {t('Öppna som ny fil')}
           </button>
           <button class="knapp" onClick={() => props.onKlistraIn(false)}>
-            Klipp av
+            {t('Klipp av')}
           </button>
           <button
             class={`knapp${harRubriker ? '' : ' knapp--primar'}`}
             onClick={() => props.onKlistraIn(true)}
           >
-            Lägg till plats
+            {t('Lägg till plats')}
           </button>
         </>
       }
     >
       <Notis ton={harRubriker ? 'info' : 'varning'}>
-        {harRubriker ? (
-          <>
-            Det du klistrar in har <strong>kolumnnamn på första raden</strong> och ser därför ut
-            som ett eget dokument — {raderText(plan.rader.length)} och{' '}
-            {kolumnerText(bredd)}, mot en markering på {formatCount(props.markeradeRader)} ×{' '}
-            {formatCount(props.markeradeKolumner)}.
-          </>
-        ) : (
-          <>
-            Det du klistrar in är{' '}
-            <strong>
-              {raderText(plan.rader.length)} och {kolumnerText(bredd)}
-            </strong>
-            , men markeringen är {formatCount(props.markeradeRader)} ×{' '}
-            {formatCount(props.markeradeKolumner)}.
-          </>
-        )}
+        {harRubriker
+          ? tj(
+              'Det du klistrar in har {0} och ser därför ut som ett eget dokument — {1} och {2}, mot en markering på {3} × {4}.',
+              <strong>{t('kolumnnamn på första raden')}</strong>,
+              raderText(plan.rader.length),
+              kolumnerText(bredd),
+              formatCount(props.markeradeRader),
+              formatCount(props.markeradeKolumner),
+            )
+          : tj(
+              'Det du klistrar in är {0}, men markeringen är {1} × {2}.',
+              <strong>
+                {tf('{0} och {1}', raderText(plan.rader.length), kolumnerText(bredd))}
+              </strong>,
+              formatCount(props.markeradeRader),
+              formatCount(props.markeradeKolumner),
+            )}
       </Notis>
 
       <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
-        <strong>Öppna som ny fil</strong> lämnar den här tabellen orörd och lägger det
-        inklistrade i en egen flik.{' '}
-        <strong>Lägg till plats</strong> utökar tabellen med{' '}
-        {plan.extraRader > 0 && raderText(plan.extraRader)}
-        {plan.extraRader > 0 && plan.extraKolumner > 0 && ' och '}
-        {plan.extraKolumner > 0 && kolumnerText(plan.extraKolumner)} så att allt får plats.{' '}
-        <strong>Klipp av</strong> skriver bara in det som ryms i tabellen som den ser ut nu —
-        resten kastas.
+        {tj(
+          '{0} lämnar den här tabellen orörd och lägger det inklistrade i en egen flik. {1} utökar tabellen med {2} så att allt får plats. {3} skriver bara in det som ryms i tabellen som den ser ut nu — resten kastas.',
+          <strong>{t('Öppna som ny fil')}</strong>,
+          <strong>{t('Lägg till plats')}</strong>,
+          [
+            plan.extraRader > 0 ? raderText(plan.extraRader) : '',
+            plan.extraRader > 0 && plan.extraKolumner > 0 ? t('och') : '',
+            plan.extraKolumner > 0 ? kolumnerText(plan.extraKolumner) : '',
+          ]
+            .filter(Boolean)
+            .join(' '),
+          <strong>{t('Klipp av')}</strong>,
+        )}
       </p>
 
       <div class="falt">
-        <span class="falt__etikett">Första raderna av det du klistrar in</span>
+        <span class="falt__etikett">{t('Första raderna av det du klistrar in')}</span>
         <div class="fortab__omslag">
           <table class="fortab">
             <tbody>

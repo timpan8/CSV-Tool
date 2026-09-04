@@ -5,6 +5,7 @@ import { TYPE_LABELS } from '../core/infer.js'
 import { formatCount } from '../core/locale/sv.js'
 import { innehallsprofil } from '../core/frame/innehall.js'
 import { ordnaVerktyg, type Verktygsnamn } from './verktyg.jsx'
+import { t, tf } from './sprak.js'
 
 const TYPER: ColumnType[] = ['text', 'number', 'date', 'email', 'bool']
 
@@ -40,10 +41,10 @@ export function Inspector(props: {
   if (!column || !stat || !ordning) {
     return (
       <div class="panel panel--hoger">
-        <div class="panel__rubrik">Kolumn</div>
+        <div class="panel__rubrik">{t('Kolumn')}</div>
         <div class="panel__innehall">
           <p style={{ color: 'var(--text-svag)', fontSize: 13 }}>
-            Klicka på en kolumnrubrik för att se antal, tomma värden och de vanligaste värdena.
+            {t('Klicka på en kolumnrubrik för att se antal, tomma värden och de vanligaste värdena.')}
           </p>
         </div>
       </div>
@@ -54,27 +55,28 @@ export function Inspector(props: {
 
   return (
     <div class="panel panel--hoger">
-      <div class="panel__rubrik">Kolumn</div>
+      <div class="panel__rubrik">{t('Kolumn')}</div>
       <div class="panel__innehall" style={{ padding: 0 }}>
         <div class="insp__grupp">
           <h3 class="insp__namn">{column.name}</h3>
           <div class="falt">
-            <span class="falt__etikett">Typ</span>
+            <span class="falt__etikett">{t('Typ')}</span>
             <select
               value={column.type}
               onChange={(e) =>
                 props.onSetType((e.currentTarget as HTMLSelectElement).value as ColumnType)
               }
             >
-              {TYPER.map((t) => (
-                <option value={t} key={t}>
-                  {TYPE_LABELS[t]}
+              {TYPER.map((typ) => (
+                <option value={typ} key={typ}>
+                  {t(TYPE_LABELS[typ])}
                 </option>
               ))}
             </select>
             <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-svag)' }}>
-              Typen styr sortering, filter och vilka verktyg som erbjuds. Den skriver aldrig om
-              ett värde.
+              {t(
+                'Typen styr sortering, filter och vilka verktyg som erbjuds. Den skriver aldrig om ett värde.',
+              )}
             </p>
           </div>
         </div>
@@ -82,24 +84,24 @@ export function Inspector(props: {
         <div class="insp__grupp">
           <dl style={{ margin: 0 }}>
             <div class="insp__matt">
-              <dt>Rader</dt>
+              <dt>{t('Rader')}</dt>
               <dd>{formatCount(stat.totalt)}</dd>
             </div>
             <div class="insp__matt">
-              <dt>Ifyllda</dt>
+              <dt>{t('Ifyllda')}</dt>
               <dd>{formatCount(stat.ifyllda)}</dd>
             </div>
             <div class="insp__matt">
-              <dt>Tomma</dt>
+              <dt>{t('Tomma')}</dt>
               <dd>{formatCount(stat.tomma)}</dd>
             </div>
             <div class="insp__matt">
-              <dt>Unika</dt>
+              <dt>{t('Unika')}</dt>
               <dd>{formatCount(stat.unika)}</dd>
             </div>
             {stat.ogiltiga > 0 && (
               <div class="insp__matt insp__matt--varning">
-                <dt>Går inte att tolka</dt>
+                <dt>{t('Går inte att tolka')}</dt>
                 <dd>{formatCount(stat.ogiltiga)}</dd>
               </div>
             )}
@@ -110,20 +112,20 @@ export function Inspector(props: {
               style={{ width: '100%', marginTop: 8 }}
               onClick={props.onFilterInvalid}
             >
-              Visa de {formatCount(stat.ogiltiga)} raderna
+              {tf('Visa de {0} raderna', formatCount(stat.ogiltiga))}
             </button>
           )}
         </div>
 
         {stat.topp.length > 0 && (
           <div class="insp__grupp">
-            <span class="falt__etikett">Vanligaste värden</span>
+            <span class="falt__etikett">{t('Vanligaste värden')}</span>
             <div class="insp__topp" style={{ marginTop: 6 }}>
               {stat.topp.map((post) => (
                 <button
                   class="insp__toppost"
                   key={post.varde}
-                  title={`Filtrera fram ${post.varde}`}
+                  title={tf('Filtrera fram {0}', post.varde)}
                   onClick={() => props.onFiltreraVarde(post.varde)}
                 >
                   <span class="insp__vardetext">{post.varde}</span>
@@ -139,7 +141,7 @@ export function Inspector(props: {
         )}
 
         <div class="insp__grupp">
-          <span class="falt__etikett">Städa kolumnen</span>
+          <span class="falt__etikett">{t('Städa kolumnen')}</span>
           <div class="insp__knappar" style={{ marginTop: 6 }}>
             {ordning.passande.map(({ post, skal }) => (
               <button
@@ -148,12 +150,12 @@ export function Inspector(props: {
                 title={skal}
                 onClick={() => props.onVerktyg(post.namn)}
               >
-                {post.etikett}
+                {t(post.etikett)}
               </button>
             ))}
             {ordning.ovriga.map((post) => (
               <button key={post.namn} class="knapp" onClick={() => props.onVerktyg(post.namn)}>
-                {post.etikett}
+                {t(post.etikett)}
               </button>
             ))}
           </div>
@@ -163,16 +165,16 @@ export function Inspector(props: {
         </div>
 
         <div class="insp__grupp" style={{ borderBottom: 0 }}>
-          <span class="falt__etikett">Åtgärder</span>
+          <span class="falt__etikett">{t('Åtgärder')}</span>
           <div class="insp__knappar" style={{ marginTop: 6 }}>
             <button class="knapp" onClick={props.onRename}>
-              Byt namn…
+              {t('Byt namn…')}
             </button>
             <button class="knapp" onClick={props.onDuplicate}>
-              Duplicera kolumnen
+              {t('Duplicera kolumnen')}
             </button>
             <button class="knapp knapp--fara" onClick={props.onDelete}>
-              Ta bort kolumnen
+              {t('Ta bort kolumnen')}
             </button>
           </div>
         </div>

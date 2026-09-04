@@ -13,8 +13,9 @@ import {
   type Malformat,
 } from '../core/ops/dates.js'
 import { beraknaForhandsvisning, sammanfatta, type Forhandsvisning } from '../state/preview.js'
-import { celler, formatCount } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
 import { kolumnrubrik } from './verktyg.js'
+import { celler, sprak, t, tf, tj } from './sprak.js'
 
 const FELTILLSTAND: { varde: Feltillstand; etikett: string; titel: string }[] = [
   {
@@ -85,7 +86,7 @@ export function DateTool(props: {
   const maasteSvara = grundinventering.tvetydig && svar === null
 
   const inst = { dagForst, excelSerie, mal, onError }
-  const malnamn = MALFORMAT.find((m) => m.varde === mal)!.etikett
+  const malnamn = t(MALFORMAT.find((m) => m.varde === mal)!.etikett)
 
   /*
    * Nyläget gäller en kolumn i taget.
@@ -99,7 +100,7 @@ export function DateTool(props: {
   const malkolumner = nyKolumn ? kolumner.slice(0, 1) : kolumner
   const forsta = kolumner[0]
   // Namnet följer målformatet: byter man till ÅÅÅÅ-MM följer förslaget med.
-  const forslagsnamn = `${forsta?.name ?? 'Datum'} (${malnamn})`
+  const forslagsnamn = `${forsta?.name ?? t('Datum')} (${malnamn})`
   const visatNamn = namnFoljer ? forslagsnamn : namn
   const rentNamn = visatNamn.trim() === '' ? forslagsnamn : visatNamn.trim()
 
@@ -108,8 +109,8 @@ export function DateTool(props: {
       malkolumner.map((col) =>
         beraknaForhandsvisning(col, {
           etikett: nyKolumn
-            ? `Datum ur ”${col.name}” → ${rentNamn}`
-            : `Datum i ”${col.name}” → ${malnamn}`,
+            ? tf('Datum ur ”{0}” → {1}', col.name, rentNamn)
+            : tf('Datum i ”{0}” → {1}', col.name, malnamn),
           kind: 'dates',
           profil: {
             typ: 'datum',
@@ -125,7 +126,9 @@ export function DateTool(props: {
           ...(nyKolumn ? { nyaKolumner: [rentNamn] } : {}),
         }),
       ),
-    [nyckel, props.dataRevision, dagForst, excelSerie, mal, onError, nyKolumn, rentNamn],
+    // `sprak.value` finns med eftersom etiketten är översatt: utan den skulle
+    // förhandsvisningen behålla gamla språkets etikett tills något annat ändras.
+    [nyckel, props.dataRevision, dagForst, excelSerie, mal, onError, nyKolumn, rentNamn, sprak.value],
   )
   const forh = sammanfatta(forhLista)
 
@@ -145,52 +148,50 @@ export function DateTool(props: {
 
   return (
     <Verktygspanel
-      titel="Datum"
+      titel={t('Datum')}
       underrubrik={kolumnrubrik(kolumner)}
       onStang={props.onStang}
       fot={
         <>
           <button class="knapp" onClick={props.onStang}>
-            Avbryt
+            {t('Avbryt')}
           </button>
           <button
             class="knapp knapp--primar"
             disabled={forh.andrade === 0 || maasteSvara}
             title={
               maasteSvara
-                ? 'Svara först på om dagen eller månaden står först.'
+                ? t('Svara först på om dagen eller månaden står först.')
                 : forh.andrade === 0
-                  ? nyKolumn
-                    ? 'Kolumnen skulle bli tom.'
-                    : 'Ingenting skulle ändras.'
+                  ? t(nyKolumn ? 'Kolumnen skulle bli tom.' : 'Ingenting skulle ändras.')
                   : undefined
             }
             onClick={() => props.onTillampa(forhLista)}
           >
             {nyKolumn
-              ? 'Skapa kolumnen'
+              ? t('Skapa kolumnen')
               : kolumner.length > 1
-                ? `Tillämpa på ${kolumner.length} kolumner`
-                : 'Tillämpa'}
+                ? tf('Tillämpa på {0} kolumner', kolumner.length)
+                : t('Tillämpa')}
           </button>
         </>
       }
     >
       <div class="falt">
-        <span class="falt__etikett">Det här finns i kolumnen</span>
+        <span class="falt__etikett">{t('Det här finns i kolumnen')}</span>
         <table class="inventering">
           <tbody>
             {grundinventering.poster.map((post) => (
               <tr key={post.format} class={post.format === 'okant' ? 'inventering--okant' : ''}>
                 <td class="inventering__antal">{formatCount(post.antal)}</td>
-                <td>{FORMATNAMN[post.format]}</td>
+                <td>{t(FORMATNAMN[post.format])}</td>
                 <td class="inventering__exempel">{post.exempel.join('  ')}</td>
               </tr>
             ))}
             {grundinventering.poster.length === 0 && (
               <tr>
                 <td colSpan={3} class="inventering__exempel">
-                  Kolumnen är tom.
+                  {t('Kolumnen är tom.')}
                 </td>
               </tr>
             )}
@@ -200,16 +201,18 @@ export function DateTool(props: {
 
       {grundinventering.bevis !== null && (
         <Notis ton="lyckat">
-          Kolumnen svarar själv: <code>{grundinventering.bevis}</code> kan bara läsas{' '}
-          {grundinventering.bevisSagerDagForst ? 'med dagen först' : 'med månaden först'}, eftersom
-          det ena talet är större än 12. Samma ordning används för hela kolumnen.
+          {tj(
+            'Kolumnen svarar själv: {0} kan bara läsas {1}, eftersom det ena talet är större än 12. Samma ordning används för hela kolumnen.',
+            <code>{grundinventering.bevis}</code>,
+            t(grundinventering.bevisSagerDagForst ? 'med dagen först' : 'med månaden först'),
+          )}
         </Notis>
       )}
 
       {grundinventering.tvetydig && (
         <div class="falt">
           <span class="falt__etikett">
-            Står dagen eller månaden först i <code>{exempelTvetydigt}</code>?
+            {tj('Står dagen eller månaden först i {0}?', <code>{exempelTvetydigt}</code>)}
           </span>
           <Val
             varden={[
@@ -221,9 +224,9 @@ export function DateTool(props: {
           />
           {maasteSvara && (
             <Notis ton="varning">
-              Inget värde i kolumnen avgör saken — alla dag- och månadstal är 12 eller lägre. Att
-              gissa här skulle flytta datum flera månader utan att det syns, så frågan måste
-              besvaras.
+              {t(
+                'Inget värde i kolumnen avgör saken — alla dag- och månadstal är 12 eller lägre. Att gissa här skulle flytta datum flera månader utan att det syns, så frågan måste besvaras.',
+              )}
             </Notis>
           )}
         </div>
@@ -236,12 +239,12 @@ export function DateTool(props: {
             checked={excelSerie}
             onChange={(e) => setExcelSerie((e.currentTarget as HTMLInputElement).checked)}
           />
-          Tolka de {formatCount(grundinventering.mojligaExcelSerier)} rena talen som Exceldatum
+          {tf('Tolka de {0} rena talen som Exceldatum', formatCount(grundinventering.mojligaExcelSerier))}
         </label>
       )}
 
       <div class="falt">
-        <span class="falt__etikett">Skriv om till</span>
+        <span class="falt__etikett">{t('Skriv om till')}</span>
         <Val
           varden={MALFORMAT.map((m) => ({ varde: m.varde, etikett: m.etikett, titel: m.exempel }))}
           valt={mal}
@@ -255,15 +258,15 @@ export function DateTool(props: {
           checked={nyKolumn}
           onChange={(e) => setNyKolumn((e.currentTarget as HTMLInputElement).checked)}
         />
-        Lägg resultatet i en ny kolumn och låt originalet stå kvar
+        {t('Lägg resultatet i en ny kolumn och låt originalet stå kvar')}
       </label>
 
       {nyKolumn && (
         <div class="falt">
-          <span class="falt__etikett">Namn på den nya kolumnen</span>
+          <span class="falt__etikett">{t('Namn på den nya kolumnen')}</span>
           <input
             value={visatNamn}
-            aria-label="Namn på den nya kolumnen"
+            aria-label={t('Namn på den nya kolumnen')}
             onInput={(e) => {
               setNamnFoljer(false)
               setNamn((e.currentTarget as HTMLInputElement).value)
@@ -271,31 +274,35 @@ export function DateTool(props: {
           />
           {kolumner.length > 1 && forsta && (
             <Notis ton="varning">
-              En ny kolumn skapas åt gången, så det här gäller {forsta.name}. De andra{' '}
-              {kolumner.length - 1} markerade kolumnerna lämnas orörda — stäng av valet för att
-              skriva om allihop på plats i stället.
+              {tf(
+                'En ny kolumn skapas åt gången, så det här gäller {0}. De andra {1} markerade kolumnerna lämnas orörda — stäng av valet för att skriva om allihop på plats i stället.',
+                forsta.name,
+                kolumner.length - 1,
+              )}
             </Notis>
           )}
         </div>
       )}
 
       <div class="falt">
-        <span class="falt__etikett">Värden som inte går att tolka</span>
+        <span class="falt__etikett">{t('Värden som inte går att tolka')}</span>
         <Val varden={FELTILLSTAND} valt={onError} onValj={setOnError} />
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Vad som händer</span>
+        <span class="falt__etikett">{t('Vad som händer')}</span>
         <p class="verktyg__sammanfattning verktyg__resultat">
-          <strong>{formatCount(forh.andrade)}</strong> av {celler(forh.ifyllda)}{' '}
-          {nyKolumn ? `får ett värde i ${rentNamn}` : 'skrivs om'}
-          {forh.problem > 0 && (
-            <>
-              {' · '}
-              <strong class="verktyg__problem">{formatCount(forh.problem)}</strong> går inte att
-              tolka
-            </>
+          {tj(
+            nyKolumn ? '{0} av {1} får ett värde i {2}' : '{0} av {1} skrivs om',
+            <strong>{formatCount(forh.andrade)}</strong>,
+            celler(forh.ifyllda),
+            rentNamn,
           )}
+          {forh.problem > 0 &&
+            tj(
+              ' · {0} går inte att tolka',
+              <strong class="verktyg__problem">{formatCount(forh.problem)}</strong>,
+            )}
           .
         </p>
         {nyKolumn && forh.problem > 0 && (
@@ -306,13 +313,18 @@ export function DateTool(props: {
               är en annan fråga — en ny kolumn som innehåller ”i går” är ett annat
               löfte än en orörd originalcell.
             */}
-            De {formatCount(forh.problem)} raderna får{' '}
-            {onError === 'behall'
-              ? 'originalvärdet oförändrat'
-              : onError === 'markera'
-                ? 'OGILTIGT'
-                : 'ingenting alls'}{' '}
-            i {rentNamn}.
+            {tf(
+              'De {0} raderna får {1} i {2}.',
+              formatCount(forh.problem),
+              t(
+                onError === 'behall'
+                  ? 'originalvärdet oförändrat'
+                  : onError === 'markera'
+                    ? 'OGILTIGT'
+                    : 'ingenting alls',
+              ),
+              rentNamn,
+            )}
           </p>
         )}
         <div class="val" role="radiogroup">
@@ -322,7 +334,7 @@ export function DateTool(props: {
             aria-checked={props.visaBara === undefined}
             onClick={() => props.onVisaBara(undefined)}
           >
-            Alla rader
+            {t('Alla rader')}
           </button>
           <button
             class={`val__knapp${props.visaBara === 'andrade' ? ' val__knapp--vald' : ''}`}
@@ -331,7 +343,7 @@ export function DateTool(props: {
             disabled={forh.andrade === 0}
             onClick={() => props.onVisaBara('andrade')}
           >
-            {nyKolumn ? 'Bara ifyllda' : 'Bara ändrade'}
+            {t(nyKolumn ? 'Bara ifyllda' : 'Bara ändrade')}
           </button>
           <button
             class={`val__knapp${props.visaBara === 'problem' ? ' val__knapp--vald' : ''}`}
@@ -340,25 +352,23 @@ export function DateTool(props: {
             disabled={forh.problem === 0}
             onClick={() => props.onVisaBara('problem')}
           >
-            Bara problem
+            {t('Bara problem')}
           </button>
         </div>
       </div>
 
       <Notis ton="info">
-        {nyKolumn ? (
-          <>
-            Kolumnen med streckad ram visar vad {rentNamn} kommer att innehålla. Ingenting är
-            skapat förrän du klickar Skapa kolumnen, och Ctrl+Z tar bort den efteråt.
-          </>
-        ) : (
-          <>
-            Tabellen visar <span class="forhand__fore">före</span>{' '}
-            <span class="forhand__pil">→</span> <span class="forhand__efter">efter</span> i
-            kolumnen. Ingenting är ändrat förrän du klickar Tillämpa, och Ctrl+Z tar tillbaka det
-            efteråt.
-          </>
-        )}
+        {nyKolumn
+          ? tf(
+              'Kolumnen med streckad ram visar vad {0} kommer att innehålla. Ingenting är skapat förrän du klickar Skapa kolumnen, och Ctrl+Z tar bort den efteråt.',
+              rentNamn,
+            )
+          : tj(
+              'Tabellen visar {0} {1} {2} i kolumnen. Ingenting är ändrat förrän du klickar Tillämpa, och Ctrl+Z tar tillbaka det efteråt.',
+              <span class="forhand__fore">{t('före')}</span>,
+              <span class="forhand__pil">→</span>,
+              <span class="forhand__efter">{t('efter')}</span>,
+            )}
       </Notis>
     </Verktygspanel>
   )

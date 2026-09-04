@@ -4,8 +4,9 @@ import { Notis } from './parts.js'
 import type { Column } from '../core/types.js'
 import { TOM_ERSATTNING, byggErsattare, type Ersattning } from '../core/ops/replace.js'
 import { beraknaForhandsvisning, sammanfatta, type Forhandsvisning } from '../state/preview.js'
-import { celler, formatCount } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
 import { kolumnrubrik } from './verktyg.js'
+import { celler, sprak, t, tf, tj } from './sprak.js'
 
 /**
  * Sök och ersätt i de markerade kolumnerna.
@@ -45,13 +46,18 @@ export function ReplaceTool(props: {
         ? []
         : kolumner.map((col) =>
             beraknaForhandsvisning(col, {
-              etikett: `Ersatte ”${kort(inst.sok)}” med ”${kort(inst.ersatt)}” i ”${col.name}”`,
+              etikett: tf(
+                'Ersatte ”{0}” med ”{1}” i ”{2}”',
+                kort(inst.sok),
+                kort(inst.ersatt),
+                col.name,
+              ),
               kind: 'replace',
               profil: { typ: 'ersatt', kolumn: col.name, inst },
               fn,
             }),
           ),
-    [nyckel, props.dataRevision, fn],
+    [nyckel, props.dataRevision, fn, sprak.value],
   )
   const forh = forhLista.length === 0 ? null : sammanfatta(forhLista)
 
@@ -65,39 +71,39 @@ export function ReplaceTool(props: {
 
   return (
     <Verktygspanel
-      titel="Sök och ersätt"
+      titel={t('Sök och ersätt')}
       underrubrik={kolumnrubrik(kolumner)}
       onStang={props.onStang}
       fot={
         <>
           <button class="knapp" onClick={props.onStang}>
-            Avbryt
+            {t('Avbryt')}
           </button>
           <button
             class="knapp knapp--primar"
             disabled={forh === null || forh.andrade === 0}
-            title={forh !== null && forh.andrade === 0 ? 'Ingenting träffas.' : undefined}
+            title={forh !== null && forh.andrade === 0 ? t('Ingenting träffas.') : undefined}
             onClick={() => forh && props.onTillampa(forhLista)}
           >
-            {kolumner.length > 1 ? `Ersätt i ${kolumner.length} kolumner` : 'Ersätt'}
+            {kolumner.length > 1 ? tf('Ersätt i {0} kolumner', kolumner.length) : t('Ersätt')}
           </button>
         </>
       }
     >
       <div class="falt">
-        <span class="falt__etikett">Sök efter</span>
+        <span class="falt__etikett">{t('Sök efter')}</span>
         <input
           value={inst.sok}
-          placeholder={inst.regex ? '^\\d{3} ?\\d{2}$' : 'text att hitta'}
+          placeholder={inst.regex ? '^\\d{3} ?\\d{2}$' : t('text att hitta')}
           onInput={(e) => uppdatera({ sok: (e.currentTarget as HTMLInputElement).value })}
         />
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Ersätt med</span>
+        <span class="falt__etikett">{t('Ersätt med')}</span>
         <input
           value={inst.ersatt}
-          placeholder="lämna tomt för att radera träffen"
+          placeholder={t('lämna tomt för att radera träffen')}
           onInput={(e) => uppdatera({ ersatt: (e.currentTarget as HTMLInputElement).value })}
         />
       </div>
@@ -109,7 +115,7 @@ export function ReplaceTool(props: {
             checked={inst.helaCellen}
             onChange={(e) => uppdatera({ helaCellen: (e.currentTarget as HTMLInputElement).checked })}
           />
-          Hela cellen
+          {t('Hela cellen')}
         </label>
         <label class="kryss">
           <input
@@ -119,7 +125,7 @@ export function ReplaceTool(props: {
               uppdatera({ versalkanslig: (e.currentTarget as HTMLInputElement).checked })
             }
           />
-          Skilj på VERSALER och gemener
+          {t('Skilj på VERSALER och gemener')}
         </label>
       </div>
 
@@ -131,7 +137,7 @@ export function ReplaceTool(props: {
             disabled={inst.accentokanslig}
             onChange={(e) => uppdatera({ regex: (e.currentTarget as HTMLInputElement).checked })}
           />
-          Reguljärt uttryck
+          {t('Reguljärt uttryck')}
         </label>
         <label class="kryss">
           <input
@@ -147,29 +153,45 @@ export function ReplaceTool(props: {
               })
             }
           />
-          Strunta i å ä ö (<code>oberg</code> hittar <code>Öberg</code>)
+          {tj(
+            'Strunta i å ä ö ({0} hittar {1})',
+            <code>oberg</code>,
+            <code>Öberg</code>,
+          )}
         </label>
       </div>
 
-      {fel !== null && <Notis ton="fara">{fel}</Notis>}
+      {/*
+        `t()` på felet slår igenom för de meddelanden som är hela meningar.
+        De som bär med sig regexmotorns egen text står kvar som de kommer —
+        den texten är webbläsarens, inte vår.
+      */}
+      {fel !== null && <Notis ton="fara">{t(fel)}</Notis>}
 
       {inst.regex && fel === null && (
         <Notis ton="info">
-          <code>\d</code> siffra · <code>\s</code> blanksteg · <code>^</code> början ·{' '}
-          <code>$</code> slut · <code>(…)</code> grupp som <code>$1</code> i ersättningen.
+          {tj(
+            '{0} siffra · {1} blanksteg · {2} början · {3} slut · {4} grupp som {5} i ersättningen.',
+            <code>\d</code>,
+            <code>\s</code>,
+            <code>^</code>,
+            <code>$</code>,
+            <code>(…)</code>,
+            <code>$1</code>,
+          )}
         </Notis>
       )}
 
       <div class="falt">
-        <span class="falt__etikett">Vad som händer</span>
+        <span class="falt__etikett">{t('Vad som händer')}</span>
         <p class="verktyg__sammanfattning verktyg__resultat">
-          {forh === null ? (
-            'Skriv något att söka efter.'
-          ) : (
-            <>
-              <strong>{formatCount(forh.andrade)}</strong> av {celler(forh.ifyllda)} ändras.
-            </>
-          )}
+          {forh === null
+            ? t('Skriv något att söka efter.')
+            : tj(
+                '{0} av {1} ändras.',
+                <strong>{formatCount(forh.andrade)}</strong>,
+                celler(forh.ifyllda),
+              )}
         </p>
         <div class="val" role="radiogroup">
           <button
@@ -178,7 +200,7 @@ export function ReplaceTool(props: {
             aria-checked={props.visaBara === undefined}
             onClick={() => props.onVisaBara(undefined)}
           >
-            Alla rader
+            {t('Alla rader')}
           </button>
           <button
             class={`val__knapp${props.visaBara === 'andrade' ? ' val__knapp--vald' : ''}`}
@@ -187,7 +209,7 @@ export function ReplaceTool(props: {
             disabled={forh === null || forh.andrade === 0}
             onClick={() => props.onVisaBara('andrade')}
           >
-            Bara träffar
+            {t('Bara träffar')}
           </button>
         </div>
       </div>

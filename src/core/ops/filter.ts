@@ -352,20 +352,54 @@ export function tillampaFilter(
 }
 
 /** "Ort är Malmö" — chippets text. */
-export function beskrivRegel(frame: Frame, regel: Filterregel): string {
+/**
+ * Regeln i klartext, delad i mall och delar.
+ *
+ * Kärnan skriver svenska och vet ingenting om gränssnittets språkval — men en
+ * färdigsatt mening går inte att slå upp i en ordbok, eftersom kolumnnamnet
+ * och värdet är olika varje gång. Mallen är den enda konstanta biten, och det
+ * är den gränssnittet slår upp. `beskrivRegel` nedan sätter ihop den svenska
+ * formen ur samma delar, för allt som bara behöver en sträng.
+ *
+ * `etiketter` pekar ut vilka delar som är husets egna ord och alltså går att
+ * slå upp. Kolumnnamn och värden står *inte* med: en kolumn som råkar heta
+ * ”Tal” skulle annars döpas om till ”Number” mitt i en mening om användarens
+ * eget data.
+ */
+export function beskrivRegelDelar(
+  frame: Frame,
+  regel: Filterregel,
+): { mall: string; delar: string[]; etiketter: number[] } {
   const col = findColumn(frame, regel.colId)
   const namn = col?.name ?? 'Borttagen kolumn'
   const post = operatorpost(regel.operator)
 
   if (regel.operator === 'iLista') {
     const n = regel.varden?.length ?? 0
-    if (n <= 2) return `${namn} är ${(regel.varden ?? []).join(' eller ')}`
-    return `${namn} är något av ${n}`
+    if (n <= 2) {
+      return {
+        mall: '{0} är {1}',
+        delar: [namn, (regel.varden ?? []).join(' eller ')],
+        etiketter: [],
+      }
+    }
+    return { mall: '{0} är något av {1}', delar: [namn, String(n)], etiketter: [] }
   }
-  if (post.falt === 0) return `${namn} ${post.etikett}`
-  if (post.falt === 2) return `${namn} ${post.etikett} ${regel.varde}–${regel.varde2 ?? ''}`
+  if (post.falt === 0) return { mall: '{0} {1}', delar: [namn, post.etikett], etiketter: [1] }
+  if (post.falt === 2) {
+    return {
+      mall: '{0} {1} {2}–{3}',
+      delar: [namn, post.etikett, regel.varde, regel.varde2 ?? ''],
+      etiketter: [1],
+    }
+  }
   if (regel.operator === 'langreAn' || regel.operator === 'kortareAn') {
-    return `${namn} ${post.etikett} ${regel.varde} tecken`
+    return { mall: '{0} {1} {2} tecken', delar: [namn, post.etikett, regel.varde], etiketter: [1] }
   }
-  return `${namn} ${post.etikett} ${regel.varde}`
+  return { mall: '{0} {1} {2}', delar: [namn, post.etikett, regel.varde], etiketter: [1] }
+}
+
+export function beskrivRegel(frame: Frame, regel: Filterregel): string {
+  const { mall, delar } = beskrivRegelDelar(frame, regel)
+  return mall.replace(/\{(\d+)\}/g, (traff, i: string) => delar[Number(i)] ?? traff)
 }

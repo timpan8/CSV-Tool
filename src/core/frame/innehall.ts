@@ -46,6 +46,16 @@ export interface Verktygsforslag {
   andel: number
   /** Färdig mening att visa efter etiketten: ”14 av 16 ser ut som adresser”. */
   skal: string
+  /**
+   * Samma mening som mall med `{0}`-platshållare, plus delarna den sätts ihop av.
+   *
+   * Kärnan skriver svenska och ska fortsätta göra det — den vet ingenting om
+   * gränssnittets språkval. Men en färdigsatt mening går inte att slå upp i en
+   * ordbok, eftersom siffrorna i den är olika varje gång. Mallen är därför den
+   * enda delen som är konstant, och det är den gränssnittet slår upp.
+   */
+  mall: string
+  delar: string[]
 }
 
 export interface Innehallsprofil {
@@ -145,38 +155,42 @@ function bygg(col: Column): Profilpost {
 function rakna(col: Column, vikter: Uint32Array, ifyllda: number): Verktygsforslag[] {
   const ut: Verktygsforslag[] = []
   const av = (n: number) => `${formatCount(n)} av ${formatCount(ifyllda)}`
-  const lagg = (verktyg: Verktygsnamn, traffar: number, skal: string) => {
+  const satt = (mall: string, delar: string[]) =>
+    mall.replace(/\{(\d+)\}/g, (traff, i: string) => delar[Number(i)] ?? traff)
+  const lagg = (verktyg: Verktygsnamn, traffar: number, mall: string, ...delar: string[]) => {
     const andel = traffar / ifyllda
-    if (andel >= TROSKEL) ut.push({ verktyg, andel, skal })
+    if (andel >= TROSKEL) ut.push({ verktyg, andel, mall, delar, skal: satt(mall, delar) })
   }
 
   const epost = inventeraEpost(col.dict, EPOSTVAL, vikter)
-  lagg('epost', epost.adresser, `${av(epost.adresser)} ser ut som adresser`)
+  lagg('epost', epost.adresser, '{0} ser ut som adresser', av(epost.adresser))
 
   const telefon = inventeraTelefon(col.dict, { ...TELEFONVAL, format: 'e164', onError: 'behall' }, vikter)
-  lagg('telefon', telefon.nummer, `${av(telefon.nummer)} ser ut som telefonnummer`)
+  lagg('telefon', telefon.nummer, '{0} ser ut som telefonnummer', av(telefon.nummer))
 
   const datum = inventeraDatum(col.dict, DATUMVAL, vikter)
   const format = datum.poster.filter((p) => p.antal > 0 && p.format !== 'okant').length
-  lagg(
-    'datum',
-    datum.tolkade,
-    format > 1
-      ? `${av(datum.tolkade)} går att läsa som datum, i ${format} format`
-      : `${av(datum.tolkade)} går att läsa som datum`,
-  )
+  if (format > 1) {
+    lagg(
+      'datum',
+      datum.tolkade,
+      '{0} går att läsa som datum, i {1} format',
+      av(datum.tolkade),
+      String(format),
+    )
+  } else {
+    lagg('datum', datum.tolkade, '{0} går att läsa som datum', av(datum.tolkade))
+  }
 
   const { traffar: taltraffar, enheter } = raknaTal(col, vikter)
-  lagg(
-    'tal',
-    taltraffar,
-    enheter.length > 0
-      ? `${av(taltraffar)} går att läsa som tal, med ${enheter.join(', ')}`
-      : `${av(taltraffar)} går att läsa som tal`,
-  )
+  if (enheter.length > 0) {
+    lagg('tal', taltraffar, '{0} går att läsa som tal, med {1}', av(taltraffar), enheter.join(', '))
+  } else {
+    lagg('tal', taltraffar, '{0} går att läsa som tal', av(taltraffar))
+  }
 
   const delbara = raknaDelbara(col, vikter)
-  lagg('dela', delbara, `${av(delbara)} går att dela i två ord`)
+  lagg('dela', delbara, '{0} går att dela i två ord', av(delbara))
 
   return ut
 }

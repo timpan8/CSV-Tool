@@ -9,6 +9,7 @@ import {
   type ExportOptions,
 } from '../core/csv/stringify.js'
 import { formatCount } from '../core/locale/sv.js'
+import { t, tf, tj } from './sprak.js'
 
 const PROFILER = [
   {
@@ -109,29 +110,32 @@ export function ExportDialog(props: {
 
   return (
     <Modal
-      titel="Exportera"
-      underrubrik={`${formatCount(urval.rows.length)} rader · ${formatCount(urval.columns.length)} kolumner`}
+      titel={t('Exportera')}
+      underrubrik={`${tf('{0} rader', formatCount(urval.rows.length))} · ${tf(
+        '{0} kolumner',
+        formatCount(urval.columns.length),
+      )}`}
       onStang={props.onStang}
       fot={
         <>
           <button class="knapp" onClick={props.onStang}>
-            Avbryt
+            {t('Avbryt')}
           </button>
           <button class="knapp knapp--primar" onClick={() => void spara()}>
-            Ladda ner
+            {t('Ladda ner')}
           </button>
         </>
       }
     >
       <div class="falt">
-        <span class="falt__etikett">Format</span>
+        <span class="falt__etikett">{t('Format')}</span>
         <Val varden={PROFILER} valt={profil} onValj={valjProfil} />
       </div>
 
       {!arXlsx && (
       <div class="faltrad">
         <div class="falt">
-          <span class="falt__etikett">Avgränsare</span>
+          <span class="falt__etikett">{t('Avgränsare')}</span>
           <Val
             varden={[
               { varde: ';' as Delimiter, etikett: 'Semikolon' },
@@ -143,7 +147,7 @@ export function ExportDialog(props: {
           />
         </div>
         <div class="falt">
-          <span class="falt__etikett">Teckenkodning</span>
+          <span class="falt__etikett">{t('Teckenkodning')}</span>
           <Val
             varden={[
               { varde: 'utf-8' as Encoding, etikett: 'UTF-8' },
@@ -154,7 +158,7 @@ export function ExportDialog(props: {
           />
         </div>
         <div class="falt">
-          <span class="falt__etikett">Radslut</span>
+          <span class="falt__etikett">{t('Radslut')}</span>
           <Val
             varden={[
               { varde: '\r\n' as const, etikett: 'CRLF (Windows)' },
@@ -176,7 +180,7 @@ export function ExportDialog(props: {
             disabled={options.encoding !== 'utf-8'}
             onChange={(e) => uppdatera({ bom: (e.currentTarget as HTMLInputElement).checked })}
           />
-          Skriv BOM (behövs för att Excel ska visa å ä ö rätt)
+          {t('Skriv BOM (behövs för att Excel ska visa å ä ö rätt)')}
         </label>
         <label class="kryss">
           <input
@@ -186,7 +190,7 @@ export function ExportDialog(props: {
               uppdatera({ includeHeader: (e.currentTarget as HTMLInputElement).checked })
             }
           />
-          Ta med rubrikrad
+          {t('Ta med rubrikrad')}
         </label>
         <label class="kryss">
           <input
@@ -196,7 +200,7 @@ export function ExportDialog(props: {
               uppdatera({ protectFormulas: (e.currentTarget as HTMLInputElement).checked })
             }
           />
-          Skydda mot formler i Excel
+          {t('Skydda mot formler i Excel')}
         </label>
       </div>
       )}
@@ -211,25 +215,28 @@ export function ExportDialog(props: {
                 uppdatera({ includeHeader: (e.currentTarget as HTMLInputElement).checked })
               }
             />
-            Ta med rubrikrad
+            {t('Ta med rubrikrad')}
           </label>
         </div>
       )}
 
       <div class="faltrad">
         <div class="falt">
-          <span class="falt__etikett">Vilka rader</span>
+          <span class="falt__etikett">{t('Vilka rader')}</span>
           <Val
             varden={[
-              { varde: 'view' as const, etikett: `Som visas nu (${formatCount(props.frame.view.length)})` },
-              { varde: 'all' as const, etikett: `Alla (${formatCount(props.frame.rowCount)})` },
+              {
+                varde: 'view' as const,
+                etikett: tf('Som visas nu ({0})', formatCount(props.frame.view.length)),
+              },
+              { varde: 'all' as const, etikett: tf('Alla ({0})', formatCount(props.frame.rowCount)) },
             ]}
             valt={options.rows}
             onValj={(v) => setOptions((o) => ({ ...o, rows: v }))}
           />
         </div>
         <div class="falt">
-          <span class="falt__etikett">Vilka kolumner</span>
+          <span class="falt__etikett">{t('Vilka kolumner')}</span>
           <Val
             varden={[
               { varde: 'visible' as const, etikett: 'Bara synliga' },
@@ -240,7 +247,7 @@ export function ExportDialog(props: {
           />
         </div>
         <div class="falt" style={{ flex: 1, minWidth: 200 }}>
-          <span class="falt__etikett">Filnamn</span>
+          <span class="falt__etikett">{t('Filnamn')}</span>
           <input
             value={filnamn}
             onInput={(e) => setFilnamn((e.currentTarget as HTMLInputElement).value)}
@@ -250,31 +257,37 @@ export function ExportDialog(props: {
 
       {props.harFilter && options.rows === 'all' && (
         <Notis ton="varning">
-          Du har ett aktivt filter men exporterar alla {formatCount(props.frame.rowCount)} rader.
-          Är det avsiktligt?
+          {tf(
+            'Du har ett aktivt filter men exporterar alla {0} rader. Är det avsiktligt?',
+            formatCount(props.frame.rowCount),
+          )}
         </Notis>
       )}
 
       {arXlsx && (
         <Notis ton="lyckat">
-          Talkolumner skrivs som riktiga tal, så <strong>SUMMA</strong> fungerar direkt i Excel.
-          Allt annat skrivs som text, vilket är det enda sättet att få{' '}
-          <strong>01234</strong> att förbli <strong>01234</strong> — en CSV kan Excel alltid
-          tolka om på egen hand.
+          {tj(
+            'Talkolumner skrivs som riktiga tal, så {0} fungerar direkt i Excel. Allt annat skrivs som text, vilket är det enda sättet att få {1} att förbli {2} — en CSV kan Excel alltid tolka om på egen hand.',
+            <strong>{t('SUMMA')}</strong>,
+            <strong>01234</strong>,
+            <strong>01234</strong>,
+          )}
         </Notis>
       )}
 
       {forlorade.length > 0 && !arXlsx && (
         <Notis ton="varning">
-          Windows-1252 kan inte lagra {forlorade.slice(0, 6).join(' ')} — de ersätts med
-          frågetecken. Välj UTF-8 om tecknen ska bevaras.
+          {tf(
+            'Windows-1252 kan inte lagra {0} — de ersätts med frågetecken. Välj UTF-8 om tecknen ska bevaras.',
+            forlorade.slice(0, 6).join(' '),
+          )}
         </Notis>
       )}
 
       {!arXlsx && (
         <div class="falt">
-          <span class="falt__etikett">Så här kommer första raden se ut</span>
-          <pre class="fortab__ra">{exempelrad || '(inga rader att exportera)'}</pre>
+          <span class="falt__etikett">{t('Så här kommer första raden se ut')}</span>
+          <pre class="fortab__ra">{exempelrad || t('(inga rader att exportera)')}</pre>
         </div>
       )}
     </Modal>

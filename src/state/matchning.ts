@@ -11,6 +11,7 @@ import { notify, tabs, type Tab } from './store.js'
 import { laddaSession, lagringsfel, sparaSession } from './lagring.js'
 import { findColumn } from '../core/frame/frame.js'
 import type { ColumnId, Frame } from '../core/types.js'
+import { tf } from '../ui/sprak.js'
 
 /**
  * Matchningsverkstaden: sessionen som betar av restlistorna.
@@ -574,7 +575,7 @@ export function korRunda(par: Matchningspar[]): number {
     ...s,
     extra: [
       ...s.extra,
-      ...m.par.map((p) => ({ v: p.v, h: p.h, kalla: 'runda' as const, notis: `runda ${nr}` })),
+      ...m.par.map((p) => ({ v: p.v, h: p.h, kalla: 'runda' as const, notis: tf('runda {0}', nr) })),
     ],
     rundor: [...s.rundor, { par, traffar: m.par.length }],
   }

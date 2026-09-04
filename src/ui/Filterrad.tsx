@@ -1,7 +1,8 @@
 import type { Frame } from '../core/types.js'
 import { findColumn } from '../core/frame/frame.js'
-import { beskrivRegel, type Filter } from '../core/ops/filter.js'
+import { beskrivRegelDelar, type Filter } from '../core/ops/filter.js'
 import { formatCount } from '../core/locale/sv.js'
+import { t, tf } from './sprak.js'
 
 /**
  * Filterbanderollen.
@@ -26,19 +27,26 @@ export function Filterrad(props: {
   return (
     <div class="filterrad">
       <span class="filterrad__etikett">
-        {props.filter.inverterat === true
-          ? 'Dolda:'
-          : props.filter.koppling === 'alla'
-            ? 'Alla:'
-            : 'Någon:'}
+        {t(
+          props.filter.inverterat === true
+            ? 'Dolda:'
+            : props.filter.koppling === 'alla'
+              ? 'Alla:'
+              : 'Någon:',
+        )}
       </span>
       {props.filter.inverterat === true && (
-        <span class="chip chip--vand" title="Filtret är vänt: du ser raderna det annars döljer.">
-          vänt
+        <span
+          class="chip chip--vand"
+          title={t('Filtret är vänt: du ser raderna det annars döljer.')}
+        >
+          {t('vänt')}
         </span>
       )}
       {props.filter.regler.map((regel) => {
         const finns = findColumn(props.frame, regel.colId) !== undefined
+        const { mall, delar, etiketter } = beskrivRegelDelar(props.frame, regel)
+        const beskrivning = tf(mall, ...delar.map((d, i) => (etiketter.includes(i) ? t(d) : d)))
         return (
           <span
             class={`chip${regel.av ? ' chip--av' : ''}${finns ? '' : ' chip--trasig'}`}
@@ -46,20 +54,20 @@ export function Filterrad(props: {
           >
             <button
               class="chip__text"
-              title={
+              title={t(
                 finns
                   ? regel.av
                     ? 'Avslagen. Klicka för att slå på.'
                     : 'Klicka för att slå av regeln.'
-                  : 'Kolumnen finns inte längre.'
-              }
+                  : 'Kolumnen finns inte längre.',
+              )}
               onClick={() => props.onVaxla(regel.id)}
             >
-              {beskrivRegel(props.frame, regel)}
+              {beskrivning}
             </button>
             <button
               class="chip__stang"
-              aria-label={`Ta bort regeln ${beskrivRegel(props.frame, regel)}`}
+              aria-label={tf('Ta bort regeln {0}', beskrivning)}
               onClick={() => props.onTaBort(regel.id)}
             >
               ✕
@@ -68,14 +76,14 @@ export function Filterrad(props: {
         )
       })}
       <button class="knapp knapp--tyst" onClick={props.onOppna}>
-        Ändra…
+        {t('Ändra…')}
       </button>
       <span class="filterrad__antal">
-        {formatCount(props.traffar)} av {formatCount(props.totalt)} rader
+        {tf('{0} av {1} rader', formatCount(props.traffar), formatCount(props.totalt))}
       </span>
       <span style={{ marginLeft: 'auto' }}>
         <button class="knapp knapp--tyst" onClick={props.onRensa}>
-          Rensa filtret
+          {t('Rensa filtret')}
         </button>
       </span>
     </div>

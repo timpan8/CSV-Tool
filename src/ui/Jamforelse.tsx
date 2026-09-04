@@ -9,6 +9,7 @@ import {
   type Nyckeldel,
 } from '../core/ops/match.js'
 import { rubriknyckel } from '../core/ops/rubriker.js'
+import { t, tf } from './sprak.js'
 
 /**
  * Två rader ställda mot varandra, fält för fält.
@@ -40,8 +41,9 @@ export function Jamforelse(props: {
     return (
       <div class="jamforelse jamforelse--tom">
         <p class="restlista__tom">
-          Markera en rad i någon av listorna, så visas dess fält här. Med en rad vald i vardera
-          listan ställs de mot varandra.
+          {t(
+            'Markera en rad i någon av listorna, så visas dess fält här. Med en rad vald i vardera listan ställs de mot varandra.',
+          )}
         </p>
       </div>
     )
@@ -51,10 +53,10 @@ export function Jamforelse(props: {
     <div class="jamforelse">
       <div class="jamforelse__topp">
         <span class="jamforelse__fil">
-          {props.vansterRad === null ? <em>ingen rad vald</em> : props.vanster.name}
+          {props.vansterRad === null ? <em>{t('ingen rad vald')}</em> : props.vanster.name}
         </span>
         <span class="jamforelse__fil">
-          {props.hogerRad === null ? <em>ingen rad vald</em> : props.hoger.name}
+          {props.hogerRad === null ? <em>{t('ingen rad vald')}</em> : props.hoger.name}
         </span>
       </div>
       <div class="jamforelse__falt">
@@ -246,16 +248,19 @@ function Faltrad(props: {
     <div class={klass} data-falt={rad.etikett}>
       <div class="jamforelse__etikett">
         <span>{rad.etikett}</span>
-        {rad.nyckel && <span class="jamforelse__marke">nyckel</span>}
+        {rad.nyckel && <span class="jamforelse__marke">{t('nyckel')}</span>}
         {rad.gissad && (
-          <span class="jamforelse__marke jamforelse__marke--gissad" title="Kopplad på rubriknamnet, inte av matchningen.">
-            gissad
+          <span
+            class="jamforelse__marke jamforelse__marke--gissad"
+            title={t('Kopplad på rubriknamnet, inte av matchningen.')}
+          >
+            {t('gissad')}
           </span>
         )}
         {rad.utfall === 'tom' && (
-          <span class="jamforelse__utfall">tom nyckel — kan aldrig matcha</span>
+          <span class="jamforelse__utfall">{t('tom nyckel — kan aldrig matcha')}</span>
         )}
-        {rad.utfall === 'skiljer' && <span class="jamforelse__utfall">skiljer sig</span>}
+        {rad.utfall === 'skiljer' && <span class="jamforelse__utfall">{t('skiljer sig')}</span>}
       </div>
       <Cell sida={rad.vanster} onRatta={props.onRatta} />
       <Cell sida={rad.hoger} onRatta={props.onRatta} />
@@ -279,7 +284,11 @@ function Cell(props: {
           class="jamforelse__input"
           value={utkast}
           autoFocus
-          aria-label={`${s.col.name} i ${s.sida === 'vanster' ? 'vänsterfilen' : 'högerfilen'}`}
+          aria-label={tf(
+            '{0} i {1}',
+            s.col.name,
+            t(s.sida === 'vanster' ? 'vänsterfilen' : 'högerfilen'),
+          )}
           onInput={(e) => setUtkast((e.currentTarget as HTMLInputElement).value)}
           onBlur={() => {
             props.onRatta(s.sida, s.col, utkast)
@@ -304,11 +313,11 @@ function Cell(props: {
     <div class="jamforelse__cell">
       <button
         class="jamforelse__varde"
-        title="Klicka för att rätta värdet i källfilen"
+        title={t('Klicka för att rätta värdet i källfilen')}
         onClick={() => setUtkast(s.varde)}
       >
         {s.varde === '' ? (
-          <em class="restrad__tomt">{s.saknat ? 'saknades' : 'tomt'}</em>
+          <em class="restrad__tomt">{t(s.saknat ? 'saknades' : 'tomt')}</em>
         ) : (
           s.varde
         )}

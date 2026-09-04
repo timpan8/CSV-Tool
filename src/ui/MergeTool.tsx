@@ -4,7 +4,8 @@ import { Notis } from './parts.js'
 import type { Column, Frame } from '../core/types.js'
 import { korMall, tolkaMall } from '../core/ops/columns.js'
 import { beraknaForhandsvisning, type Forhandsvisning } from '../state/preview.js'
-import { celler, formatCount } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
+import { celler, sprak, t, tf, tj } from './sprak.js'
 
 /**
  * Slår ihop flera kolumner till en, styrt av en mall.
@@ -38,20 +39,20 @@ export function MergeTool(props: {
       beraknaForhandsvisning(
         col,
         {
-          etikett: `Slog ihop till ”${namn.trim() || 'Sammanslagen'}”`,
+          etikett: tf('Slog ihop till ”{0}”', namn.trim() || t('Sammanslagen')),
           kind: 'merge',
           profil: {
             typ: 'mall',
             mall,
-            namn: namn.trim() === '' ? 'Sammanslagen' : namn.trim(),
+            namn: namn.trim() === '' ? t('Sammanslagen') : namn.trim(),
             stadaLuckor,
           },
           rad: (f, row) => [korMall(f, row, tolkning.delar, { stadaLuckor })],
-          nyaKolumner: [namn.trim() === '' ? 'Sammanslagen' : namn.trim()],
+          nyaKolumner: [namn.trim() === '' ? t('Sammanslagen') : namn.trim()],
         },
         frame,
       ),
-    [col, frame, props.dataRevision, tolkning, namn, stadaLuckor],
+    [col, frame, props.dataRevision, tolkning, namn, stadaLuckor, sprak.value],
   )
 
   useEffect(() => {
@@ -63,45 +64,47 @@ export function MergeTool(props: {
 
   return (
     <Verktygspanel
-      titel="Slå ihop kolumner"
+      titel={t('Slå ihop kolumner')}
       underrubrik={col.name}
       onStang={props.onStang}
       fot={
         <>
           <button class="knapp" onClick={props.onStang}>
-            Avbryt
+            {t('Avbryt')}
           </button>
           <button
             class="knapp knapp--primar"
             disabled={forh.andrade === 0 || tolkning.okanda.length > 0}
             title={
               tolkning.okanda.length > 0
-                ? 'Mallen pekar på kolumner som inte finns.'
+                ? t('Mallen pekar på kolumner som inte finns.')
                 : forh.andrade === 0
-                  ? 'Kolumnen skulle bli tom.'
+                  ? t('Kolumnen skulle bli tom.')
                   : undefined
             }
             onClick={() => props.onTillampa([forh])}
           >
-            Skapa kolumnen
+            {t('Skapa kolumnen')}
           </button>
         </>
       }
     >
       <div class="falt">
-        <span class="falt__etikett">Mall</span>
+        <span class="falt__etikett">{t('Mall')}</span>
         <input
           value={mall}
           onInput={(e) => setMall((e.currentTarget as HTMLInputElement).value)}
         />
         <p class="verktyg__sammanfattning">
-          Skriv <code>{'{Kolumnnamn}'}</code> där ett värde ska in. Allt annat kommer med som det
-          står.
+          {tj(
+            'Skriv {0} där ett värde ska in. Allt annat kommer med som det står.',
+            <code>{'{Kolumnnamn}'}</code>,
+          )}
         </p>
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Lägg till kolumn</span>
+        <span class="falt__etikett">{t('Lägg till kolumn')}</span>
         <div class="val" role="group">
           {frame.columns
             .filter((c) => !c.hidden)
@@ -115,9 +118,11 @@ export function MergeTool(props: {
 
       {tolkning.okanda.length > 0 && (
         <Notis ton="fara">
-          Mallen pekar på {tolkning.okanda.length === 1 ? 'en kolumn' : 'kolumner'} som inte finns:{' '}
-          <strong>{tolkning.okanda.join(', ')}</strong>. Ett stavfel ger annars en kolumn full av
-          halva värden.
+          {tj(
+            'Mallen pekar på {0} som inte finns: {1}. Ett stavfel ger annars en kolumn full av halva värden.',
+            t(tolkning.okanda.length === 1 ? 'en kolumn' : 'kolumner'),
+            <strong>{tolkning.okanda.join(', ')}</strong>,
+          )}
         </Notis>
       )}
 
@@ -127,11 +132,11 @@ export function MergeTool(props: {
           checked={stadaLuckor}
           onChange={(e) => setStadaLuckor((e.currentTarget as HTMLInputElement).checked)}
         />
-        Städa bort luckor efter tomma värden
+        {t('Städa bort luckor efter tomma värden')}
       </label>
 
       <div class="falt">
-        <span class="falt__etikett">Namn på den nya kolumnen</span>
+        <span class="falt__etikett">{t('Namn på den nya kolumnen')}</span>
         <input
           value={namn}
           onInput={(e) => setNamn((e.currentTarget as HTMLInputElement).value)}
@@ -145,12 +150,17 @@ export function MergeTool(props: {
         problem={0}
         etikettAndrade="Bara ifyllda"
       >
-        <strong>{formatCount(forh.andrade)}</strong> av {celler(forh.ifyllda)} ger ett värde.
+        {tj(
+          '{0} av {1} ger ett värde.',
+          <strong>{formatCount(forh.andrade)}</strong>,
+          celler(forh.ifyllda),
+        )}
       </Resultat>
 
       <Notis ton="info">
-        Värdet räknas ut rad för rad, eftersom det beror på flera kolumner. På riktigt stora filer
-        märks det som en kort fördröjning när du skriver i mallen.
+        {t(
+          'Värdet räknas ut rad för rad, eftersom det beror på flera kolumner. På riktigt stora filer märks det som en kort fördröjning när du skriver i mallen.',
+        )}
       </Notis>
     </Verktygspanel>
   )

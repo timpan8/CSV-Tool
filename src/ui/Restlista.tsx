@@ -1,7 +1,8 @@
 import { Flag, type ColumnId, type Frame } from '../core/types.js'
 import { hasFlag } from '../core/frame/column.js'
 import { cellText } from '../core/ops/match.js'
-import { formatCount, rader as raderText } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
+import { rader as raderText, t, tf } from './sprak.js'
 
 /**
  * Varför raden ligger här.
@@ -59,14 +60,12 @@ export function Restlista(props: {
         */}
       <div class="restlista__fil">
         {props.filnamn}
-        <span class="restlista__ordning">filens ordning</span>
+        <span class="restlista__ordning">{t('filens ordning')}</span>
       </div>
       <div class="panel__innehall">
         {props.rader.length === 0 && (
           <p class="restlista__tom">
-            {props.avskrivna > 0
-              ? 'Inget kvar att beta av.'
-              : 'Alla rader hittade en partner.'}
+            {t(props.avskrivna > 0 ? 'Inget kvar att beta av.' : 'Alla rader hittade en partner.')}
           </p>
         )}
         {visade.map((rad) => {
@@ -96,7 +95,7 @@ export function Restlista(props: {
                       key={id}
                     >
                       {text === '' ? (
-                        <em class="restrad__tomt">{saknat ? 'saknades' : 'tomt'}</em>
+                        <em class="restrad__tomt">{t(saknat ? 'saknades' : 'tomt')}</em>
                       ) : (
                         text
                       )}
@@ -104,14 +103,14 @@ export function Restlista(props: {
                   )
                 })}
                 {SORTTEXT[sort] !== '' && (
-                  <span class="restrad__sort">{SORTTEXT[sort]}</span>
+                  <span class="restrad__sort">{t(SORTTEXT[sort])}</span>
                 )}
               </span>
             </button>
             <button
               class="restrad__skriv"
-              title="Skriv av raden — den försvinner ur listan, men resultatet blir detsamma"
-              aria-label={`Skriv av rad ${props.frame.sourceRow[rad] || rad + 1}`}
+              title={t('Skriv av raden — den försvinner ur listan, men resultatet blir detsamma')}
+              aria-label={tf('Skriv av rad {0}', props.frame.sourceRow[rad] || rad + 1)}
               onClick={() => props.onSkrivAv(rad)}
             >
               ✕
@@ -121,13 +120,16 @@ export function Restlista(props: {
         })}
         {props.rader.length > TAK && (
           <p class="restlista__tom">
-            Visar {formatCount(TAK)} av {raderText(props.rader.length)}. Kör en ny runda på en
-            annan kolumn för att korta listan.
+            {tf(
+              'Visar {0} av {1}. Kör en ny runda på en annan kolumn för att korta listan.',
+              formatCount(TAK),
+              raderText(props.rader.length),
+            )}
           </p>
         )}
       </div>
       {props.avskrivna > 0 && (
-        <div class="restlista__avskrivna">{formatCount(props.avskrivna)} avskrivna</div>
+        <div class="restlista__avskrivna">{tf('{0} avskrivna', formatCount(props.avskrivna))}</div>
       )}
     </div>
   )

@@ -5,6 +5,7 @@ import type { Delimiter, Encoding } from '../core/types.js'
 import { dataWorker } from '../worker/client.js'
 import type { ParsePreview } from '../worker/protocol.js'
 import { formatByte, formatCount } from '../core/locale/sv.js'
+import { t, tf, tj } from './sprak.js'
 
 const DELIMITER_VAL: { varde: Delimiter; etikett: string }[] = [
   { varde: ';', etikett: 'Semikolon  ;' },
@@ -86,20 +87,20 @@ export function ImportDialog(props: {
 
   return (
     <Modal
-      titel={`Öppna ${props.file.name}`}
+      titel={tf('Öppna {0}', props.file.name)}
       underrubrik={storlek}
       onStang={props.onAvbryt}
       fot={
         <>
           <button class="knapp" onClick={props.onAvbryt}>
-            Avbryt
+            {t('Avbryt')}
           </button>
           <button
             class="knapp knapp--primar"
             disabled={preview === null}
             onClick={() => props.onOppna(settings)}
           >
-            Öppna filen
+            {t('Öppna filen')}
           </button>
         </>
       }
@@ -108,7 +109,7 @@ export function ImportDialog(props: {
         <div class="faltrad">
           {preview && preview.sheets && preview.sheets.length > 1 && (
             <div class="falt">
-              <span class="falt__etikett">Blad</span>
+              <span class="falt__etikett">{t('Blad')}</span>
               <Val
                 varden={preview.sheets.map((namn) => ({ varde: namn, etikett: namn }))}
                 valt={settings.sheet ?? preview.valdSheet ?? preview.sheets[0]!}
@@ -117,7 +118,7 @@ export function ImportDialog(props: {
             </div>
           )}
           <div class="falt">
-            <span class="falt__etikett">Decimaltecken för tal</span>
+            <span class="falt__etikett">{t('Decimaltecken för tal')}</span>
             <Val
               varden={[
                 { varde: ',' as const, etikett: 'Komma  1240,5', titel: 'Det svenskt Excel förväntar sig när filen läses tillbaka.' },
@@ -131,7 +132,7 @@ export function ImportDialog(props: {
       ) : (
         <div class="faltrad">
           <div class="falt">
-            <span class="falt__etikett">Avgränsare</span>
+            <span class="falt__etikett">{t('Avgränsare')}</span>
             <Val
               varden={DELIMITER_VAL}
               valt={(settings.delimiter ?? (preview?.delimiter as Delimiter) ?? ';')}
@@ -139,7 +140,7 @@ export function ImportDialog(props: {
             />
           </div>
           <div class="falt">
-            <span class="falt__etikett">Teckenkodning</span>
+            <span class="falt__etikett">{t('Teckenkodning')}</span>
             <Val
               varden={ENCODING_VAL}
               valt={(settings.encoding ?? (preview?.encoding as Encoding) ?? 'utf-8')}
@@ -158,7 +159,7 @@ export function ImportDialog(props: {
               uppdatera({ headerRow: (e.currentTarget as HTMLInputElement).checked ? 0 : null })
             }
           />
-          Första raden är rubriker
+          {t('Första raden är rubriker')}
         </label>
         <label class="kryss">
           <input
@@ -166,7 +167,7 @@ export function ImportDialog(props: {
             checked={settings.trimFields}
             onChange={(e) => uppdatera({ trimFields: (e.currentTarget as HTMLInputElement).checked })}
           />
-          Trimma blanksteg runt värden
+          {t('Trimma blanksteg runt värden')}
         </label>
         <label class="kryss">
           <input
@@ -176,11 +177,11 @@ export function ImportDialog(props: {
               uppdatera({ skipEmptyRows: (e.currentTarget as HTMLInputElement).checked })
             }
           />
-          Hoppa över helt tomma rader
+          {t('Hoppa över helt tomma rader')}
         </label>
       </div>
 
-      {error && <Notis ton="fara">Filen kunde inte läsas: {error}</Notis>}
+      {error && <Notis ton="fara">{tf('Filen kunde inte läsas: {0}', error)}</Notis>}
 
       {preview && <Sjalvkontroll preview={preview} arExcel={arExcel} />}
 
@@ -188,11 +189,11 @@ export function ImportDialog(props: {
         <div class="falt">
           <div class="faltrad" style={{ justifyContent: 'space-between' }}>
             <span class="falt__etikett">
-              Förhandsvisning — {formatCount(preview.rows.length)} första raderna
+              {tf('Förhandsvisning — {0} första raderna', formatCount(preview.rows.length))}
             </span>
             {!arExcel && (
               <button class="knapp knapp--tyst" onClick={() => setVisaRa(!visaRa)}>
-                {visaRa ? 'Visa tolkat' : 'Visa rådata'}
+                {t(visaRa ? 'Visa tolkat' : 'Visa rådata')}
               </button>
             )}
           </div>
@@ -244,9 +245,10 @@ function Sjalvkontroll({ preview, arExcel }: { preview: ParsePreview; arExcel: b
     return (
       <>
         <Notis ton="info">
-          En Excel-fil innehåller typade värden, inte text. Datum skrivs om till{' '}
-          <strong>ÅÅÅÅ-MM-DD</strong> och tal med det decimaltecken du valt, utan
-          tusentalsavgränsare. Ledande nollor i textceller bevaras.
+          {tj(
+            'En Excel-fil innehåller typade värden, inte text. Datum skrivs om till {0} och tal med det decimaltecken du valt, utan tusentalsavgränsare. Ledande nollor i textceller bevaras.',
+            <strong>{t('ÅÅÅÅ-MM-DD')}</strong>,
+          )}
         </Notis>
         {extra.map((w, i) => (
           <Notis ton="varning" key={i}>
@@ -260,23 +262,26 @@ function Sjalvkontroll({ preview, arExcel }: { preview: ParsePreview; arExcel: b
     <>
       {preview.check.state === 'ok' && (
         <Notis ton="lyckat">
-          Ser rätt ut: {formatCount(preview.headers.length)} kolumner, och svenska tecken visas
-          korrekt (inga tecken som Ã¥ Ã¤ Ã¶).
-          {preview.hadSepDirective && ' Excels sep=-rad hittades och användes.'}
+          {tf(
+            'Ser rätt ut: {0} kolumner, och svenska tecken visas korrekt (inga tecken som Ã¥ Ã¤ Ã¶).',
+            formatCount(preview.headers.length),
+          )}
+          {preview.hadSepDirective && ` ${t('Excels sep=-rad hittades och användes.')}`}
         </Notis>
       )}
       {preview.check.state === 'unknown' && (
         <Notis ton="info">
-          Filen innehåller bara ASCII-tecken i den del vi läst, så det går inte att avgöra om
-          teckenkodningen är rätt vald. Har filen svenska tecken längre ned kan de behöva en
-          annan kodning.
+          {t(
+            'Filen innehåller bara ASCII-tecken i den del vi läst, så det går inte att avgöra om teckenkodningen är rätt vald. Har filen svenska tecken längre ned kan de behöva en annan kodning.',
+          )}
         </Notis>
       )}
       {preview.check.state === 'mojibake' && (
         <Notis ton="varning">
-          Teckenkodningen ser trasig ut. Exempel ur filen:{' '}
-          <code>{preview.check.sample.slice(0, 2).join('  ·  ')}</code>. Prova en annan
-          teckenkodning ovan.
+          {tj(
+            'Teckenkodningen ser trasig ut. Exempel ur filen: {0}. Prova en annan teckenkodning ovan.',
+            <code>{preview.check.sample.slice(0, 2).join('  ·  ')}</code>,
+          )}
         </Notis>
       )}
       {extra.map((w, i) => (

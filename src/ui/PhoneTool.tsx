@@ -11,8 +11,9 @@ import {
   type Telefonformat,
 } from '../core/ops/phone.js'
 import { beraknaForhandsvisning, sammanfatta, type Forhandsvisning } from '../state/preview.js'
-import { celler, formatCount } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
 import { kolumnrubrik } from './verktyg.js'
+import { celler, sprak, t, tf, tj } from './sprak.js'
 
 type Feltillstand = 'behall' | 'tom' | 'markera'
 
@@ -66,14 +67,14 @@ export function PhoneTool(props: {
     () =>
       kolumner.map((col) =>
         beraknaForhandsvisning(col, {
-          etikett: `Normaliserade telefonnummer i ”${col.name}”`,
+          etikett: tf('Normaliserade telefonnummer i ”{0}”', col.name),
           kind: 'phone',
           profil: { typ: 'telefon', kolumn: col.name, inst },
           fn: telefonTransform(inst),
           arProblem: (v) => tolkaTelefon(v, inst).siffror === null,
         }),
       ),
-    [nyckel, props.dataRevision, land, format, onError],
+    [nyckel, props.dataRevision, land, format, onError, sprak.value],
   )
   const forh = sammanfatta(forhLista)
 
@@ -84,32 +85,32 @@ export function PhoneTool(props: {
 
   return (
     <Verktygspanel
-      titel="Telefon"
+      titel={t('Telefon')}
       underrubrik={kolumnrubrik(kolumner)}
       onStang={props.onStang}
       fot={
         <>
           <button class="knapp" onClick={props.onStang}>
-            Avbryt
+            {t('Avbryt')}
           </button>
           <button
             class="knapp knapp--primar"
             disabled={forh.andrade === 0}
-            title={forh.andrade === 0 ? 'Ingenting skulle ändras.' : undefined}
+            title={forh.andrade === 0 ? t('Ingenting skulle ändras.') : undefined}
             onClick={() => props.onTillampa(forhLista)}
           >
-            {kolumner.length > 1 ? `Tillämpa på ${kolumner.length} kolumner` : 'Tillämpa'}
+            {kolumner.length > 1 ? tf('Tillämpa på {0} kolumner', kolumner.length) : t('Tillämpa')}
           </button>
         </>
       }
     >
       <div class="falt">
-        <span class="falt__etikett">Det här finns i kolumnen</span>
+        <span class="falt__etikett">{t('Det här finns i kolumnen')}</span>
         <table class="inventering">
           <tbody>
             <tr>
               <td class="inventering__antal">{formatCount(inv.nummer)}</td>
-              <td>telefonnummer</td>
+              <td>{t('telefonnummer')}</td>
               <td class="inventering__exempel">
                 {inv.exempel ? `${inv.exempel.fore} → ${inv.exempel.efter}` : ''}
               </td>
@@ -117,19 +118,19 @@ export function PhoneTool(props: {
             {inv.ejNummer > 0 && (
               <tr class="inventering--okant">
                 <td class="inventering__antal">{formatCount(inv.ejNummer)}</td>
-                <td>går inte att tolka</td>
+                <td>{t('går inte att tolka')}</td>
                 <td class="inventering__exempel">{inv.exempelOgiltigt ?? ''}</td>
               </tr>
             )}
             <tr>
               <td class="inventering__antal">{formatCount(inv.medLandskod)}</td>
-              <td>har redan landskod</td>
+              <td>{t('har redan landskod')}</td>
               <td class="inventering__exempel" />
             </tr>
             {inv.utlandska > 0 && (
               <tr>
                 <td class="inventering__antal">{formatCount(inv.utlandska)}</td>
-                <td>är utländska</td>
+                <td>{t('är utländska')}</td>
                 <td class="inventering__exempel" />
               </tr>
             )}
@@ -138,12 +139,12 @@ export function PhoneTool(props: {
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Nummer utan landskod tillhör</span>
+        <span class="falt__etikett">{t('Nummer utan landskod tillhör')}</span>
         <Val varden={LANDSNUMMER} valt={land} onValj={setLand} />
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Skriv om till</span>
+        <span class="falt__etikett">{t('Skriv om till')}</span>
         <Val
           varden={TELEFONFORMAT.map((f) => ({ varde: f.varde, etikett: f.etikett }))}
           valt={format}
@@ -152,7 +153,7 @@ export function PhoneTool(props: {
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Värden som inte är telefonnummer</span>
+        <span class="falt__etikett">{t('Värden som inte är telefonnummer')}</span>
         <Val varden={FELTILLSTAND} valt={onError} onValj={setOnError} />
       </div>
 
@@ -163,21 +164,24 @@ export function PhoneTool(props: {
         problem={forh.problem}
         etikettProblem="Bara problem"
       >
-        <strong>{formatCount(forh.andrade)}</strong> av {celler(forh.ifyllda)} skrivs om
-        {forh.problem > 0 && (
-          <>
-            {' · '}
-            <strong class="verktyg__problem">{formatCount(forh.problem)}</strong> går inte att
-            tolka
-          </>
+        {tj(
+          '{0} av {1} skrivs om',
+          <strong>{formatCount(forh.andrade)}</strong>,
+          celler(forh.ifyllda),
         )}
+        {forh.problem > 0 &&
+          tj(
+            ' · {0} går inte att tolka',
+            <strong class="verktyg__problem">{formatCount(forh.problem)}</strong>,
+          )}
         .
       </Resultat>
 
       <Notis ton="info">
-        Numret skrivs utan mellanrum. Att gruppera <code>+46 70 123 45 67</code> kräver att man vet
-        hur långt riktnumret är, och det är två till fyra siffror beroende på ort — en gissning som
-        blir fel ser fortfarande rimlig ut.
+        {tj(
+          'Numret skrivs utan mellanrum. Att gruppera {0} kräver att man vet hur långt riktnumret är, och det är två till fyra siffror beroende på ort — en gissning som blir fel ser fortfarande rimlig ut.',
+          <code>+46 70 123 45 67</code>,
+        )}
       </Notis>
     </Verktygspanel>
   )

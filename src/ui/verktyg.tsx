@@ -1,6 +1,7 @@
 import type { Column, Frame } from '../core/types.js'
 import type { Innehallsprofil, Verktygsnamn } from '../core/frame/innehall.js'
 import type { Forhandsvisning } from '../state/preview.js'
+import { tf } from './sprak.js'
 import { DateTool } from './DateTool.jsx'
 import { EmailTool } from './EmailTool.jsx'
 import { NumberTool } from './NumberTool.jsx'
@@ -47,11 +48,11 @@ export const VERKTYG: Verktygspost[] = [
  */
 export function kolumnrubrik(kolumner: readonly Column[]): string {
   if (kolumner.length === 1) return kolumner[0]!.name
-  return `${kolumner.length} kolumner: ${kolumner.map((c) => c.name).join(', ')}`
+  return tf('{0} kolumner: {1}', kolumner.length, kolumner.map((c) => c.name).join(', '))
 }
 
 export interface Verktygsordning {
-  /** Verktyg innehållet talar för, starkast först, med sitt skäl. */
+  /** Verktyg innehållet talar för, starkast först, med sitt skäl på gränssnittets språk. */
   passande: { post: Verktygspost; skal: string }[]
   /** Resten, i listans ordning. Aldrig gömda — typen är trots allt en gissning. */
   ovriga: Verktygspost[]
@@ -70,7 +71,14 @@ export function ordnaVerktyg(profil: Innehallsprofil): Verktygsordning {
   for (const forslag of profil.forslag) {
     const post = VERKTYG.find((v) => v.namn === forslag.verktyg)
     if (!post || tagna.has(post.namn)) continue
-    passande.push({ post, skal: forslag.skal })
+    /*
+     * Skälet sätts ihop här och inte i kärnan.
+     *
+     * `innehall.ts` lämnar mallen och delarna var för sig just för det här:
+     * ”{0} ser ut som adresser” går att slå upp i ordboken, medan den färdiga
+     * meningen ”14 av 16 ser ut som adresser” aldrig kan göra det.
+     */
+    passande.push({ post, skal: tf(forslag.mall, ...forslag.delar) })
     tagna.add(post.namn)
   }
   return { passande, ovriga: VERKTYG.filter((v) => !tagna.has(v.namn)) }
