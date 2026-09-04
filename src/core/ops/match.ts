@@ -566,19 +566,43 @@ export const FLERTRAFF: { varde: Flertraff; etikett: string; beskrivning: string
   },
 ]
 
+/** Vad som händer med rader som saknar partner. */
+export type Omfattning = 'stomme' | 'bada'
+
+export const OMFATTNING: { varde: Omfattning; etikett: string; beskrivning: string }[] = [
+  {
+    varde: 'stomme',
+    etikett: 'Bara stommens rader',
+    beskrivning:
+      'Alla rader ur stommen följer med. Rader som bara finns i den andra filen hamnar i restlistan.',
+  },
+  {
+    varde: 'bada',
+    etikett: 'Alla rader ur båda filerna',
+    beskrivning:
+      'Ingenting faller bort. Rader som bara finns i den ena filen får tomma celler i den andras kolumner.',
+  },
+]
+
 /** Namnet på kolumnen som säger hur det gick för raden. */
 export const TRAFFKOLUMN = 'Träff'
 
 /**
  * Vad kolumnen säger, med orden användaren ser.
  *
- * Tre värden och inte två, av samma skäl som `Planpost.flera` finns: en rad
- * utan partner och en rad med för många är inte samma sak.
+ * Fyra värden och inte två, av samma skäl som `Planpost.flera` finns: en rad
+ * utan partner och en rad med för många är inte samma sak. Och en rad som
+ * bara finns i den andra filen är inte heller "ingen träff" — den kom aldrig
+ * från stommen, så det finns ingenting den kunde ha träffat.
+ *
+ * `bara` skrivs bara när `Omfattning` är 'bada'; ett resultat utan
+ * högerrader får därför exakt samma ordbok som förut.
  */
 export const TRAFFVARDEN = {
   traff: 'träff',
   utan: 'ingen träff',
   flera: 'flera träffar',
+  bara: 'bara i den andra filen',
 } as const
 
 export interface Sammanslagning {
@@ -587,6 +611,15 @@ export interface Sammanslagning {
   flertraff: Flertraff
   /** Prefix på de nya kolumnnamnen, t.ex. "Fil 2 – ". Tomt för inget. */
   prefix: string
+  /**
+   * Om högerfilens rader utan partner också ska följa med.
+   *
+   * Valfritt med flit: `undefined` betyder 'stomme', alltså det beteende
+   * verktyget alltid haft. Då kan en verkstad som parkerades före det här
+   * valet läsas tillbaka utan att `SESSIONSVERSION` höjs — och att höja den
+   * kastar varje användares påbörjade arbete.
+   */
+  omfattning?: Omfattning
 }
 
 export interface Resultat {
@@ -597,22 +630,76 @@ export interface Resultat {
   rader: number
 }
 
+/** Raderna en förhandsvisning ska byggas av, per sida. */
+export interface Forhandsval {
+  vanster: number[]
+  hoger: number[]
+}
+
 /**
- * Vänsterrader som en förhandsvisning ska byggas av.
+ * Fördelar `tak` platser över sorterna i proportion till hur många rader de har.
+ *
+ * Aldrig så att en sort som finns försvinner helt: en enda omatchad rad bland
+ * tusen ska synas, eftersom det är just den raden man behöver upptäcka. Räcker
+ * taket inte ens till en av varje går platserna till de största sorterna.
+ */
+function fordela(storlekar: readonly number[], tak: number): number[] {
+  const finns = storlekar.filter((n) => n > 0)
+  const totalt = finns.reduce((a, b) => a + b, 0)
+  if (totalt === 0) return storlekar.map(() => 0)
+
+  if (finns.length > tak) {
+    const storst = new Set(
+      storlekar
+        .map((n, i) => ({ n, i }))
+        .filter((x) => x.n > 0)
+        .sort((a, b) => b.n - a.n || a.i - b.i)
+        .slice(0, tak)
+        .map((x) => x.i),
+    )
+    return storlekar.map((_, i) => (storst.has(i) ? 1 : 0))
+  }
+
+  // En plats till varje sort som finns, resten proportionerligt. Avrundning
+  // nedåt först, så att summan aldrig kan gå över taket; överskottet delas
+  // sedan ut i tur och ordning.
+  const ut: number[] = storlekar.map((n) => (n > 0 ? 1 : 0))
+  const kvar = tak - finns.length
+  for (let i = 0; i < ut.length; i++) {
+    const extra = Math.floor((kvar * storlekar[i]!) / totalt)
+    ut[i]! += Math.min(extra, storlekar[i]! - ut[i]!)
+  }
+  let over = tak - ut.reduce((a, b) => a + b, 0)
+  for (let i = 0; over > 0 && i < ut.length; i++) {
+    const plats = Math.min(over, storlekar[i]! - ut[i]!)
+    ut[i]! += plats
+    over -= plats
+  }
+  return ut
+}
+
+/**
+ * Raderna som en förhandsvisning ska byggas av.
  *
  * De första N raderna duger inte. Råkar de alla ha träff ser resultatet
  * felfritt ut; råkar ingen ha det ser det ut som att filerna inte hör ihop.
  * Båda intrycken är fel, och båda uppstår av ren slump i vilken ände filen
  * råkar börja.
  *
- * Urvalet tar därför träffar och icke-träffar i **den proportion de faktiskt
- * har**, men aldrig så att någon sida försvinner helt när den finns: en enda
- * omatchad rad bland tusen ska synas i förhandsvisningen, eftersom det är den
- * raden man behöver upptäcka. Resultatet står i filens ordning, så att raderna
- * går att känna igen mot rutnätet.
+ * Urvalet tar därför sorterna i **den proportion de faktiskt har** — matchade
+ * vänsterrader, vänsterrader utan partner, och när `hogerRader` skickas med
+ * även högerrader utan partner. Vänsterraderna står i filens ordning, så att
+ * de går att känna igen mot rutnätet.
+ *
+ * `hogerRader` skickas bara när omfattningen är 'bada'. En förhandsvisning
+ * som inte visar det man just slog på vore värre än ingen alls.
  */
-export function forhandsurval(matchning: Matchning, tak: number): number[] {
-  if (tak <= 0) return []
+export function forhandsurval(
+  matchning: Matchning,
+  tak: number,
+  hogerRader?: readonly number[],
+): Forhandsval {
+  if (tak <= 0) return { vanster: [], hoger: [] }
 
   // `par` byggs genom att svepa vänsterraderna i ordning, så de unika
   // vänsterraderna faller ut stigande utan att behöva sorteras.
@@ -625,28 +712,25 @@ export function forhandsurval(matchning: Matchning, tak: number): number[] {
     }
   }
   const utan = matchning.vansterUtan
+  const hoger = hogerRader ?? []
 
-  if (matchade.length === 0) return utan.slice(0, tak)
-  if (utan.length === 0) return matchade.slice(0, tak)
-
-  const totalt = matchade.length + utan.length
-  // Minst en av varje så länge båda finns, och minst en av varje så länge
-  // taket räcker till det.
-  let antalMatchade = Math.round((tak * matchade.length) / totalt)
-  antalMatchade = Math.min(Math.max(antalMatchade, 1), Math.max(1, tak - 1))
-  antalMatchade = Math.min(antalMatchade, matchade.length)
-  let antalUtan = Math.min(tak - antalMatchade, utan.length)
-  // Räcker inte den ena sidan till får den andra ta över det som blev över.
-  antalMatchade = Math.min(tak - antalUtan, matchade.length)
-
-  const valda = [...matchade.slice(0, antalMatchade), ...utan.slice(0, antalUtan)]
-  valda.sort((a, b) => a - b)
-  return valda
+  const antal = fordela([matchade.length, utan.length, hoger.length], tak)
+  const vanster = [...matchade.slice(0, antal[0]!), ...utan.slice(0, antal[1]!)]
+  vanster.sort((a, b) => a - b)
+  return { vanster, hoger: hoger.slice(0, antal[2]!) }
 }
 
 /** En resultatrad: vilken vänsterrad, och vilken högerrad. `null` = ingen partner. */
 export interface Planpost {
-  v: number
+  /**
+   * Vänsterraden, eller `null` när raden bara finns i högerfilen.
+   *
+   * Null bara när omfattningen är 'bada'. Att låta planen bära även de
+   * raderna, i stället för att hålla dem i en lista vid sidan om, är hela
+   * skälet planen finns: den ska vara den enda sanningen om vad resultatet
+   * består av.
+   */
+  v: number | null
   h: number | null
   /**
    * Sant när vänsterraden matchade mer än en högerrad.
@@ -670,12 +754,19 @@ export interface Planpost {
  * dem vore samma fel som att låta en summa av ingenting bli noll.
  *
  * `vansterRader` begränsar planen till ett urval, i urvalets ordning.
+ *
+ * `hogerRader` lägger till högerrader utan partner sist, en post var med
+ * `v: null`. Anroparen skickar listan i stället för att planen läser
+ * `matchning.hogerUtan` själv — och det är avsiktligt: verkstaden skickar då
+ * sin restlista, som redan är rensad från avskrivna rader, och kärnan slipper
+ * känna till att avskrivningar finns.
  */
 export function byggPlan(
   matchning: Matchning,
   flertraff: Flertraff,
   vanterRowCount: number,
   vansterRader?: readonly number[],
+  hogerRader?: readonly number[],
 ): Planpost[] {
   // Träffarna per vänsterrad, i högerfilens ordning.
   const traffar = new Map<number, number[]>()
@@ -702,6 +793,13 @@ export function byggPlan(
       plan.push({ v: r, h: null, flera: true })
     }
   }
+
+  // Högerraderna sist. De kan inte vävas in bland vänsterraderna: det finns
+  // ingen ordningsrelation mellan två filer, så varje annan placering vore en
+  // ordning verktyget hittat på.
+  if (hogerRader) {
+    for (const h of hogerRader) plan.push({ v: null, h, flera: false })
+  }
   return plan
 }
 
@@ -709,9 +807,12 @@ export function byggPlan(
  * Bygger den sammanslagna ramen.
  *
  * Vänsterfilen är stommen: alla dess rader följer med, även de utan träff.
- * Det är den enda varianten som aldrig tappar data i tysthet — rader som
- * inte matchade blir synliga som tomma celler i stället för att försvinna,
- * och högerfilens omatchade rader hamnar i restlistan.
+ * Rader som inte matchade blir synliga som tomma celler i stället för att
+ * försvinna, och högerfilens omatchade rader hamnar i restlistan.
+ *
+ * `hogerRader` tar med även dem, sist och med tomma vänsterkolumner — då
+ * faller ingenting bort på någondera sidan. Vilka rader det är bestämmer
+ * anroparen, se `byggPlan`.
  *
  * `vansterRader` begränsar bygget till ett urval, i den ordning urvalet står.
  * Det är samma begrepp som `matcha`s `Urval` och `stapla`s `Kalla.rader`, och
@@ -728,12 +829,13 @@ export function slaIhop(
   matchning: Matchning,
   val: Sammanslagning,
   vansterRader?: readonly number[],
+  hogerRader?: readonly number[],
 ): Resultat {
   const hogerKolumner = val.hogerKolumner
     .map((id) => findColumn(hoger, id))
     .filter((c): c is Column => c !== undefined)
 
-  const plan = byggPlan(matchning, val.flertraff, vanster.rowCount, vansterRader)
+  const plan = byggPlan(matchning, val.flertraff, vanster.rowCount, vansterRader, hogerRader)
   const antal = plan.length
   const namn = new Set(vanster.columns.map((c) => c.name))
   const kolumner: Column[] = []
@@ -779,14 +881,26 @@ export function slaIhop(
     }
     const col = createColumn(unikt, antal)
     col.typeLocked = true
+    // Det fjärde värdet interneras bara när det behövs. Annars hade varje
+    // resultat fått en ordbokspost ingen rad använder, som sedan dykt upp som
+    // ett alternativ med noll rader i snabbfiltrets värdelista.
+    const harHogerrader = hogerRader !== undefined && hogerRader.length > 0
     const koder = {
       traff: intern(col, TRAFFVARDEN.traff),
       utan: intern(col, TRAFFVARDEN.utan),
       flera: intern(col, TRAFFVARDEN.flera),
+      bara: harHogerrader ? intern(col, TRAFFVARDEN.bara) : 0,
     }
     for (let i = 0; i < antal; i++) {
       const p = plan[i]!
-      col.codes[i] = p.flera ? koder.flera : p.h !== null ? koder.traff : koder.utan
+      col.codes[i] =
+        p.v === null
+          ? koder.bara
+          : p.flera
+            ? koder.flera
+            : p.h !== null
+              ? koder.traff
+              : koder.utan
     }
     kolumner.push(col)
   }
@@ -800,13 +914,27 @@ export function slaIhop(
     columns: kolumner,
     rowCount: antal,
     view: Uint32Array.from({ length: antal }, (_, i) => i),
-    // Radnumret pekar på vänsterfilen: det är den som är stommen.
-    sourceRow: Uint32Array.from(plan, (p) => vanster.sourceRow[p.v] ?? p.v + 1),
+    /*
+     * Radnumret pekar på den fil raden kom ifrån — stommen för de flesta,
+     * högerfilen för dem som bara finns där. Att två rader då kan bära samma
+     * nummer är samma egenskap som `stapla` har, och Träff-kolumnen är det
+     * som skiljer dem åt: den säger vilken fil raden kom ifrån.
+     */
+    sourceRow: Uint32Array.from(plan, (p) =>
+      p.v !== null
+        ? (vanster.sourceRow[p.v] ?? p.v + 1)
+        : p.h !== null
+          ? (hoger.sourceRow[p.h] ?? p.h + 1)
+          : 0,
+    ),
     meta: { warnings: [] },
   }
 
+  // Bara rader där båda sidor finns "fick värden". En rad som bara finns i
+  // högerfilen har högerns värden men inget att fylla dem i — den är inte en
+  // lyckad sammanslagning, den är en rad som följde med.
   let fyllda = 0
-  for (const p of plan) if (p.h !== null) fyllda += 1
+  for (const p of plan) if (p.v !== null && p.h !== null) fyllda += 1
 
   return { frame, fyllda, rader: antal }
 }

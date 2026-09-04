@@ -20,7 +20,13 @@ import {
   type Profilsteg,
 } from '../core/ops/profil.js'
 import { beraknaForhandsvisning, type Forhandsspec } from './preview.js'
-import { stadaKolumner, taBortTommaKolumner, taBortTommaRader, tillampaForhandsvisning } from './edits.js'
+import {
+  laggTillLopnummer,
+  stadaKolumner,
+  taBortTommaKolumner,
+  taBortTommaRader,
+  tillampaForhandsvisning,
+} from './edits.js'
 import { runStep, type Tab } from './store.js'
 
 /**
@@ -101,6 +107,7 @@ export function tolkaProfilfil(text: string): Profil[] | null {
 const KANDA_TYPER = new Set([
   'stada', 'datum', 'tal', 'telefon', 'epost', 'ersatt', 'dela', 'mall', 'formel',
   'dopOm', 'taBortKolumn', 'doljKolumn', 'sattTyp', 'tommaRader', 'tommaKolumner',
+  'lopnummer',
 ])
 
 function arKantSteg(steg: unknown): steg is Profilsteg {
@@ -204,6 +211,7 @@ function spec(steg: Profilsteg): Forhandsspec | null {
         fn: datumTransform(steg.inst),
         arProblem: (v) => tolkaDatum(v, steg.inst).datum === null,
         nyTyp: steg.inst.mal === 'datum' ? 'date' : undefined,
+        ...(steg.nyKolumn !== undefined ? { nyaKolumner: [steg.nyKolumn] } : {}),
       }
     case 'tal':
       return {
@@ -273,6 +281,12 @@ export function korSteg(tab: Tab, steg: Profilsteg): Stegresultat {
   }
   if (steg.typ === 'tommaKolumner') {
     return { steg, utfall: 'kord', andrade: taBortTommaKolumner(tab) }
+  }
+  if (steg.typ === 'lopnummer') {
+    // Numren räknas om för den här filen. Ett sparat värde vore fel så fort
+    // nästa månadsfil har ett annat antal rader.
+    laggTillLopnummer(tab, steg.namn)
+    return { steg, utfall: 'kord', andrade: frame.rowCount }
   }
 
   if (steg.typ === 'formel') {

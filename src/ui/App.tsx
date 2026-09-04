@@ -64,6 +64,7 @@ import {
   fyllNedat,
   infogaRader,
   klistraIn,
+  laggTillLopnummer,
   planeraInklistring,
   redigeraCell,
   sattMarkering,
@@ -792,6 +793,22 @@ export function App() {
     )
   }
 
+  /**
+   * Lägger till en kolumn med 1, 2, 3 …
+   *
+   * Notisen säger antalet, eftersom det är den enda siffran som säger om man
+   * körde kommandot på rätt fil — på en miljon rader syns ingen skillnad i
+   * rutan, men kolumnen kostar minne som allt annat.
+   */
+  const laggTillNummerkolumn = () => {
+    if (!tab) return
+    const col = laggTillLopnummer(tab)
+    setActiveColumn(col.id)
+    notify(`Lade till ${col.name} med löpnummer 1–${tab.frame.rowCount}.`, {
+      atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) },
+    })
+  }
+
   const stada = (id: string) => {
     const nu = nuLage()
     if (!nu || !nu.sel) return
@@ -928,6 +945,7 @@ export function App() {
       vaxlaDold,
       infogaFore: (i) => infogaKolumn(columnIndex(frame, i)),
       infogaEfter: (i) => infogaKolumn(columnIndex(frame, i) + 1),
+      lopnummer: laggTillNummerkolumn,
       flyttaForst: (i) => flyttaKolumn(i, 0),
       flyttaSist: (i) => flyttaKolumn(i, frame.columns.length - 1),
       anpassaBredd: (i) => anpassaKolumnbredd(i),
@@ -1936,6 +1954,7 @@ export function App() {
               vaxlaDold: () => palettKolumn && vaxlaDold(palettKolumn.id),
               taBortKolumn: () => palettKolumn && taBortKolumn(palettKolumn.id),
               infogaKolumn: () => infogaKolumn(),
+              lopnummer: laggTillNummerkolumn,
               filtreraKolumn: () => palettKolumn && filtreraKolumn(palettKolumn.id),
               visaOgiltiga: () => palettKolumn && visaOgiltiga(palettKolumn.id),
               infogaRadOvan: () =>
@@ -2131,6 +2150,7 @@ function kolumnMeny(
     vaxlaDold: (id: ColumnId) => void
     infogaFore: (id: ColumnId) => void
     infogaEfter: (id: ColumnId) => void
+    lopnummer: () => void
     flyttaForst: (id: ColumnId) => void
     flyttaSist: (id: ColumnId) => void
     anpassaBredd: (id: ColumnId) => void
@@ -2158,6 +2178,11 @@ function kolumnMeny(
     'avdelare',
     { etikett: 'Infoga tom kolumn till vänster', kor: () => handlers.infogaFore(id) },
     { etikett: 'Infoga tom kolumn till höger', kor: () => handlers.infogaEfter(id) },
+    {
+      etikett: 'Lägg till kolumn med löpnummer',
+      skal: '1, 2, 3 … först i filen, i radernas nuvarande ordning',
+      kor: () => handlers.lopnummer(),
+    },
     'avdelare',
     { etikett: 'Flytta först', kor: () => handlers.flyttaForst(id) },
     { etikett: 'Flytta sist', kor: () => handlers.flyttaSist(id) },

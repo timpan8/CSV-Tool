@@ -369,7 +369,10 @@ export function fullmatchning(f: Verkstadsflikar, s: Verkstad, bas: Matchning): 
  * Restlistorna: rader utan par, minus de avskrivna.
  *
  * Att en rad ligger här betyder att den saknar partner — inte att den saknas i
- * resultatet. En oparad vänsterrad följer ändå med, med tomma celler.
+ * resultatet. En oparad vänsterrad följer ändå med, med tomma celler, och med
+ * *Alla rader ur båda filerna* gör högerlistan det också — det är just den
+ * här listan verkstaden skickar in till `slaIhop`, eftersom den redan är
+ * rensad från de avskrivna.
  *
  * **`osakra` är en tredje lista och inte en del av de två.** Rader med flera
  * träffar har inte för få partners utan för många, och de två problemen har

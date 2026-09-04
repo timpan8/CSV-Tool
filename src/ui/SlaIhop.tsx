@@ -3,11 +3,12 @@ import { Notis, Val } from './parts.js'
 import type { Column, ColumnId, Frame } from '../core/types.js'
 import { findColumn, visibleColumns } from '../core/frame/frame.js'
 import { rubriknyckel, synonymgrupp } from '../core/ops/rubriker.js'
-import type { Planpost } from '../core/ops/match.js'
+import type { Forhandsval, Planpost } from '../core/ops/match.js'
 import {
   FLERTRAFF,
   MATCHNINGSTYPER,
   NYCKELAVSKILJARE,
+  OMFATTNING,
   byggNycklar,
   byggPlan,
   cellText,
@@ -16,6 +17,7 @@ import {
   matcha,
   slaIhop,
   type Flertraff,
+  type Omfattning,
   type Matchning,
   type Matchningspar,
   type Matchningstyp,
@@ -75,6 +77,7 @@ export function SlaIhop(props: {
 
   const [par, setPar] = useState<Matchningspar[]>([])
   const [flertraff, setFlertraff] = useState<Flertraff>('forsta')
+  const [omfattning, setOmfattning] = useState<Omfattning>('stomme')
   const [prefix, setPrefix] = useState('')
   /*
    * Prefixet fördröjs innan förhandsvisningen byggs om.
@@ -152,10 +155,25 @@ export function SlaIhop(props: {
   const vansterKolumner = vanster ? visibleColumns(vanster) : []
   const hogerKolumner = hoger ? visibleColumns(hoger) : []
   const nyckelkolumner = new Set(aktivaPar.map((p) => p.hogerColId))
-  const valda =
+  /*
+   * Nyckelkolumnen är avkryssad som förval, eftersom den vore en dubblett av
+   * vänsterns. Men när högerraderna följer med är den tvärtom det enda som
+   * identifierar dem: deras vänsterkolumner är tomma, så utan högerns nyckel
+   * blir raden omöjlig att känna igen. Då kryssas den i, och panelen säger
+   * varför — den ska inte bara dyka upp.
+   */
+  const tarMedHoger = omfattning === 'bada'
+  const valdaUtanNyckel =
     valdaKolumner ?? hogerKolumner.filter((c) => !nyckelkolumner.has(c.id)).map((c) => c.id)
+  const valda = tarMedHoger
+    ? hogerKolumner.filter((c) => nyckelkolumner.has(c.id) || valdaUtanNyckel.includes(c.id))
+        .map((c) => c.id)
+    : valdaUtanNyckel
 
-  const sammanslagning: Sammanslagning = { hogerKolumner: valda, flertraff, prefix }
+  const sammanslagning: Sammanslagning = { hogerKolumner: valda, flertraff, prefix, omfattning }
+
+  /** Högerraderna som följer med, eller undefined när bara stommen gäller. */
+  const hogerRester = tarMedHoger ? (matchning?.hogerUtan ?? []) : undefined
 
   /* ---------- De fyra rutorna ---------- */
 
@@ -172,8 +190,11 @@ export function SlaIhop(props: {
   )
 
   const urval = useMemo(
-    () => (matchning ? forhandsurval(matchning, FORHANDSRADER) : []),
-    [matchning],
+    () =>
+      matchning
+        ? forhandsurval(matchning, FORHANDSRADER, hogerRester)
+        : { vanster: [], hoger: [] },
+    [matchning, tarMedHoger],
   )
 
   /*
@@ -186,18 +207,22 @@ export function SlaIhop(props: {
   /** Planen bakom förhandsvisningen, så rutan vet vilka rader som blev utan partner. */
   const forhandsplan = useMemo(
     () =>
-      matchning && vanster ? byggPlan(matchning, flertraff, vanster.rowCount, urval) : [],
+      matchning && vanster
+        ? byggPlan(matchning, flertraff, vanster.rowCount, urval.vanster, urval.hoger)
+        : [],
     [matchning, flertraff, vanster, urval],
   )
 
   const forhand = useMemo(() => {
-    if (!vanster || !hoger || !matchning || urval.length === 0) return null
+    if (!vanster || !hoger || !matchning) return null
+    if (urval.vanster.length === 0 && urval.hoger.length === 0) return null
     return slaIhop(
       vanster,
       hoger,
       matchning,
       { ...sammanslagning, prefix: prefixdrojt },
-      urval,
+      urval.vanster,
+      urval.hoger,
     ).frame
   }, [vanster, hoger, matchning, urval, valda.join(','), flertraff, prefixdrojt])
 
@@ -236,11 +261,22 @@ export function SlaIhop(props: {
 
   const kor = () => {
     if (!vanster || !hoger || !matchning) return
-    const { frame, fyllda } = slaIhop(vanster, hoger, matchning, sammanslagning)
+    const { frame, fyllda } = slaIhop(
+      vanster,
+      hoger,
+      matchning,
+      sammanslagning,
+      undefined,
+      hogerRester,
+    )
     stangSlaIhop()
+    const extra =
+      hogerRester && hogerRester.length > 0
+        ? ` ${raderText(hogerRester.length)} kom med bara från ${hoger.name}.`
+        : ''
     props.onSlaIhop(
       frame,
-      `${vanster.name} + ${hoger.name} — ${formatCount(fyllda)} av ${raderText(frame.rowCount)} fick värden.`,
+      `${vanster.name} + ${hoger.name} — ${formatCount(fyllda)} av ${raderText(frame.rowCount)} fick värden.${extra}`,
     )
   }
 
@@ -255,6 +291,19 @@ export function SlaIhop(props: {
   }
 
   const rester = matchning ? matchning.vansterUtan.length + matchning.hogerUtan.length : 0
+  /*
+   * Hur många rader resultatet får, räknat utan att bygga ramen.
+   *
+   * Talet är hela poängen med valet: det ska gå att se vad man får innan man
+   * trycker, inte upptäcka det i statusraden efteråt. Samma formel som
+   * `Resultatet`-rutan använder, så att de två aldrig kan säga olika saker.
+   */
+  const resultatrader =
+    matchning && vanster
+      ? (flertraff === 'duplicera'
+          ? matchning.par.length + matchning.vansterUtan.length
+          : vanster.rowCount) + (hogerRester?.length ?? 0)
+      : 0
   const traffprocent =
     matchning && vanster && vanster.rowCount > 0
       ? Math.round((matchning.vansterMatchade / vanster.rowCount) * 100)
@@ -332,7 +381,9 @@ export function SlaIhop(props: {
       <div class="slaihop__topp">
         <h2>Slå ihop filer</h2>
           <div class="falt">
-            <span class="falt__etikett">Stommen — alla rader följer med</span>
+            <span class="falt__etikett">
+              {tarMedHoger ? 'Stommen — den står först i resultatet' : 'Stommen — alla rader följer med'}
+            </span>
             <Val
               varden={flikar.map((t) => ({
                 varde: t.id,
@@ -387,8 +438,11 @@ export function SlaIhop(props: {
                 <strong>{formatCount(matchning.vansterUtan.length)}</strong> hittar ingen
               </span>
             )}
-            <span>
-              <strong>{formatCount(matchning.hogerUtan.length)}</strong> blir över i {hoger.name}
+            <span class={tarMedHoger ? undefined : 'vytal--okant'}>
+              <strong>{formatCount(matchning.hogerUtan.length)}</strong>
+              {tarMedHoger
+                ? ` kommer med bara från ${hoger.name}`
+                : ` blir över i ${hoger.name}`}
             </span>
             {matchning.vansterFlera > 0 && (
               <span class="vytal--okant">
@@ -407,6 +461,13 @@ export function SlaIhop(props: {
                 tom nyckel och kan aldrig matcha
               </span>
             )}
+            {/*
+              Sist, och med egen markering: det är den enda siffran som säger
+              vad man faktiskt får, och den ska gå att läsa innan man trycker.
+            */}
+            <span class="vytal--resultat">
+              Resultatet får <strong>{formatCount(resultatrader)}</strong> rader
+            </span>
           </div>
         )}
       </div>
@@ -567,10 +628,36 @@ export function SlaIhop(props: {
             )}
 
             <div class="falt">
+              <span class="falt__etikett">Vilka rader som kommer med</span>
+              <Val
+                varden={OMFATTNING.map((o) => ({
+                  varde: o.varde,
+                  etikett: o.etikett,
+                  titel: o.beskrivning,
+                }))}
+                valt={omfattning}
+                onValj={setOmfattning}
+              />
+              {matchning && hoger && (
+                <p class="verktyg__sammanfattning">
+                  {tarMedHoger
+                    ? `${raderText(matchning.hogerUtan.length)} ur ${hoger.name} följer med sist, med tomma celler i ${vanster?.name ?? 'stommens'} kolumner.`
+                    : `${raderText(matchning.hogerUtan.length)} ur ${hoger.name} hittar ingen kund och kommer inte med.`}
+                </p>
+              )}
+            </div>
+
+            <div class="falt">
               <span class="falt__etikett">
                 Kolumner att hämta
                 <span class="panel__rubrik__antal"> {formatCount(valda.length)}</span>
               </span>
+              {tarMedHoger && nyckelkolumner.size > 0 && (
+                <p class="verktyg__sammanfattning">
+                  Nyckelkolumnen följer med automatiskt — annars går raderna som bara finns i{' '}
+                  {hoger?.name ?? 'den andra filen'} inte att känna igen.
+                </p>
+              )}
               <div class="kollista kollista--kryss">
                 {hogerKolumner.map((c) => (
                   <label class="kryss" key={c.id}>
@@ -633,6 +720,7 @@ export function SlaIhop(props: {
             vansterRader={vanster?.rowCount ?? 0}
             vansterKolumner={vanster?.columns.length ?? 0}
             flertraff={flertraff}
+            hogerRader={hogerRester?.length ?? 0}
             nyckelnamn={
               vanster ? aktivaPar.map((p) => findColumn(vanster, p.vansterColId)?.name ?? '') : []
             }
@@ -642,7 +730,10 @@ export function SlaIhop(props: {
       <div class="slaihop__fot">
         <span class="slaihop__fot__text">
           Resultatet blir en ny flik. Källfilerna rörs inte.
-          {rester > 0 && ` ${formatCount(rester)} rader hittar ingen partner.`}
+          {rester > 0 &&
+            (tarMedHoger
+              ? ` ${formatCount(rester)} rader hittar ingen partner, men kommer med.`
+              : ` ${formatCount(rester)} rader hittar ingen partner.`)}
           {(matchning?.vansterFlera ?? 0) > 0 &&
             ` ${formatCount(matchning!.vansterFlera)} matchar flera och behöver ett val.`}
         </span>
@@ -802,7 +893,7 @@ function Paren(props: {
   vanster: Frame | null
   hoger: Frame | null
   matchning: Matchning | null
-  urval: readonly number[]
+  urval: Forhandsval
   aktivaPar: readonly Matchningspar[]
 }) {
   const { vanster, hoger, matchning } = props
@@ -824,10 +915,10 @@ function Paren(props: {
       <div class="ruta__kropp">
         {!vanster || !hoger || !matchning ? (
           <p class="restlista__tom">Välj ett kolumnpar, så visas de första paren här.</p>
-        ) : props.urval.length === 0 ? (
+        ) : props.urval.vanster.length + props.urval.hoger.length === 0 ? (
           <p class="restlista__tom">Inga rader att visa.</p>
         ) : (
-          props.urval.map((v) => {
+          props.urval.vanster.map((v) => {
             const traffar = partner.get(v) ?? []
             return (
               <div class={`slaihop__paret${traffar.length === 0 ? ' slaihop__paret--utan' : ''}`} key={v}>
@@ -857,6 +948,28 @@ function Paren(props: {
             )
           })
         )}
+        {/*
+          Högerraderna sist, med samma form men spegelvänd: inget att para
+          ihop med på stommens sida. Utan dem visar rutan inte det man just
+          slog på, och en förhandsvisning som utelämnar hälften av vad som
+          händer är sämre än ingen alls.
+        */}
+        {vanster &&
+          hoger &&
+          matchning &&
+          props.urval.hoger.map((h) => (
+            <div class="slaihop__paret slaihop__paret--bara" key={`h${h}`}>
+              <div class="forslag__rad slaihop__ingen">✕ ingen rad i {vanster.name}</div>
+              <div class="forslag__rad">
+                ↔{' '}
+                {radtext(
+                  hoger,
+                  props.aktivaPar.map((p) => p.hogerColId),
+                  h,
+                )}
+              </div>
+            </div>
+          ))}
       </div>
     </div>
   )
@@ -879,6 +992,8 @@ function Resultatet(props: {
   /** Antal kolumner vänsterfilen bidrar med — allt efter dem är hämtat. */
   vansterKolumner: number
   flertraff: Flertraff
+  /** Antal högerrader som följer med utan partner, noll när bara stommen gäller. */
+  hogerRader: number
   nyckelnamn: readonly string[]
 }) {
   const { forhand, matchning } = props
@@ -894,9 +1009,9 @@ function Resultatet(props: {
   const totaltAntal =
     matchning === null
       ? null
-      : props.flertraff === 'duplicera'
-        ? matchning.par.length + matchning.vansterUtan.length
-        : props.vansterRader
+      : (props.flertraff === 'duplicera'
+          ? matchning.par.length + matchning.vansterUtan.length
+          : props.vansterRader) + props.hogerRader
 
   /*
    * Sömmen först: nyckeln, sedan de hämtade kolumnerna.
@@ -949,15 +1064,26 @@ function Resultatet(props: {
                   // och att måla dem lika vore att påstå att de betyder samma
                   // sak.
                   const utanPartner = props.plan[r]?.h === null
+                  // Spegelbilden: en rad som bara finns i den andra filen har
+                  // ingen stomme att hämta ur, så där är det den vänstra
+                  // halvan som är frånvarande.
+                  const utanStomme = props.plan[r]?.v === null
                   return (
                     <tr key={r}>
                       {ordnade.map(({ col, hamtad }) => {
                         const v = getCell(col, r)
+                        const saknas = hamtad ? utanPartner : utanStomme
                         return (
                           <td
                             key={col.id}
-                            class={hamtad && utanPartner ? 'fortab__utan' : undefined}
-                            title={hamtad && utanPartner ? 'Raden hittade ingen partner' : undefined}
+                            class={saknas ? 'fortab__utan' : undefined}
+                            title={
+                              saknas
+                                ? hamtad
+                                  ? 'Raden hittade ingen partner'
+                                  : 'Raden finns bara i den andra filen'
+                                : undefined
+                            }
                           >
                             {v}
                           </td>

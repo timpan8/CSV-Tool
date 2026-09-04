@@ -119,3 +119,22 @@ test('Escape stänger paletten även när effekterna släpar efter', async ({ pa
   await page.keyboard.press('Escape')
   await expect(palett(page)).toHaveCount(0)
 })
+
+test('lägger till en kolumn med löpnummer och ångrar den', async ({ page }) => {
+  await oppnaExempel(page)
+
+  await page.keyboard.press('Control+k')
+  await falt(page).fill('löpnummer')
+  await expect(page.locator('.palett__post')).toContainText('Lägg till kolumn med löpnummer')
+  await page.keyboard.press('Enter')
+
+  await expect(page.locator('.toast').last()).toContainText('Lade till Nr med löpnummer 1–16.')
+  // Först i filen, före den rubrik som stod först förut.
+  const rubriker = page.locator('.rubrik')
+  await expect(rubriker.first()).toHaveAttribute('title', 'Nr')
+  await expect(page.getByRole('gridcell', { name: '1', exact: true }).first()).toBeVisible()
+
+  await page.keyboard.press('Control+z')
+  await expect(page.locator('.rubrik[title="Nr"]')).toHaveCount(0)
+  await expect(rubriker.first()).toHaveAttribute('title', 'Kundnr')
+})
