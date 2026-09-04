@@ -1,7 +1,13 @@
 import { expect, test, type Page } from '@playwright/test'
 import { vantaPaBorttaget, vantaPaSparat } from './lagringshjalp.js'
 
-/** Öppnar exempelparet och går in i verkstaden på Namn ↔ Name. */
+/**
+ * Öppnar exempelparet och går in i verkstaden på Namn ↔ Name.
+ *
+ * Paret ställs in för hand. Förslaget provar numera alla kolumnpar och väljer
+ * det som ger flest träffar, vilket för exempelparet är E-post ↔ mail — men
+ * verkstadens hela poäng är just raderna som *inte* matchade på namn.
+ */
 async function oppnaVerkstaden(page: Page) {
   await page.goto('/')
   await page.getByRole('button', { name: 'Öppna två filer att slå ihop' }).click()
@@ -11,6 +17,9 @@ async function oppnaVerkstaden(page: Page) {
   await page.locator('.flik__namn', { hasText: 'exempel-kunder.csv' }).click()
   await page.getByRole('button', { name: 'Flera filer ▾' }).click()
   await page.getByRole('menuitem', { name: 'Slå ihop…' }).click()
+  const parrad = page.locator('.slaihop__par').first()
+  await parrad.locator('select').nth(0).selectOption({ label: 'Namn' })
+  await parrad.locator('select').nth(1).selectOption({ label: 'Name' })
   await page.getByRole('button', { name: 'Beta av resten…' }).click()
   await expect(page.locator('.verkstad')).toBeVisible()
 }
@@ -244,6 +253,40 @@ test('arbetet ligger kvar efter en körning och går att fortsätta med', async 
   await page.getByRole('button', { name: 'Slå ihop igen' }).click()
   await expect(page.locator('.flik')).toHaveCount(4)
   await expect(page.locator('.flik__namn', { hasText: 'omgång 2' })).toBeVisible()
+})
+
+test('den påbörjade sammanslagningen syns i filerna den gäller', async ({ page }) => {
+  /*
+   * Vägen tillbaka låg förut bara under *Flera filer*. Den som inte redan
+   * visste att verkstaden fanns hittade den aldrig — arbetet låg kvar utan
+   * att någon kom och hämtade det.
+   */
+  await oppnaVerkstaden(page)
+  await page.keyboard.press('Escape')
+
+  const chip = page.locator('.verkstadchip')
+  // Källfilen man står i säger hur mycket som är kvar.
+  await expect(chip).toContainText('kvar att beta av')
+  // Och flikarna som hör till bär ett märke, så att det syns utifrån.
+  await expect(page.locator('.flik__verkstad')).toHaveCount(2)
+
+  // Den andra källfilen säger samma sak.
+  await page.locator('.flik__namn', { hasText: 'exempel-order.csv' }).click()
+  await expect(chip).toContainText('kvar att beta av')
+
+  // Knappen i chippet är vägen in, utan att gå via menyn.
+  await chip.getByRole('button', { name: 'Fortsätt' }).click()
+  await expect(page.locator('.verkstad')).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  // Efter en körning syns det även i resultatfliken — det är där man står när
+  // man undrar över raderna som saknas.
+  await page.getByRole('button', { name: 'Flera filer ▾' }).click()
+  await page.getByRole('menuitem', { name: 'Fortsätt beta av resten…' }).click()
+  await page.getByRole('button', { name: 'Slå ihop', exact: true }).click()
+  await expect(page.locator('.flik')).toHaveCount(3)
+  await expect(chip).toContainText('kom inte med')
+  await expect(page.locator('.flik__verkstad')).toHaveCount(3)
 })
 
 test('att stänga verkstaden kastar inte arbetet, men Kasta arbetet gör det', async ({ page }) => {

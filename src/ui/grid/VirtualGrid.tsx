@@ -639,7 +639,21 @@ function Header(props: HeaderProps) {
             props.onSortera(e.shiftKey)
           }}
         >
-          {props.sortriktning === 'fallande' ? '↓' : '↑'}
+          {/*
+            Osorterad har ett eget tecken.
+            Förut visades ↑ även när kolumnen inte var sorterad — bara i en
+            svagare färg. Pilen syns dessutom alltid på den aktiva kolumnen,
+            så ett klick på rubriknamnet (som *markerar* kolumnen) lämnade ett
+            ↑ efter sig som såg ut som "sorterad stigande". Då läser man
+            filens egen ordning som en sorterad ordning, och blir med rätta
+            förvirrad när den inte ser sorterad ut. ↕ betyder "går att
+            sortera"; ↑ och ↓ betyder att den *är* det.
+          */}
+          {props.sortriktning === 'stigande'
+            ? '↑'
+            : props.sortriktning === 'fallande'
+              ? '↓'
+              : '↕'}
           {props.sortniva !== -1 && props.flerniva && (
             <span class="rubrik__sortniva">{props.sortniva + 1}</span>
           )}

@@ -30,6 +30,19 @@ const parrad = (page: Page) => page.locator('.slaihop__par').first()
 
 const kor = (page: Page) => page.getByRole('button', { name: 'Slå ihop', exact: true })
 
+/**
+ * Ställer paret på Namn ↔ Name.
+ *
+ * Förslaget provar numera alla kolumnpar och väljer det som ger flest
+ * träffar, vilket för exempelparet är E-post ↔ mail. De tester som handlar om
+ * namnmatchningens siffror ställer därför in paret själva i stället för att
+ * luta sig mot förvalet.
+ */
+const valjNamnpar = async (page: Page) => {
+  await parrad(page).locator('select').nth(0).selectOption({ label: 'Namn' })
+  await parrad(page).locator('select').nth(1).selectOption({ label: 'Name' })
+}
+
 test('erbjuder en filväljare när den andra filen saknas', async ({ page }) => {
   // Förr var det här en återvändsgränd: en ruta som sa "öppna den andra filen
   // först" med Stäng som enda knapp.
@@ -50,26 +63,36 @@ test('erbjuder en filväljare när den andra filen saknas', async ({ page }) => 
   await expect(kor(page)).toBeVisible()
 })
 
-test('föreslår kolumnpar utifrån rubrikerna och räknar träffarna', async ({ page }) => {
+test('föreslår det kolumnpar som faktiskt ger flest träffar', async ({ page }) => {
   await oppnaParet(page)
   await oppnaVyn(page)
 
-  // Namn ↔ Name är inte samma ord, men samma sak — förslaget ska hitta just
-  // det paret. Etiketterna asserteras, inte selectens värde mot sig själv:
-  // ett förslag som valde t.ex. Kundnr ↔ Order ska falla här.
-  await expect(parrad(page).locator('select').nth(0).locator('option:checked')).toHaveText('Namn')
-  await expect(parrad(page).locator('select').nth(1).locator('option:checked')).toHaveText('Name')
-  await expect(vy(page)).toContainText('Föreslaget utifrån kolumnernas namn')
+  /*
+   * Namn ↔ Name är det par rubrikerna pekar ut, och det var förr förslaget.
+   * Men E-post ↔ mail matchar tio rader mot åtta — Carl-Johan Nilsson står
+   * med bindestreck i den ena filen och utan i den andra, och hittas bara via
+   * adressen. Förslaget provar därför alla par mot varandra och tar det som
+   * matchar bäst. Etiketterna asserteras, inte selectens värde mot sig själv.
+   */
+  await expect(parrad(page).locator('select').nth(0).locator('option:checked')).toHaveText('E-post')
+  await expect(parrad(page).locator('select').nth(1).locator('option:checked')).toHaveText('mail')
+  await expect(vy(page)).toContainText('alla kolumnpar provats mot varandra')
+  await expect(vy(page)).toContainText('10 av 16 rader')
 
   const siffror = page.locator('.slaihop .vytal')
-  // Talet är facit för exempelparet: åtta kunder har en order med samma namn.
-  await expect(siffror).toContainText('8 av 16 rader hittar en träff')
+  await expect(siffror).toContainText('10 av 16 rader hittar en träff')
   await expect(siffror).toContainText('blir över')
+
+  // Och namnparet går att välja för hand, med sitt eget facit: åtta kunder
+  // har en order med samma namn.
+  await valjNamnpar(page)
+  await expect(siffror).toContainText('8 av 16 rader hittar en träff')
 })
 
 test('räknar kardinalitet och tomma nycklar före körningen', async ({ page }) => {
   await oppnaParet(page)
   await oppnaVyn(page)
+  await valjNamnpar(page)
 
   // Anna Karlsson finns två gånger i kundfilen och Erik har två order.
   await expect(vy(page)).toContainText('används av flera')
@@ -84,6 +107,7 @@ test('räknar kardinalitet och tomma nycklar före körningen', async ({ page })
 test('visar båda källfilerna med nyckelkolumnen främst', async ({ page }) => {
   await oppnaParet(page)
   await oppnaVyn(page)
+  await valjNamnpar(page)
 
   // Fyra rutor: två källfiler, paren, resultatet.
   await expect(page.locator('.slaihop__rutor .ruta')).toHaveCount(4)
@@ -107,6 +131,7 @@ test('visar båda källfilerna med nyckelkolumnen främst', async ({ page }) => 
 test('visar den normaliserade nyckeln när den skiljer sig från värdet', async ({ page }) => {
   await oppnaParet(page)
   await oppnaVyn(page)
+  await valjNamnpar(page)
 
   // ERIK ÖBERG jämförs som "erik öberg" — det är hela skillnaden mellan
   // jämförelsetyperna, och den syns ingen annanstans.
@@ -142,6 +167,7 @@ test('visar hur raderna paras ihop, och vilka som blev utan', async ({ page }) =
 test('visar resultatet med sömmen först och tomma celler synliga', async ({ page }) => {
   await oppnaParet(page)
   await oppnaVyn(page)
+  await valjNamnpar(page)
 
   const resultat = page.locator('.slaihop__rutor .ruta').nth(3)
   await expect(resultat).toContainText('Så här blir resultatet')
@@ -194,6 +220,7 @@ test('slår ihop till en ny flik där omatchade rader finns kvar tomma', async (
 test('alla rader ur båda filerna tar med de omatchade orderraderna', async ({ page }) => {
   await oppnaParet(page)
   await oppnaVyn(page)
+  await valjNamnpar(page)
 
   // Utgångsläget: 16 kunder, 8 matchar, 6 orderrader blir över.
   const tal = page.locator('.slaihop .vytal')
@@ -226,6 +253,7 @@ test('alla rader ur båda filerna tar med de omatchade orderraderna', async ({ p
 test('Träff-kolumnen skiljer på ingen träff och bara i den andra filen', async ({ page }) => {
   await oppnaParet(page)
   await oppnaVyn(page)
+  await valjNamnpar(page)
   await page.getByRole('radio', { name: 'Alla rader ur båda filerna' }).click()
   await kor(page).click()
 
@@ -238,9 +266,35 @@ test('Träff-kolumnen skiljer på ingen träff och bara i den andra filen', asyn
   await expect(page.locator('.statusrad')).toContainText('6 av 22 rader')
 })
 
+test('sortering på Träff går från lyckad till helt utan partner', async ({ page }) => {
+  await oppnaParet(page)
+  await oppnaVyn(page)
+  await page.getByRole('radio', { name: 'Alla rader ur båda filerna' }).click()
+  await kor(page).click()
+
+  await page.getByRole('button', { name: 'Sortera på Träff' }).click()
+  const varden = await page.evaluate(() => {
+    const rubriker = [...document.querySelectorAll('.rubrik')]
+    const i = rubriker.findIndex(
+      (r) => r.querySelector('.rubrik__namn span')?.textContent === 'Träff',
+    )
+    return [...document.querySelectorAll('.rutnat__rad')].map((rad) =>
+      (rad.querySelectorAll('.rutnat__cell')[i]?.textContent ?? '').trim(),
+    )
+  })
+  // Bokstavsordningen hade lagt ”bara i den andra filen” först. Ordningen som
+  // betyder något är den kolumnen berättar.
+  expect(varden[0]).toBe('träff')
+  expect(varden[varden.length - 1]).toBe('bara i den andra filen')
+  // Och varje sort ligger samlad: ingen blandning.
+  const grupper = varden.filter((v, i) => v !== varden[i - 1])
+  expect(grupper).toEqual([...new Set(varden)])
+})
+
 test('förhandsvisningen och körningen är eniga om radantalet', async ({ page }) => {
   await oppnaParet(page)
   await oppnaVyn(page)
+  await valjNamnpar(page)
 
   // Rutan säger vad hela resultatet blir, inte bara vad den visar.
   const resultat = page.locator('.slaihop__rutor .ruta').nth(3)
@@ -259,6 +313,7 @@ test('förhandsvisningen och körningen är eniga om radantalet', async ({ page 
 test('matchning på e-post ger fler träffar än på namn', async ({ page }) => {
   await oppnaParet(page)
   await oppnaVyn(page)
+  await valjNamnpar(page)
 
   // Namnnyckelns facit först, så att jämförelsen efter bytet är en riktig
   // jämförelse och inte samma delsträng två gånger.
@@ -448,6 +503,7 @@ test('Enter aktiverar knapparna i vyn', async ({ page }) => {
 test('resultatet säger per rad hur det gick', async ({ page }) => {
   await oppnaParet(page)
   await oppnaVyn(page)
+  await valjNamnpar(page)
   await kor(page).click()
   await expect(page.locator('.flik')).toHaveCount(3)
 

@@ -51,6 +51,8 @@ interface Rangpost extends Rang {
    * fältet skulle bytet ske tyst.
    */
   type: string
+  /** Den egna ordningen rangen räknades med. Identitetsjämförelse. */
+  sortordning: readonly string[] | undefined
   /** Den sorterade ordningen av koder, för att kunna sortera in nya värden. */
   ordning: number[]
 }
@@ -72,7 +74,12 @@ export function nollstallRangcache(col?: Column): void {
  */
 export function kolumnrang(col: Column): Rang {
   const post = cache.get(col)
-  if (post && post.dict === col.dict && post.type === col.type) {
+  if (
+    post &&
+    post.dict === col.dict &&
+    post.type === col.type &&
+    post.sortordning === col.sortordning
+  ) {
     if (post.langd === col.dict.length) return post
     if (col.dict.length > post.langd) return utoka(col, post)
   }
@@ -112,6 +119,7 @@ function utoka(col: Column, post: Rangpost): Rang {
     dict: col.dict,
     langd: col.dict.length,
     type: col.type,
+    sortordning: col.sortordning,
     ordning,
   }
   cache.set(col, ny)
@@ -135,6 +143,7 @@ function bygg(col: Column): Rangpost {
     dict: col.dict,
     langd: col.dict.length,
     type: col.type,
+    sortordning: col.sortordning,
     ordning,
   }
 }
@@ -148,6 +157,25 @@ function bygg(col: Column): Rangpost {
  */
 function jamforare(col: Column): (a: number, b: number) => number {
   const text = (a: number, b: number) => sortCollator.compare(col.dict[a]!, col.dict[b]!)
+
+  /*
+   * En egen ordning går före allt annat, typen inräknad.
+   *
+   * Kolumnen har fått den för att bokstavsordningen inte betyder någonting
+   * för just de här värdena. Värden utanför listan hamnar efter dem — de
+   * hör inte till berättelsen kolumnen är gjord för, och att sortera in dem
+   * mitt i vore att låtsas att de gör det.
+   */
+  if (col.sortordning !== undefined) {
+    const plats = new Map(col.sortordning.map((v, i) => [v, i]))
+    const efter = col.sortordning.length
+    const nyckel = (k: number) => plats.get(col.dict[k]!) ?? efter
+    return (a, b) => {
+      const x = nyckel(a)
+      const y = nyckel(b)
+      return x === y ? text(a, b) : x - y
+    }
+  }
 
   if (col.type === 'number') {
     const tal = talnycklar(col)

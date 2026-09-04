@@ -22,6 +22,7 @@ import {
   saknadeKolumner,
   skrivAv,
   kastaVerkstad,
+  bokforResultatflik,
   sparadVerkstad,
   synkaVerkstad,
   verkstad,
@@ -263,6 +264,10 @@ describe('sessionen mellan besök', () => {
     laggExtrapar(0, 2, 'hand', 'för hand')
     antecknaOmgang()
     antecknaOmgang()
+    bokforResultatflik('resultat-1')
+    bokforResultatflik('resultat-2')
+    // Samma flik två gånger ska inte ge två poster.
+    bokforResultatflik('resultat-1')
 
     const fore = verkstad.value!
     // Genom riktig JSON, som IndexedDB-raden i praktiken: structured clone är
@@ -284,6 +289,19 @@ describe('sessionen mellan besök', () => {
     expect(fore.avskrivnaHoger.size).toBeGreaterThan(0)
     expect(fore.rundor.length).toBeGreaterThan(0)
     expect(fore.omgangar).toBe(2)
+    expect(fore.resultatTabIds).toEqual(['resultat-1', 'resultat-2'])
+  })
+
+  it('en session sparad innan resultatflikarna fanns läses tillbaka utan dem', () => {
+    // Fältet är valfritt just för att `SESSIONSVERSION` inte skulle behöva
+    // höjas — och en höjning kastar varje påbörjad sammanslagning.
+    const { v, h } = oppna()
+    const data = sparadVerkstad(verkstad.value!)
+    delete (data as { resultatTabIds?: string[] }).resultatTabIds
+    const efter = verkstadAvSparad(data)
+    expect(efter.resultatTabIds).toEqual([])
+    expect(efter.vansterTabId).toBe(v.id)
+    expect(efter.hogerTabId).toBe(h.id)
   })
 })
 

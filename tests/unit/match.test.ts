@@ -16,8 +16,12 @@ import {
   type Matchning,
   type Matchningspar,
   type Matchningstyp,
+  TRAFFORDNING,
+  foreslaPar,
+  provaKolumnpar,
   TRAFFVARDEN,
 } from '../../src/core/ops/match.js'
+import { sorteraRader } from '../../src/core/ops/sort.js'
 
 function frameOf(namn: string, headers: string[], rows: string[][]): Frame {
   const columns = headers.map((name) => createColumn(name, rows.length))
@@ -652,6 +656,20 @@ describe('slaIhop med urval', () => {
     expect(getCell(traff, 4)).toBe(TRAFFVARDEN.bara)
   })
 
+  it('Träff-kolumnen sorterar från lyckad till helt utan partner', () => {
+    const m = matcha(VANSTER, HOGER, P)
+    const { frame } = slaIhop(VANSTER, HOGER, m, VAL, undefined, [1])
+    const traff = frame.columns[frame.columns.length - 1]!
+    expect(traff.sortordning).toEqual(TRAFFORDNING)
+
+    const niva = [{ colId: traff.id, riktning: 'stigande' as const }]
+    const ordnade = Array.from(sorteraRader(frame, niva), (r) => getCell(traff, r))
+    // Bokstavsordningen hade lagt ”bara i den andra filen” först och ”träff”
+    // sist, alltså precis tvärtom.
+    expect(ordnade[0]).toBe(TRAFFVARDEN.traff)
+    expect(ordnade[ordnade.length - 1]).toBe(TRAFFVARDEN.bara)
+  })
+
   it('radnumret pekar på den fil raden faktiskt kom ifrån', () => {
     const m = matcha(VANSTER, HOGER, P)
     const { frame } = slaIhop(VANSTER, HOGER, m, VAL, undefined, [1])
@@ -978,5 +996,95 @@ describe('nyckelavvikelse', () => {
         )
       }),
     )
+  })
+})
+
+describe('förslaget på kolumnpar', () => {
+  const namnet = (frame: Frame, id: string) => frame.columns.find((c) => c.id === id)!.name
+
+  it('väljer paret som ger flest träffar, inte det första', () => {
+    // Rubrikerna säger ingenting här — inga lika namn och inga synonymer. Då
+    // är siffrorna det enda som finns, och första kolumnen i vardera filen
+    // (som förut blev valet) matchar ingenting.
+    const v = frameOf('v', ['Xa', 'Xb'], [
+      ['1', 'a@x.se'],
+      ['2', 'b@x.se'],
+      ['3', 'c@x.se'],
+    ])
+    const h = frameOf('h', ['Ya', 'Yb'], [
+      ['ORD-1', 'a@x.se'],
+      ['ORD-2', 'B@X.SE'],
+    ])
+    const f = foreslaPar(v, h)
+    expect(f.skal).toBe('flest')
+    expect(namnet(v, f.par[0]!.vansterColId)).toBe('Xb')
+    expect(namnet(h, f.par[0]!.hogerColId)).toBe('Yb')
+    expect(f.betyg?.traffar).toBe(2)
+  })
+
+  it('låter rubriknamnen vinna när de pekar på ett lika bra par', () => {
+    const v = frameOf('v', ['Namn', 'Ort'], [['Anna', 'Lund'], ['Bo', 'Lund']])
+    const h = frameOf('h', ['Namn', 'Ort'], [['Anna', 'Lund'], ['Bo', 'Lund']])
+    const f = foreslaPar(v, h)
+    expect(f.skal).toBe('namn')
+    expect(namnet(v, f.par[0]!.vansterColId)).toBe('Namn')
+  })
+
+  it('väljer bort en kolumn där ett värde matchar hela filen', () => {
+    /*
+     * Status ↔ Status ger 100 % träffar och är ändå värdelöst som nyckel:
+     * varje Aktiv möter varenda Aktiv. Personnr matchar bara två av tre rader,
+     * men entydigt — och det är den som ska vinna.
+     */
+    const v = frameOf('v', ['Personnr', 'Status'], [
+      ['111', 'Aktiv'],
+      ['222', 'Aktiv'],
+      ['333', 'Aktiv'],
+    ])
+    const h = frameOf('h', ['Personnr', 'Status'], [
+      ['111', 'Aktiv'],
+      ['222', 'Aktiv'],
+      ['999', 'Aktiv'],
+    ])
+    const f = foreslaPar(v, h)
+    expect(namnet(v, f.par[0]!.vansterColId)).toBe('Personnr')
+    expect(f.betyg?.traffar).toBe(2)
+  })
+
+  it('räknar poängen per entydig partner', () => {
+    const v = frameOf('v', ['A'], [['x'], ['y']])
+    const h = frameOf('h', ['A'], [['x'], ['x'], ['y']])
+    const betyg = provaKolumnpar(v, h)!
+    expect(betyg).toHaveLength(1)
+    // x möter två rader och räknas som en halv, y möter en och räknas som hel.
+    expect(betyg[0]!.traffar).toBe(2)
+    expect(betyg[0]!.flertraffar).toBe(1)
+    expect(betyg[0]!.poang).toBeCloseTo(1.5)
+  })
+
+  it('struntar i tomma nycklar, precis som hashjoinen', () => {
+    const v = frameOf('v', ['Xa'], [[''], ['']])
+    const h = frameOf('h', ['Ya'], [[''], ['']])
+    const f = foreslaPar(v, h)
+    expect(f.skal).toBe('inget')
+    expect(f.par).toEqual([])
+  })
+
+  it('ser inte dolda kolumner', () => {
+    const v = frameOf('v', ['Hemlig', 'Namn'], [['x', 'Anna']])
+    const h = frameOf('h', ['Hemlig', 'Namn'], [['x', 'Anna']])
+    v.columns[0]!.hidden = true
+    h.columns[0]!.hidden = true
+    const betyg = provaKolumnpar(v, h)!
+    expect(betyg).toHaveLength(1)
+    expect(namnet(v, betyg[0]!.par.vansterColId)).toBe('Namn')
+  })
+
+  it('faller tillbaka på namnen när ingenting matchar', () => {
+    const v = frameOf('v', ['Namn'], [['Anna']])
+    const h = frameOf('h', ['Namn'], [['Bo']])
+    const f = foreslaPar(v, h)
+    expect(f.skal).toBe('namn')
+    expect(f.par).toHaveLength(1)
   })
 })

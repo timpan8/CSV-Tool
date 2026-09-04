@@ -2,8 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { Notis, Val } from './parts.js'
 import type { Column, ColumnId, Frame } from '../core/types.js'
 import { findColumn, visibleColumns } from '../core/frame/frame.js'
-import { rubriknyckel, synonymgrupp } from '../core/ops/rubriker.js'
-import type { Forhandsval, Planpost } from '../core/ops/match.js'
+import type { Forhandsval, Parforslag, Planpost } from '../core/ops/match.js'
 import {
   FLERTRAFF,
   MATCHNINGSTYPER,
@@ -12,6 +11,7 @@ import {
   byggNycklar,
   byggPlan,
   cellText,
+  foreslaPar,
   forhandsurval,
   kraverTvaHoger,
   matcha,
@@ -128,10 +128,14 @@ export function SlaIhop(props: {
     setValdaKolumner(null)
   }, [fliksignatur])
 
-  const foreslagna = useMemo(
-    () => (vanster && hoger ? foreslaPar(vanster, hoger) : []),
+  const forslag = useMemo(
+    () =>
+      vanster && hoger
+        ? foreslaPar(vanster, hoger)
+        : ({ par: [], skal: 'inget', betyg: null } as Parforslag),
     [vanster, hoger],
   )
+  const foreslagna = forslag.par
   const aktivaPar = egnaPar ? par : foreslagna
 
   /**
@@ -587,7 +591,13 @@ export function SlaIhop(props: {
               </div>
               {!egnaPar && foreslagna.length > 0 && (
                 <p class="verktyg__sammanfattning">
-                  Föreslaget utifrån kolumnernas namn. Ändra fritt.
+                  {forslag.skal === 'flest' && forslag.betyg
+                    ? `Föreslaget efter att alla kolumnpar provats mot varandra: det här ger flest träffar (${formatCount(
+                        forslag.betyg.traffar,
+                      )} av ${raderText(vanster?.rowCount ?? 0)}). Ändra fritt.`
+                    : forslag.skal === 'namn-for-stort'
+                      ? 'Föreslaget utifrån kolumnernas namn. Filerna har för många kolumner för att hinna prova alla par mot varandra, så siffrorna fick inte vara med och bestämma.'
+                      : 'Föreslaget utifrån kolumnernas namn, och det är också paret som matchar bäst. Ändra fritt.'}
                 </p>
               )}
             </div>
@@ -1134,29 +1144,3 @@ function Filknappar(props: {
   )
 }
 
-/**
- * Gissar kolumnpar utifrån rubrikernas namn.
- *
- * Bara ett förslag, och bara ett par: att gissa ihop flera kolumner åt gången
- * ger lätt en nyckel som är för sträng, och en matchning som ger noll träffar
- * ser ut som att filerna inte hör ihop.
- */
-export function foreslaPar(vanster: Frame, hoger: Frame): Matchningspar[] {
-  const v = visibleColumns(vanster)
-  const h = visibleColumns(hoger)
-
-  for (const vc of v) {
-    const vn = rubriknyckel(vc.name)
-    const traff = h.find((hc) => rubriknyckel(hc.name) === vn)
-    if (traff) return [{ vansterColId: vc.id, hogerColId: traff.id, typ: 'oberoende' }]
-  }
-
-  for (const vc of v) {
-    const grupp = synonymgrupp(rubriknyckel(vc.name))
-    if (grupp === -1) continue
-    const traff = h.find((hc) => synonymgrupp(rubriknyckel(hc.name)) === grupp)
-    if (traff) return [{ vansterColId: vc.id, hogerColId: traff.id, typ: 'oberoende' }]
-  }
-
-  return []
-}
