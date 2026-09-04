@@ -81,7 +81,9 @@ import { ColumnPanel } from './ColumnPanel.jsx'
 import { Inspector } from './Inspector.jsx'
 import { EmptyState } from './EmptyState.jsx'
 import { Redigeringsfalt } from './Redigeringsfalt.jsx'
+import { Pivot } from './Pivot.jsx'
 import { IkonExportera, IkonKugghjul, IkonMane, IkonOppna, IkonProfiler, IkonSol } from './ikoner.jsx'
+import { oppnaPivot, pivotOppen, stangPivot } from '../state/pivot.js'
 import { ImportDialog, type ImportSettings } from './ImportDialog.jsx'
 import { ExportDialog } from './ExportDialog.jsx'
 import { SearchBar } from './SearchBar.jsx'
@@ -556,6 +558,7 @@ export function App() {
     stangSlaIhop()
     stangKombinera()
     setOversiktOppen(false)
+    stangPivot()
     // Vyn, inte sessionen: arbetet ligger kvar precis som vid Escape.
     lamnaVerkstad()
   }
@@ -1553,7 +1556,8 @@ export function App() {
   const iVerkstaden = verkstadOppen.value
   const iKombinera = kombineraOppen.value
   const iSlaIhop = slaIhopOppen.value
-  const egenVy = iVerkstaden || iKombinera || iSlaIhop || oversiktOppen
+  const iPivot = pivotOppen.value
+  const egenVy = iVerkstaden || iKombinera || iSlaIhop || iPivot || oversiktOppen
 
   /*
    * Vilken vy som ligger överst — härlett en gång, läst på två ställen.
@@ -1570,9 +1574,11 @@ export function App() {
       ? stangKombinera
       : oversiktOppen
         ? () => setOversiktOppen(false)
-        : iVerkstaden
-          ? lamnaVerkstad
-          : null
+        : iPivot
+          ? stangPivot
+          : iVerkstaden
+            ? lamnaVerkstad
+            : null
 
   /*
    * Redigeringsfältet byggs en gång och placeras efter inställningen: som en
@@ -1625,6 +1631,7 @@ export function App() {
           })
         }
         sammanfatta={() => setSammanfatta({ startkolumn: null })}
+        pivot={() => oppnaPivot()}
       />
     ) : null
 
@@ -1889,6 +1896,26 @@ export function App() {
           onVerktyg={oppnaVerktyg}
           onStang={() => setOversiktOppen(false)}
         />
+      ) : iPivot && frame ? (
+        /*
+         * `key` på flikens id, så att pivoten byggs om från grunden när man
+         * byter fil. Flikraden syns även med vyn uppe, och en plan som pekar
+         * på kolumn-id ur en annan fil hade gett en tom tabell utan att säga
+         * varför. Med nyckeln får den nya filen sitt eget förslag i stället.
+         */
+        <Pivot
+          key={tab?.id}
+          frame={frame}
+          revision={rev}
+          onNyFlik={(resultat, text) => {
+            openFrame(resultat)
+            // Stäng vyn: fliken är hela poängen med knappen, och att bli kvar
+            // i pivoten hade sett ut som att ingenting hände.
+            stangPivot()
+            notify(text)
+          }}
+          onStang={stangPivot}
+        />
       ) : iVerkstaden ? (
         <Verkstad
           onSlaIhop={(resultat, text) => {
@@ -2140,6 +2167,7 @@ export function App() {
               kombinera: () => oppnaKombinera(),
               mall: () => oppnaKombinera(true),
               sammanfatta: () => setSammanfatta({ startkolumn: palettKolumn?.id ?? null }),
+              pivot: () => oppnaPivot(),
               oversikt: () => setOversiktOppen(true),
               visaAllaRader: () => {
                 if (!tab) return

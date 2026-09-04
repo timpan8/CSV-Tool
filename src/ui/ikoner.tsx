@@ -79,6 +79,14 @@ export const IkonSammanfatta = () => (
   </Ikon>
 )
 
+export const IkonPivot = () => (
+  <Ikon>
+    <path d="M2.5 2.5h11v11h-11Z" />
+    <path d="M2.5 6h11" />
+    <path d="M6 2.5v11" />
+  </Ikon>
+)
+
 export const IkonFleraFiler = () => (
   <Ikon>
     <path d="m8 2.5 6 3-6 3-6-3Z" />

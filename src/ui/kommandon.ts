@@ -57,6 +57,7 @@ export interface Kommandohandlare {
   kombinera: () => void
   mall: () => void
   sammanfatta: () => void
+  pivot: () => void
   oversikt: () => void
   visaAllaRader: () => void
   stada: (id: string) => void
@@ -183,9 +184,17 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
       id: 'sammanfatta',
       grupp: t('Tabell'),
       etikett: t('Gruppera och summera…'),
-      ord: 'summa summera antal snitt medel pivot grupp group by aggregera sammanfatta total',
+      ord: 'summa summera antal snitt medel grupp group by aggregera sammanfatta total',
       beskrivning: t('En rad per grupp: summa Belopp per Ort, antal ordrar per kund.'),
       kor: h.sammanfatta,
+    })
+    lagg({
+      id: 'pivot',
+      grupp: t('Tabell'),
+      etikett: t('Pivot…'),
+      ord: 'pivot korstabell crosstab matris nivåer träd överblick två ledder',
+      beskrivning: t('Gruppera åt två håll i en egen vy. Datat rörs inte.'),
+      kor: h.pivot,
     })
     lagg({
       id: 'oversikt',
