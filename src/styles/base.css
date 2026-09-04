@@ -253,6 +253,20 @@ input[type='radio'] {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * Språkväljaren.
+ *
+ * Två bokstäver och inget mer: den ska gå att hitta men aldrig konkurrera med
+ * knapparna som gör något med datat. Fast bredd så att raden inte hoppar när
+ * SV blir EN.
+ */
+.sprakval {
+  min-width: 34px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  font-weight: 620;
+}
+
 /* Märket är en knapp: det är också vägen till att se och rensa det sparade. */
 .statusrad__lokal {
   margin-left: auto;

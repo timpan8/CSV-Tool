@@ -1,4 +1,5 @@
 import { useRef, useState } from 'preact/hooks'
+import { t } from './sprak.js'
 
 export function EmptyState(props: {
   onFiler: (files: File[]) => void
@@ -24,8 +25,8 @@ export function EmptyState(props: {
           if (files.length > 0) props.onFiler(files)
         }}
       >
-        <p class="tomt__rubrik">Släpp dina filer här</p>
-        <p class="tomt__underrubrik">CSV, TXT, tabbseparerad text eller Excel (.xlsx)</p>
+        <p class="tomt__rubrik">{t('Släpp dina filer här')}</p>
+        <p class="tomt__underrubrik">{t('CSV, TXT, tabbseparerad text eller Excel (.xlsx)')}</p>
         <input
           ref={inputRef}
           type="file"
@@ -39,39 +40,41 @@ export function EmptyState(props: {
           }}
         />
         <button class="knapp knapp--primar" onClick={() => inputRef.current?.click()}>
-          Välj fil…
+          {t('Välj fil…')}
         </button>
         <p style={{ marginTop: 14, marginBottom: 0, color: 'var(--text-svag)', fontSize: 13 }}>
-          …eller klistra in data direkt med Ctrl+V
+          {t('…eller klistra in data direkt med Ctrl+V')}
         </p>
       </div>
 
       <p class="tomt__lokal">
         <strong aria-hidden="true">●</strong>
         <span>
-          <strong>Inget laddas upp.</strong> Filen öppnas i din webbläsare och lämnar aldrig
-          datorn. Verktyget kan inte skicka data någonstans — det är låst i sidans
-          säkerhetspolicy och går att kontrollera i utvecklarverktygen.
+          <strong>{t('Inget laddas upp.')}</strong>{' '}
+          {t(
+            'Filen öppnas i din webbläsare och lämnar aldrig datorn. Verktyget kan inte skicka data någonstans — det är låst i sidans säkerhetspolicy och går att kontrollera i utvecklarverktygen.',
+          )}
         </span>
       </p>
 
       <div class="tomt__kort">
         <div>
-          <h3>Prova utan egen fil</h3>
+          <h3>{t('Prova utan egen fil')}</h3>
           <div class="tomt__lista">
             <button class="knapp" onClick={props.onExempel}>
-              Öppna exempelfil
+              {t('Öppna exempelfil')}
             </button>
             <button class="knapp" onClick={props.onExempelpar}>
-              Öppna två filer att slå ihop
+              {t('Öppna två filer att slå ihop')}
             </button>
           </div>
         </div>
         <div>
-          <h3>Det här kan du göra</h3>
+          <h3>{t('Det här kan du göra')}</h3>
           <div class="tomt__lista" style={{ color: 'var(--text-svag)', fontSize: 13 }}>
-            Öppna och städa CSV · sortera och filtrera · hitta dubbletter · slå ihop två filer ·
-            exportera Excel-vänligt
+            {t(
+              'Öppna och städa CSV · sortera och filtrera · hitta dubbletter · slå ihop två filer · exportera Excel-vänligt',
+            )}
           </div>
         </div>
       </div>

@@ -90,6 +90,7 @@ import { ExportDialog } from './ExportDialog.jsx'
 import { SearchBar } from './SearchBar.jsx'
 import { PasteDialog } from './PasteDialog.jsx'
 import { BorjaOmDialog } from './BorjaOmDialog.jsx'
+import { sattSprak, sprak, t, tf } from './sprak.js'
 import { Verktyg, ordnaVerktyg, type Verktygsnamn } from './verktyg.jsx'
 import { innehallsprofil } from '../core/frame/innehall.js'
 import { Statusrad } from './Statusrad.jsx'
@@ -245,7 +246,7 @@ export function App() {
       (f) => /\.(csv|txt|tsv|xlsx)$/i.test(f.name) || f.type.startsWith('text/'),
     )
     if (tillatna.length === 0) {
-      notify('Verktyget öppnar CSV, TXT, TSV och Excel-filer (.xlsx).', { ton: 'varning' })
+      notify(t('Verktyget öppnar CSV, TXT, TSV och Excel-filer (.xlsx).'), { ton: 'varning' })
       return
     }
     setKö((current) => [...current, ...tillatna])
@@ -424,7 +425,7 @@ export function App() {
       { typ: 'taBortKolumn', kolumn: col.name },
     )
     notify(`Kolumnen ”${col.name}” togs bort.`, {
-      atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) },
+      atgard: { etikett: t('Ångra'), kor: () => tab && undo(tab) },
     })
   }
 
@@ -562,7 +563,7 @@ export function App() {
         { ton: 'varning' },
       )
     } else if (svar === 'stangd') {
-      notify('En av filerna är stängd, så det finns inga rader att beta av.', { ton: 'varning' })
+      notify(t('En av filerna är stängd, så det finns inga rader att beta av.'), { ton: 'varning' })
     }
   }
 
@@ -578,7 +579,7 @@ export function App() {
     const col = findColumn(frame, id)
     notify(
       `Visar ${formatCount(frame.view.length)} rader där ”${col?.name ?? ''}” inte går att tolka.`,
-      { atgard: { etikett: 'Visa alla igen', kor: () => tab && clearViewSpec(tab) } },
+      { atgard: { etikett: t('Visa alla igen'), kor: () => tab && clearViewSpec(tab) } },
     )
   }
 
@@ -681,7 +682,7 @@ export function App() {
         `${celler(rader.length * kolumner.length)} kopierade. Klistra in direkt i Excel.`,
       )
     } catch {
-      notify('Webbläsaren tillät inte kopiering till urklipp.', { ton: 'varning' })
+      notify(t('Webbläsaren tillät inte kopiering till urklipp.'), { ton: 'varning' })
     }
   }
 
@@ -691,8 +692,8 @@ export function App() {
     if (!nu || !nu.sel) return
     const andrade = sattMarkering(nu.tab, nu.sel, '')
     if (andrade > 0) {
-      notify(`Klippte ut ${celler(andrade)}.`, {
-        atgard: { etikett: 'Ångra', kor: () => undo(nu.tab) },
+      notify(tf('Klippte ut {0}.', celler(andrade)), {
+        atgard: { etikett: t('Ångra'), kor: () => undo(nu.tab) },
       })
     }
   }
@@ -710,7 +711,7 @@ export function App() {
       const text = await navigator.clipboard.readText()
       if (text.trim() !== '') forbereKlistraIn(text)
     } catch {
-      notify('Webbläsaren tillät inte att urklippet lästes. Tryck Ctrl+V i stället.', {
+      notify(t('Webbläsaren tillät inte att urklippet lästes. Tryck Ctrl+V i stället.'), {
         ton: 'varning',
       })
     }
@@ -721,8 +722,8 @@ export function App() {
     if (!nu || !nu.sel) return
     const andrade = sattMarkering(nu.tab, nu.sel, '')
     if (andrade > 0) {
-      notify(`Tömde ${celler(andrade)}.`, {
-        atgard: { etikett: 'Ångra', kor: () => undo(nu.tab) },
+      notify(tf('Tömde {0}.', celler(andrade)), {
+        atgard: { etikett: t('Ångra'), kor: () => undo(nu.tab) },
       })
     }
   }
@@ -742,11 +743,11 @@ export function App() {
     if (svar === null) return
     const andrade = sattMarkering(nu.tab, nu.sel, svar)
     if (andrade === 0) {
-      notify('Cellerna hade redan det värdet.')
+      notify(t('Cellerna hade redan det värdet.'))
       return
     }
-    notify(`Fyllde ${celler(andrade)}.`, {
-      atgard: { etikett: 'Ångra', kor: () => undo(nu.tab) },
+    notify(tf('Fyllde {0}.', celler(andrade)), {
+      atgard: { etikett: t('Ångra'), kor: () => undo(nu.tab) },
     })
   }
 
@@ -767,12 +768,12 @@ export function App() {
     try {
       const text = await navigator.clipboard.readText()
       if (text.trim() === '') {
-        notify('Urklippet är tomt.')
+        notify(t('Urklippet är tomt.'))
         return
       }
       klistraInSomNyFil(text)
     } catch {
-      notify('Webbläsaren tillät inte att urklippet lästes. Tryck Ctrl+Skift+V i stället.', {
+      notify(t('Webbläsaren tillät inte att urklippet lästes. Tryck Ctrl+Skift+V i stället.'), {
         ton: 'varning',
       })
     }
@@ -809,7 +810,7 @@ export function App() {
     const bredd = Math.max(...rows.map((r) => r.length), 0)
     const serUtSomFil = rows.length >= 2 && bredd >= 2
     const somNyFil = {
-      etikett: 'Öppna som ny fil i stället',
+      etikett: t('Öppna som ny fil i stället'),
       kor: () => {
         undo(tab)
         klistraInSomNyFil(text)
@@ -818,8 +819,8 @@ export function App() {
 
     if (plan.extraRader === 0 && plan.extraKolumner === 0) {
       const andrade = klistraIn(tab, sel, plan, false)
-      const angra = { etikett: 'Ångra', kor: () => undo(tab) }
-      notify(`Klistrade in ${celler(andrade)}.`, {
+      const angra = { etikett: t('Ångra'), kor: () => undo(tab) }
+      notify(tf('Klistrade in {0}.', celler(andrade)), {
         atgard: serUtSomFil ? [angra, somNyFil] : angra,
       })
       return
@@ -835,8 +836,8 @@ export function App() {
     const rader = selectedRows(nu.tab, nu.sel)
     if (rader.length === 0) return
     taBortRader(nu.tab, rader)
-    notify(`Tog bort ${raderText(rader.length)}.`, {
-      atgard: { etikett: 'Ångra', kor: () => undo(nu.tab) },
+    notify(tf('Tog bort {0}.', raderText(rader.length)), {
+      atgard: { etikett: t('Ångra'), kor: () => undo(nu.tab) },
     })
   }
 
@@ -845,7 +846,7 @@ export function App() {
     const n = taBortTommaRader(tab)
     notify(
       n === 0 ? 'Inga helt tomma rader hittades.' : `Tog bort ${raderText(n)} som var helt tomma.`,
-      n > 0 ? { atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) } } : undefined,
+      n > 0 ? { atgard: { etikett: t('Ångra'), kor: () => tab && undo(tab) } } : undefined,
     )
   }
 
@@ -856,7 +857,7 @@ export function App() {
       n === 0
         ? 'Inga helt tomma kolumner hittades.'
         : `Tog bort ${kolumnerText(n)} som var helt tomma.`,
-      n > 0 ? { atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) } } : undefined,
+      n > 0 ? { atgard: { etikett: t('Ångra'), kor: () => tab && undo(tab) } } : undefined,
     )
   }
 
@@ -871,8 +872,8 @@ export function App() {
     if (!tab) return
     const col = laggTillLopnummer(tab)
     setActiveColumn(col.id)
-    notify(`Lade till ${col.name} med löpnummer 1–${tab.frame.rowCount}.`, {
-      atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) },
+    notify(tf('Lade till {0} med löpnummer 1–{1}.', col.name, tab.frame.rowCount), {
+      atgard: { etikett: t('Ångra'), kor: () => tab && undo(tab) },
     })
   }
 
@@ -893,7 +894,7 @@ export function App() {
       `${stadning.etikett} — ${celler(andrade)} ändrades i ${
         kolumner.length === 1 ? `”${kolumner[0]!.name}”` : kolumnerText(kolumner.length)
       }.`,
-      { atgard: { etikett: 'Ångra', kor: () => undo(tab) } },
+      { atgard: { etikett: t('Ångra'), kor: () => undo(tab) } },
     )
   }
 
@@ -979,7 +980,7 @@ export function App() {
     return [
       ...ordning.passande.map((p) => post(p.post.namn, p.post.etikett, p.skal)),
       {
-        etikett: 'Fler verktyg',
+        etikett: t('Fler verktyg'),
         undermeny: ordning.ovriga.map((v) => post(v.namn, v.etikett)),
       },
     ]
@@ -1052,13 +1053,13 @@ export function App() {
     const verktygskolumner = r ? nu.kolumner.slice(r.k1, r.k2 + 1) : [col]
 
     return [
-      { etikett: 'Klipp ut', genvag: 'Ctrl+X', kor: () => void klippUtMarkering() },
-      { etikett: 'Kopiera', genvag: 'Ctrl+C', kor: () => void kopieraMarkering() },
-      { etikett: 'Klistra in', genvag: 'Ctrl+V', kor: () => void klistraInFranMeny() },
+      { etikett: t('Klipp ut'), genvag: 'Ctrl+X', kor: () => void klippUtMarkering() },
+      { etikett: t('Kopiera'), genvag: 'Ctrl+C', kor: () => void kopieraMarkering() },
+      { etikett: t('Klistra in'), genvag: 'Ctrl+V', kor: () => void klistraInFranMeny() },
       {
-        etikett: 'Klistra in som ny fil',
+        etikett: t('Klistra in som ny fil'),
         genvag: 'Ctrl+Skift+V',
-        skal: 'lämnar den här tabellen orörd',
+        skal: t('lämnar den här tabellen orörd'),
         kor: () => void klistraInSomNyFilFranMeny(),
       },
       'avdelare',
@@ -1066,17 +1067,17 @@ export function App() {
         etikett: flera ? 'Fyll markeringen med ett värde…' : 'Skriv ett värde…',
         kor: fyllMarkering,
       },
-      { etikett: 'Fyll nedåt', genvag: 'Ctrl+D', kor: () => {
+      { etikett: t('Fyll nedåt'), genvag: 'Ctrl+D', kor: () => {
         const n = nuLage()
         if (!n?.sel) return
         const andrade = fyllNedat(n.tab, n.sel)
         if (andrade > 0) {
-          notify(`Fyllde nedåt i ${celler(andrade)}.`, {
-            atgard: { etikett: 'Ångra', kor: () => undo(n.tab) },
+          notify(tf('Fyllde nedåt i {0}.', celler(andrade)), {
+            atgard: { etikett: t('Ångra'), kor: () => undo(n.tab) },
           })
         }
       } },
-      { etikett: 'Töm', genvag: 'Delete', kor: tomMarkering },
+      { etikett: t('Töm'), genvag: 'Delete', kor: tomMarkering },
       'avdelare',
       {
         etikett: `Filtrera på ”${kort(varde)}”`,
@@ -1086,13 +1087,13 @@ export function App() {
       { etikett: `Sortera på ${col.name}`, kor: () => vaxlaSortering(nu.tab, col.id, false) },
       {
         etikett: `Gruppera på ${col.name}…`,
-        skal: 'en rad per värde, med summa och antal för resten av kolumnerna',
+        skal: t('en rad per värde, med summa och antal för resten av kolumnerna'),
         kor: () => setSammanfatta({ startkolumn: col.id }),
       },
       'avdelare',
       ...verktygsposter(verktygskolumner, col),
       'avdelare',
-      { etikett: 'Radens åtgärder', undermeny: radmenyposter() },
+      { etikett: t('Radens åtgärder'), undermeny: radmenyposter() },
     ]
   }
 
@@ -1122,7 +1123,7 @@ export function App() {
       behall
         ? `Behöll ${raderText(nu.frame.rowCount)} och tog bort ${raderText(bort.length)}.`
         : `Tog bort ${raderText(bort.length)}.`,
-      { atgard: { etikett: 'Ångra', kor: () => undo(nu.tab) } },
+      { atgard: { etikett: t('Ångra'), kor: () => undo(nu.tab) } },
     )
   }
 
@@ -1149,7 +1150,7 @@ export function App() {
     setEgnaBehallna(new Map())
     setTabellverktyg(null)
     notify(`Tog bort ${raderText(bort.length)} som var dubbletter.`, {
-      atgard: { etikett: 'Ångra', kor: () => undo(nu.tab) },
+      atgard: { etikett: t('Ångra'), kor: () => undo(nu.tab) },
     })
   }
 
@@ -1282,11 +1283,11 @@ export function App() {
         if (tangent === 'z' && !e.shiftKey) {
           e.preventDefault()
           const step = undo(tab)
-          if (step) notify(`Ångrade: ${step.label}`)
+          if (step) notify(tf('Ångrade: {0}', step.label))
         } else if (tangent === 'y' || (tangent === 'z' && e.shiftKey)) {
           e.preventDefault()
           const step = redo(tab)
-          if (step) notify(`Gjorde om: ${step.label}`)
+          if (step) notify(tf('Gjorde om: {0}', step.label))
         } else if (tangent === 's') {
           e.preventDefault()
           setExportOppen(true)
@@ -1310,8 +1311,8 @@ export function App() {
           e.preventDefault()
           const andrade = fyllNedat(tab, markering)
           if (andrade > 0) {
-            notify(`Fyllde nedåt i ${celler(andrade)}.`, {
-              atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) },
+            notify(tf('Fyllde nedåt i {0}.', celler(andrade)), {
+              atgard: { etikett: t('Ångra'), kor: () => tab && undo(tab) },
             })
           }
         }
@@ -1356,8 +1357,8 @@ export function App() {
             e.preventDefault()
             const andrade = sattMarkering(tab, markering, '')
             if (andrade > 0) {
-              notify(`Tömde ${celler(andrade)}.`, {
-                atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) },
+              notify(tf('Tömde {0}.', celler(andrade)), {
+                atgard: { etikett: t('Ångra'), kor: () => tab && undo(tab) },
               })
             }
           }
@@ -1484,7 +1485,7 @@ export function App() {
       if (antal > 0) {
         notify(
           `${filerText(antal)} från förra besöket är tillbaka. Ångra-historiken börjar om.`,
-          { atgard: { etikett: 'Glöm sparade filer', kor: () => void glomSparat() } },
+          { atgard: { etikett: t('Glöm sparade filer'), kor: () => void glomSparat() } },
         )
       }
       // Efter flikarna, aldrig före: sessionen slår upp sina flik-id i `tabs`,
@@ -1494,7 +1495,7 @@ export function App() {
         const l = sessionslage()
         if (l.lage === 'redo' && l.ogjort > 0) {
           notify(`En påbörjad sammanslagning ${l.namn} finns kvar med ${l.ogjort} beslut.`, {
-            atgard: { etikett: 'Beta av resten', kor: () => aterta() },
+            atgard: { etikett: t('Beta av resten'), kor: () => aterta() },
           })
         }
       }
@@ -1572,33 +1573,36 @@ export function App() {
         <button
           class={`knapp${harSortering(tab) ? ' knapp--primar' : ''}`}
           disabled={!frame || egenVy}
-          title="Flernivåsortering med svensk bokstavsordning. Ändrar bara ordningen, aldrig värdena."
+          title={t('Flernivåsortering med svensk bokstavsordning. Ändrar bara ordningen, aldrig värdena.')}
           onClick={() => oppnaTabellverktyg('sortera')}
         >
-          Sortera{harSortering(tab) ? ` (${tab!.viewSpec.sortering!.length})` : ''}
+          {t('Sortera')}
+          {harSortering(tab) ? ` (${tab!.viewSpec.sortering!.length})` : ''}
         </button>
         <button
           class={`knapp${harFilter(tab) ? ' knapp--primar' : ''}`}
           disabled={!frame || egenVy}
-          title="Visa bara de rader som stämmer med dina regler. Raderna finns kvar."
+          title={t('Visa bara de rader som stämmer med dina regler. Raderna finns kvar.')}
           onClick={() => oppnaTabellverktyg('filter')}
         >
-          Filter{harFilter(tab) ? ` (${tab!.viewSpec.filter!.regler.length})` : ''}
+          {t('Filter')}
+          {harFilter(tab) ? ` (${tab!.viewSpec.filter!.regler.length})` : ''}
         </button>
         <button
           class={`knapp${tab?.viewSpec.dubbletter ? ' knapp--primar' : ''}`}
           disabled={!frame || egenVy}
-          title="Hitta rader som är lika i de kolumner du väljer, och visa dem grupperade."
+          title={t('Hitta rader som är lika i de kolumner du väljer, och visa dem grupperade.')}
           onClick={() => oppnaTabellverktyg('dubbletter')}
         >
-          Dubbletter{dubblettgrupper ? ` (${formatCount(dubblettgrupper.antalGrupper)})` : ''}
+          {t('Dubbletter')}
+          {dubblettgrupper ? ` (${formatCount(dubblettgrupper.antalGrupper)})` : ''}
         </button>
 
         <span class="verktygsrad__avdelare" aria-hidden="true" />
         <button
           class="knapp"
           disabled={!frame || egenVy}
-          title="Trimma blanksteg, ändra skiftläge och städa bort det osynliga i markeringen."
+          title={t('Trimma blanksteg, ändra skiftläge och städa bort det osynliga i markeringen.')}
           onClick={(e) =>
             setMeny({
               x: (e.currentTarget as HTMLElement).getBoundingClientRect().left,
@@ -1607,12 +1611,12 @@ export function App() {
             })
           }
         >
-          Städa ▾
+          {t('Städa')} ▾
         </button>
         <button
           class="knapp"
           disabled={!frame || egenVy}
-          title="Sätt ihop data ur flera filer — bredvid varandra, ovanpå varandra, eller in i en mall."
+          title={t('Sätt ihop data ur flera filer — bredvid varandra, ovanpå varandra, eller in i en mall.')}
           onClick={(e) =>
             setMeny({
               x: (e.currentTarget as HTMLElement).getBoundingClientRect().left,
@@ -1627,54 +1631,69 @@ export function App() {
             })
           }
         >
-          Flera filer ▾
+          {t('Flera filer')} ▾
         </button>
         <button
           class="knapp"
           disabled={!frame || egenVy}
-          title="En rad per grupp: summa Belopp per Ort, antal ordrar per kund. Resultatet blir en ny flik."
+          title={t('En rad per grupp: summa Belopp per Ort, antal ordrar per kund. Resultatet blir en ny flik.')}
           onClick={() => setSammanfatta({ startkolumn: null })}
         >
-          Sammanfatta…
+          {t('Sammanfatta…')}
         </button>
 
         <span class="verktygsrad__avdelare" aria-hidden="true" />
         <button
           class="knapp"
           disabled={!frame || egenVy}
-          title="Spara den här filens arbetsgång och kör om den på nästa fil."
+          title={t('Spara den här filens arbetsgång och kör om den på nästa fil.')}
           onClick={() => setProfilerOppna(true)}
         >
-          Profiler…
+          {t('Profiler…')}
         </button>
         <button
           class="knapp"
           disabled={!frame || egenVy}
-          title="Skriv ut filen som Excel eller CSV."
+          title={t('Skriv ut filen som Excel eller CSV.')}
           onClick={() => setExportOppen(true)}
         >
-          Exportera
+          {t('Exportera')}
+        </button>
+        {/*
+          Språkvalet står i verktygsraden och inte bara i paletten.
+          Den som vill ha engelska hittar per definition inte ett svenskt
+          kommando i en palett man måste veta att den finns.
+        */}
+        <button
+          class="knapp knapp--tyst sprakval"
+          title={t(
+            'Gränssnittets text byter språk. Sortering, tal och datum följer alltid svenska regler.',
+          )}
+          onClick={() => sattSprak(sprak.value === 'en' ? 'sv' : 'en')}
+        >
+          {sprak.value === 'en' ? 'SV' : 'EN'}
         </button>
         <div class="vaxel">
           <button
             class="knapp knapp--tyst"
             disabled={!canUndo(tab)}
-            title="Ångra (Ctrl+Z)"
+            title={t('Ångra (Ctrl+Z)')}
             onClick={() => tab && undo(tab)}
           >
-            ↺ Ångra{tab && tab.cursor > 0 ? ` ${tab.cursor}` : ''}
+            ↺ {t('Ångra')}
+            {tab && tab.cursor > 0 ? ` ${tab.cursor}` : ''}
           </button>
           <button
             class="knapp knapp--tyst"
             disabled={!canRedo(tab)}
-            title="Gör om (Ctrl+Y)"
+            title={t('Gör om (Ctrl+Y)')}
             onClick={() => tab && redo(tab)}
           >
-            ↻ Gör om
+            ↻ {t('Gör om')}
           </button>
           <button
             class="knapp knapp--tyst"
-            title="Ljust eller mörkt läge"
+            title={t('Ljust eller mörkt läge')}
             onClick={() => {
               theme.value = theme.value === 'dark' ? 'light' : 'dark'
             }}
@@ -1815,7 +1834,7 @@ export function App() {
               // den försvinner. Med en åtgärd lever den dubbelt så länge och
               // blir dessutom vägen tillbaka i stället för bara ett besked.
               atgard: verkstad.value
-                ? { etikett: 'Beta av resten', kor: () => aterta() }
+                ? { etikett: t('Beta av resten'), kor: () => aterta() }
                 : undefined,
             })
           }}
@@ -1931,7 +1950,7 @@ export function App() {
                   nya === 0
                     ? `${forsta.etikett}${f.length > 1 ? ` i ${kolumnerText(f.length)}` : ''} — ${celler(antal)} skrevs om.`
                     : `${forsta.etikett} — ${kolumnerText(nya)} med ${celler(antal)} ifyllda.`,
-                  { atgard: { etikett: 'Ångra', kor: () => undo(tab) } },
+                  { atgard: { etikett: t('Ångra'), kor: () => undo(tab) } },
                 )
               }}
               onStang={stangVerktyg}
@@ -2074,16 +2093,17 @@ export function App() {
               angra: () => {
                 if (!tab) return
                 const step = undo(tab)
-                if (step) notify(`Ångrade: ${step.label}`)
+                if (step) notify(tf('Ångrade: {0}', step.label))
               },
               goraOm: () => {
                 if (!tab) return
                 const step = redo(tab)
-                if (step) notify(`Gjorde om: ${step.label}`)
+                if (step) notify(tf('Gjorde om: {0}', step.label))
               },
               vaxlaTema: () => {
                 theme.value = theme.value === 'dark' ? 'light' : 'dark'
               },
+              vaxlaSprak: () => sattSprak(sprak.value === 'en' ? 'sv' : 'en'),
             },
           )}
           onStang={() => setPalettOppen(false)}
@@ -2116,7 +2136,7 @@ export function App() {
           onExporterad={() => {
             setExportOppen(false)
             if (tab) tab.smutsig = false
-            notify('Filen laddades ner.')
+            notify(t('Filen laddades ner.'))
           }}
         />
       )}
@@ -2146,8 +2166,8 @@ export function App() {
           onKlistraIn={(utoka) => {
             const andrade = klistraIn(tab, inklistring.sel, inklistring.plan, utoka)
             setInklistring(null)
-            notify(`Klistrade in ${celler(andrade)}.`, {
-              atgard: { etikett: 'Ångra', kor: () => tab && undo(tab) },
+            notify(tf('Klistrade in {0}.', celler(andrade)), {
+              atgard: { etikett: t('Ångra'), kor: () => tab && undo(tab) },
             })
           }}
         />
@@ -2186,8 +2206,8 @@ function stadMeny(
       kor: () => stada(s.id),
     })),
     'avdelare',
-    { etikett: 'Ta bort helt tomma rader', kor: rader.tommaRader },
-    { etikett: 'Ta bort helt tomma kolumner', kor: rader.tommaKolumner },
+    { etikett: t('Ta bort helt tomma rader'), kor: rader.tommaRader },
+    { etikett: t('Ta bort helt tomma kolumner'), kor: rader.tommaKolumner },
   ]
 }
 
@@ -2209,23 +2229,23 @@ function flerfilsmeny(handlers: {
 }): (MenyPost | 'avdelare')[] {
   return [
     {
-      etikett: 'Slå ihop…',
-      skal: 'rader som hör ihop läggs sida vid sida, matchat på en nyckel',
+      etikett: t('Slå ihop…'),
+      skal: t('rader som hör ihop läggs sida vid sida, matchat på en nyckel'),
       kor: handlers.slaIhop,
     },
     {
-      etikett: 'Kombinera…',
-      skal: 'filerna läggs på varandra, kolumner som betyder samma sak i samma spalt',
+      etikett: t('Kombinera…'),
+      skal: t('filerna läggs på varandra, kolumner som betyder samma sak i samma spalt'),
       kor: handlers.kombinera,
     },
     {
-      etikett: 'Fyll en mall med data…',
-      skal: 'en fil med bara rubriker bestämmer formen, data hämtas ur de filer du väljer',
+      etikett: t('Fyll en mall med data…'),
+      skal: t('en fil med bara rubriker bestämmer formen, data hämtas ur de filer du väljer'),
       kor: handlers.mall,
     },
     'avdelare',
     {
-      etikett: 'Fortsätt beta av resten…',
+      etikett: t('Fortsätt beta av resten…'),
       /*
        * Filnamnen och inte antalet kvar. Att räkna fram antalet kräver en hel
        * grundmatchning över båda filerna — `byggNycklar` normaliserar varje
@@ -2255,11 +2275,11 @@ function radMeny(handlers: {
   taBort: () => void
 }): (MenyPost | 'avdelare')[] {
   return [
-    { etikett: 'Infoga rad ovanför', kor: handlers.infogaFore },
-    { etikett: 'Infoga rad nedanför', kor: handlers.infogaEfter },
-    { etikett: 'Dubblera markerade rader', kor: handlers.duplicera },
+    { etikett: t('Infoga rad ovanför'), kor: handlers.infogaFore },
+    { etikett: t('Infoga rad nedanför'), kor: handlers.infogaEfter },
+    { etikett: t('Dubblera markerade rader'), kor: handlers.duplicera },
     'avdelare',
-    { etikett: 'Ta bort markerade rader', fara: true, kor: handlers.taBort },
+    { etikett: t('Ta bort markerade rader'), fara: true, kor: handlers.taBort },
   ]
 }
 
@@ -2290,55 +2310,55 @@ function kolumnMeny(
   },
 ): (MenyPost | 'avdelare')[] {
   return [
-    { etikett: 'Byt namn…', genvag: 'F2', kor: () => handlers.dopOm(id) },
-    { etikett: 'Duplicera kolumnen', kor: () => handlers.duplicera(id) },
+    { etikett: t('Byt namn…'), genvag: 'F2', kor: () => handlers.dopOm(id) },
+    { etikett: t('Duplicera kolumnen'), kor: () => handlers.duplicera(id) },
     {
-      etikett: handlers.dold ? 'Visa kolumnen' : 'Dölj kolumnen',
+      etikett: t(handlers.dold ? 'Visa kolumnen' : 'Dölj kolumnen'),
       kor: () => handlers.vaxlaDold(id),
     },
     'avdelare',
-    { etikett: 'Infoga tom kolumn till vänster', kor: () => handlers.infogaFore(id) },
-    { etikett: 'Infoga tom kolumn till höger', kor: () => handlers.infogaEfter(id) },
+    { etikett: t('Infoga tom kolumn till vänster'), kor: () => handlers.infogaFore(id) },
+    { etikett: t('Infoga tom kolumn till höger'), kor: () => handlers.infogaEfter(id) },
     {
-      etikett: 'Lägg till kolumn med löpnummer',
-      skal: '1, 2, 3 … först i filen, i radernas nuvarande ordning',
+      etikett: t('Lägg till kolumn med löpnummer'),
+      skal: t('1, 2, 3 … först i filen, i radernas nuvarande ordning'),
       kor: () => handlers.lopnummer(),
     },
     'avdelare',
-    { etikett: 'Flytta först', kor: () => handlers.flyttaForst(id) },
-    { etikett: 'Flytta sist', kor: () => handlers.flyttaSist(id) },
-    { etikett: 'Anpassa bredden efter innehållet', kor: () => handlers.anpassaBredd(id) },
+    { etikett: t('Flytta först'), kor: () => handlers.flyttaForst(id) },
+    { etikett: t('Flytta sist'), kor: () => handlers.flyttaSist(id) },
+    { etikett: t('Anpassa bredden efter innehållet'), kor: () => handlers.anpassaBredd(id) },
     'avdelare',
     {
-      etikett: 'Sortera A→Ö',
+      etikett: t('Sortera A→Ö'),
       aktiv: handlers.sortriktning === 'stigande',
       kor: () => handlers.sortera(id, 'stigande'),
     },
     {
-      etikett: 'Sortera Ö→A',
+      etikett: t('Sortera Ö→A'),
       aktiv: handlers.sortriktning === 'fallande',
       kor: () => handlers.sortera(id, 'fallande'),
     },
-    { etikett: 'Lägg till som sorteringsnivå', kor: () => handlers.laggSortering(id) },
+    { etikett: t('Lägg till som sorteringsnivå'), kor: () => handlers.laggSortering(id) },
     'avdelare',
-    { etikett: 'Filtrera på kolumnen…', kor: () => handlers.filtrera(id) },
+    { etikett: t('Filtrera på kolumnen…'), kor: () => handlers.filtrera(id) },
     {
-      etikett: `Gruppera på ${handlers.namn}…`,
-      skal: 'en rad per värde, med summa och antal för resten av kolumnerna',
+      etikett: tf('Gruppera på {0}…', handlers.namn),
+      skal: t('en rad per värde, med summa och antal för resten av kolumnerna'),
       kor: () => handlers.sammanfatta(id),
     },
-    { etikett: 'Visa rader som inte går att tolka', kor: () => handlers.visaOgiltiga(id) },
+    { etikett: t('Visa rader som inte går att tolka'), kor: () => handlers.visaOgiltiga(id) },
     'avdelare',
     ...handlers.verktyg,
     'avdelare',
-    { etikett: 'Ta bort kolumnen', fara: true, kor: () => handlers.taBort(id) },
+    { etikett: t('Ta bort kolumnen'), fara: true, kor: () => handlers.taBort(id) },
   ]
 }
 
 function FilValjare({ onFiler }: { onFiler: (files: File[]) => void }) {
   return (
     <label class="knapp">
-      Öppna
+      {t('Öppna')}
       <input
         type="file"
         accept=".csv,.txt,.tsv,.xlsx,text/csv,text/plain"
@@ -2380,7 +2400,7 @@ function FlikKnapp({
         }}
       >
         {tab.smutsig && '● '}
-        {tab.frame.name || 'Namnlös'}
+        {tab.frame.name || t('Namnlös')}
       </button>
       {/*
         Märket följer med fliken, så att det syns även när man står i en helt
@@ -2388,14 +2408,14 @@ function FlikKnapp({
         råkade klicka på rätt flik.
       */}
       {iVerkstad && (
-        <span class="flik__verkstad" title="Påbörjad sammanslagning med rader kvar att beta av">
+        <span class="flik__verkstad" title={t('Påbörjad sammanslagning med rader kvar att beta av')}>
           ⟡
         </span>
       )}
       <span class="flik__antal">{formatCount(tab.frame.rowCount)}</span>
       <button
         class="flik__stang"
-        aria-label={`Stäng ${tab.frame.name}`}
+        aria-label={tf('Stäng {0}', tab.frame.name)}
         onClick={() => {
           if (
             tab.smutsig &&

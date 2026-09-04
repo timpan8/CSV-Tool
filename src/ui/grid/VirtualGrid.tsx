@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Column, ColumnId, Frame } from '../../core/types.js'
 import { Flag } from '../../core/types.js'
+import { t, tf } from '../sprak.js'
 import { getCell, filledCount, flagCount, matchDictionary } from '../../core/frame/column.js'
 import { TYPE_BADGES, TYPE_LABELS, violatesType } from '../../core/infer.js'
 import { formatCount } from '../../core/locale/sv.js'
@@ -208,9 +209,9 @@ export function VirtualGrid(props: GridProps) {
             source === 0 ? ' rutnat__radnr--tillagd' : ''
           }`}
           title={
-            (source === 0 ? 'Tillagd rad — fanns inte i filen' : `Rad ${source} i filen`) +
-            (heltLika ? '. Identisk med de andra i sin dubblettgrupp.' : '') +
-            '. Klicka för att markera raden.'
+            (source === 0 ? t('Tillagd rad — fanns inte i filen') : tf('Rad {0} i filen', source)) +
+            (heltLika ? t('. Identisk med de andra i sin dubblettgrupp.') : '') +
+            t('. Klicka för att markera raden.')
           }
           onPointerDown={(e) => {
             if (e.button !== 0) return
@@ -241,7 +242,10 @@ export function VirtualGrid(props: GridProps) {
             </button>
           )}
           {gruppnr !== 0 && heltLika && props.onBehall === null && (
-            <span class="radnr__identisk" title="Raden är identisk med de andra i sin grupp i varje kolumn.">
+            <span
+              class="radnr__identisk"
+              title={t('Raden är identisk med de andra i sin grupp i varje kolumn.')}
+            >
               =
             </span>
           )}
@@ -306,7 +310,7 @@ export function VirtualGrid(props: GridProps) {
       <div class="rutnat__rubrikrad" role="row">
         <div
           class="rutnat__radnr"
-          title="Radens nummer i källfilen. Ändras inte av sortering eller filtrering."
+          title={t('Radens nummer i källfilen. Ändras inte av sortering eller filtrering.')}
         >
           #
         </div>
@@ -364,14 +368,14 @@ export function VirtualGrid(props: GridProps) {
               role="columnheader"
             >
               <span class="rubrik__namn">{namn}</span>
-              <span class="rubrik__spoke">ny kolumn</span>
+              <span class="rubrik__spoke">{t('ny kolumn')}</span>
             </div>
           )) ?? []),
         ])}
       </div>
 
       {total === 0 ? (
-        <div class="rutnat__tomt">Inga rader att visa.</div>
+        <div class="rutnat__tomt">{t('Inga rader att visa.')}</div>
       ) : (
         <div style={{ height: `${total * rowHeight}px`, position: 'relative' }}>
           <div style={{ position: 'absolute', top: `${first * rowHeight}px`, left: 0, right: 0 }}>
@@ -630,10 +634,14 @@ function Header(props: HeaderProps) {
           class={`rubrik__sort${props.sortriktning ? ' rubrik__sort--aktiv' : ''}`}
           aria-label={
             props.sortriktning
-              ? `Sorterat på ${col.name}, ${props.sortriktning}. Klicka för att vända.`
-              : `Sortera på ${col.name}`
+              ? tf(
+                  'Sorterat på {0}, {1}. Klicka för att vända.',
+                  col.name,
+                  t(props.sortriktning),
+                )
+              : tf('Sortera på {0}', col.name)
           }
-          title="Klicka för att sortera. Skift-klick lägger till en nivå."
+          title={t('Klicka för att sortera. Skift-klick lägger till en nivå.')}
           onClick={(e) => {
             e.stopPropagation()
             props.onSortera(e.shiftKey)
@@ -660,7 +668,7 @@ function Header(props: HeaderProps) {
         </button>
         <button
           class="rubrik__meny"
-          aria-label={`Meny för kolumnen ${col.name}`}
+          aria-label={tf('Meny för kolumnen {0}', col.name)}
           onClick={(e) => {
             const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
             e.stopPropagation()
@@ -695,7 +703,7 @@ function Header(props: HeaderProps) {
       </div>
       <div
         class="rubrik__greppa"
-        title="Dra för att ändra bredd. Dubbelklicka för att anpassa efter innehållet."
+        title={t('Dra för att ändra bredd. Dubbelklicka för att anpassa efter innehållet.')}
         onPointerDown={startResize}
         onClick={(e) => e.stopPropagation()}
         onDblClick={(e) => {
