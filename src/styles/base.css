@@ -109,13 +109,204 @@ input[type='radio'] {
   border-color: var(--fara);
 }
 
+.ikon {
+  flex: 0 0 auto;
+  display: block;
+}
+
+/* Ikon + text, utan ram: app-radens knappar. */
+.knapp--ikon {
+  gap: 7px;
+  padding: 5px 10px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.knapp--ikon:hover:not(:disabled) {
+  background: var(--yta-hover);
+  border-color: transparent;
+}
+
+.knapp--ikon .ikon {
+  color: var(--text-svag);
+}
+
+.knapp--rund {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 999px;
+}
+
+/* ---------- Redigeringsfältet ---------- */
+
+.redigeringsfalt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--linje);
+  background: var(--yta);
+}
+
+.redigeringsfalt__grupp {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.redigeringsfalt__avdelare {
+  width: 1px;
+  height: 22px;
+  margin: 0 4px;
+  background: var(--linje-stark);
+}
+
+.verktygsknapp {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radie);
+  background: transparent;
+  color: var(--text);
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+
+.verktygsknapp:hover:not(:disabled) {
+  background: var(--yta-hover);
+}
+
+.verktygsknapp:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* På: verktyget gör något med vyn just nu. Räknaren säger hur mycket. */
+.verktygsknapp--aktiv {
+  background: var(--accent-svag);
+  color: var(--accent-text);
+}
+
+.verktygsknapp--aktiv:hover:not(:disabled) {
+  background: var(--accent-svag);
+  filter: brightness(0.97);
+}
+
+.verktygsknapp__ikon {
+  display: inline-flex;
+  color: var(--text-svag);
+}
+
+.verktygsknapp--aktiv .verktygsknapp__ikon {
+  color: inherit;
+}
+
+.verktygsknapp__text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.verktygsknapp__antal {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 18px;
+  text-align: center;
+}
+
+.verktygsknapp__pil {
+  color: var(--text-svagast);
+}
+
+/*
+ * Lodrätt: samma markup, annan riktning. Texten står kvar under ikonen —
+ * liten, men där. En ikonrad utan ord är ett memoryspel, och användaren var
+ * tydlig med att det inte får bli svårt att hitta.
+ */
+.redigeringsfalt--lodrat {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  width: 76px;
+  padding: 8px 6px;
+  border-bottom: 0;
+  border-right: 1px solid var(--linje);
+  overflow-y: auto;
+}
+
+.redigeringsfalt--lodrat .redigeringsfalt__grupp {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.redigeringsfalt--lodrat .redigeringsfalt__avdelare {
+  width: auto;
+  height: 1px;
+  margin: 4px 6px;
+}
+
+.redigeringsfalt--lodrat .verktygsknapp {
+  position: relative;
+  flex-direction: column;
+  gap: 4px;
+  height: auto;
+  padding: 7px 4px 6px;
+  white-space: normal;
+}
+
+.redigeringsfalt--lodrat .verktygsknapp__ikon .ikon {
+  width: 18px;
+  height: 18px;
+}
+
+.redigeringsfalt--lodrat .verktygsknapp__text {
+  flex-direction: column;
+  gap: 3px;
+  font-size: 10.5px;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.redigeringsfalt--lodrat .verktygsknapp__pil {
+  position: absolute;
+  top: 1px;
+  right: 5px;
+  font-size: 9px;
+}
+
 /* ---------- Appens skal ---------- */
 
+/*
+ * Flex-kolumn och inte ett fast radschema. Både flikraden och
+ * redigeringsfältet är villkorliga rader, och ett schema som säger
+ * "tredje raden fyller" pekar fel så fort en rad saknas — då fick den tomma
+ * vyn sin höjd av innehållet och statusraden fick resten.
+ */
 .app {
-  display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   height: 100%;
   background: var(--yta);
+}
+
+.app > .arbetsyta,
+.app > .slaihop,
+.app > .kombinera,
+.app > .verkstad,
+.app > .tomt {
+  flex: 1 1 0;
+  min-height: 0;
 }
 
 .verktygsrad {
@@ -157,11 +348,12 @@ input[type='radio'] {
   font-size: 12px;
 }
 
-.vaxel {
+/* Hörnet: språk, tema, inställningar. Det som gäller verktyget, inte filen. */
+.verktygsrad__horn {
   margin-left: auto;
   display: flex;
-  gap: 6px;
   align-items: center;
+  gap: 4px;
 }
 
 .flikrad {
@@ -241,6 +433,12 @@ input[type='radio'] {
   grid-template-columns: var(--panel-bredd) 1fr var(--inspektor-bredd);
 }
 
+/* Lodrätt redigeringsfält: en spalt före kolumnpanelen. Står efter de andra
+   varianterna i filen så att den vinner när klasserna kombineras. */
+.arbetsyta--lodrat {
+  grid-template-columns: auto var(--panel-bredd) 1fr;
+}
+
 .statusrad {
   display: flex;
   align-items: center;
@@ -260,11 +458,41 @@ input[type='radio'] {
  * knapparna som gör något med datat. Fast bredd så att raden inte hoppar när
  * SV blir EN.
  */
+/*
+ * Språkvalet visar båda språken och markerar det aktiva. Den gamla knappen
+ * visade *nästa* språk — "EN" när man var på svenska — och det gick att läsa
+ * åt båda hållen.
+ */
 .sprakval {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--linje-stark);
+  border-radius: 999px;
+  background: var(--yta-2);
+}
+
+.sprakval__val {
   min-width: 34px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-svag);
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
-  font-weight: 620;
+}
+
+.sprakval__val:hover {
+  color: var(--text);
+}
+
+.sprakval__val--valt,
+.sprakval__val--valt:hover {
+  background: var(--accent);
+  color: #fff;
 }
 
 /* Märket är en knapp: det är också vägen till att se och rensa det sparade. */
@@ -373,6 +601,14 @@ input[type='radio'] {
 
 .arbetsyta--med-verktyg {
   grid-template-columns: var(--panel-bredd) 1fr var(--verktyg-bredd);
+}
+
+.arbetsyta--lodrat.arbetsyta--med-inspektor {
+  grid-template-columns: auto var(--panel-bredd) 1fr var(--inspektor-bredd);
+}
+
+.arbetsyta--lodrat.arbetsyta--med-verktyg {
+  grid-template-columns: auto var(--panel-bredd) 1fr var(--verktyg-bredd);
 }
 
 .verktyg {

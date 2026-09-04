@@ -672,9 +672,12 @@ export function dismiss(id: number): void {
 
 export type Theme = 'system' | 'light' | 'dark'
 export type Tathet = 'kompakt' | 'normal' | 'luftig'
+/** Var redigeringsfältet ligger: som en rad under flikarna, eller lodrätt till vänster. */
+export type Verktygsfalt = 'rad' | 'lodrat'
 
 const THEME_KEY = 'csv-verkstan.tema'
 const TATHET_KEY = 'csv-verkstan.tathet'
+const VERKTYGSFALT_KEY = 'csv-verkstan.verktygsfalt'
 
 function readStored<T extends string>(key: string, fallback: T, allowed: readonly T[]): T {
   try {
@@ -690,6 +693,9 @@ export const theme = signal<Theme>(readStored(THEME_KEY, 'system', ['system', 'l
 export const tathet = signal<Tathet>(
   readStored(TATHET_KEY, 'normal', ['kompakt', 'normal', 'luftig']),
 )
+export const verktygsfalt = signal<Verktygsfalt>(
+  readStored(VERKTYGSFALT_KEY, 'rad', ['rad', 'lodrat']),
+)
 
 export function applyAppearance(): void {
   const root = document.documentElement
@@ -700,6 +706,7 @@ export function applyAppearance(): void {
   try {
     localStorage.setItem(THEME_KEY, theme.value)
     localStorage.setItem(TATHET_KEY, tathet.value)
+    localStorage.setItem(VERKTYGSFALT_KEY, verktygsfalt.value)
   } catch {
     // Ingen lagring tillgänglig. Valet gäller för den här sessionen.
   }

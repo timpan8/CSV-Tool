@@ -7,30 +7,37 @@ async function oppnaExempel(page: Page) {
   await expect(page.locator('.statusrad')).toContainText('16 rader')
 }
 
-const vaxla = (page: Page) => page.locator('.sprakval')
+/** En av de två knapparna i det segmenterade språkvalet i hörnet. */
+const sprakval = (page: Page, kod: 'SV' | 'EN') =>
+  page.getByRole('radio', { name: kod, exact: true })
 
 test('växlar gränssnittet till engelska och tillbaka', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByText('Släpp dina filer här')).toBeVisible()
-  await expect(vaxla(page)).toHaveText('EN')
+  // Väljaren visar båda språken och markerar det aktiva.
+  await expect(sprakval(page, 'SV')).toHaveAttribute('aria-checked', 'true')
+  await expect(sprakval(page, 'EN')).toHaveAttribute('aria-checked', 'false')
 
-  await vaxla(page).click()
+  await sprakval(page, 'EN').click()
   await expect(page.getByText('Drop your files here')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Choose file…' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Open example file' })).toBeVisible()
-  // Knappen säger vad nästa klick gör, inte var man är.
-  await expect(vaxla(page)).toHaveText('SV')
+  await expect(sprakval(page, 'EN')).toHaveAttribute('aria-checked', 'true')
   // Och dokumentets språk följer med, för skärmläsare och stavningskontroll.
   await expect(page.locator('html')).toHaveAttribute('lang', 'en')
 
-  await vaxla(page).click()
+  // Klick på det redan valda gör ingenting.
+  await sprakval(page, 'EN').click()
+  await expect(page.getByText('Drop your files here')).toBeVisible()
+
+  await sprakval(page, 'SV').click()
   await expect(page.getByText('Släpp dina filer här')).toBeVisible()
   await expect(page.locator('html')).toHaveAttribute('lang', 'sv')
 })
 
 test('valet överlever en omladdning', async ({ page }) => {
   await page.goto('/')
-  await vaxla(page).click()
+  await sprakval(page, 'EN').click()
   await expect(page.getByText('Drop your files here')).toBeVisible()
 
   await page.reload()
@@ -40,7 +47,7 @@ test('valet överlever en omladdning', async ({ page }) => {
 
 test('verktygsraden, statusraden och menyerna följer med', async ({ page }) => {
   await oppnaExempel(page)
-  await vaxla(page).click()
+  await sprakval(page, 'EN').click()
 
   // Verktygsraden.
   await expect(page.getByRole('button', { name: 'Sort', exact: true })).toBeVisible()
@@ -66,7 +73,7 @@ test('verktygsraden, statusraden och menyerna följer med', async ({ page }) => 
 
 test('en notis och en ångring talar engelska', async ({ page }) => {
   await oppnaExempel(page)
-  await vaxla(page).click()
+  await sprakval(page, 'EN').click()
 
   await page.getByRole('gridcell', { name: 'Malmö', exact: true }).first().click()
   await page.keyboard.press('Delete')
@@ -82,7 +89,7 @@ test('svenska regler gäller för datat även på engelska', async ({ page }) =>
    * fortsätta stå med mellanslag och decimalkomma.
    */
   await oppnaExempel(page)
-  await vaxla(page).click()
+  await sprakval(page, 'EN').click()
 
   await page.getByRole('button', { name: 'Sort by Ort' }).click()
   const orter = await page.evaluate(() =>
@@ -104,7 +111,7 @@ test('svenska regler gäller för datat även på engelska', async ({ page }) =>
 
 test('ett städverktyg talar engelska', async ({ page }) => {
   await oppnaExempel(page)
-  await vaxla(page).click()
+  await sprakval(page, 'EN').click()
 
   await page.getByRole('button', { name: 'Menu for the column Registrerad' }).click()
   const post = page.getByRole('menuitem', { name: 'Dates' })
@@ -140,7 +147,7 @@ test('slå ihop-vyns val kommer ur kärnans tabeller', async ({ page }) => {
   await page.getByRole('button', { name: 'Öppna filen' }).click()
   await page.getByRole('button', { name: 'Öppna filen' }).click()
   await expect(page.locator('.flik')).toHaveCount(2)
-  await vaxla(page).click()
+  await sprakval(page, 'EN').click()
 
   await page.keyboard.press('Control+k')
   await page.getByLabel('Search commands').fill('Merge with another')
@@ -161,7 +168,7 @@ test('räkneorden i en notis följer språket', async ({ page }) => {
    * notis sa ”Removed 3 rader.” Det här testet vaktar lagningen.
    */
   await oppnaExempel(page)
-  await vaxla(page).click()
+  await sprakval(page, 'EN').click()
 
   await page.locator('.rutnat__radnr--valjbar').first().click()
   await page.locator('.rutnat__radnr--valjbar').first().click({ button: 'right' })

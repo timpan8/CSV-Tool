@@ -62,6 +62,8 @@ export interface GridProps {
   onOpenCellMenu: (rad: number, kol: number, x: number, y: number) => void
   /** Radmenyn, vid pekaren. */
   onOpenRowMenu: (x: number, y: number) => void
+  /** Menyn för tomrummet: innanför rutnätet men utanför celler, rubriker och radnummer. */
+  onOpenTomrumMenu: (x: number, y: number) => void
   onMoveColumn: (id: ColumnId, toIndex: number) => void
   onResizeColumn: (id: ColumnId, width: number) => void
   /** Dubbelklick på kolumngreppet: anpassa bredden efter innehållet. */
@@ -305,6 +307,19 @@ export function VirtualGrid(props: GridProps) {
       }}
       onPointerLeave={() => {
         drarMarkering.current = false
+      }}
+      onContextMenu={(e) => {
+        /*
+         * Tomrummet — till höger om sista kolumnen, under sista raden — gav
+         * webbläsarens egen meny. Celler, rubriker och radnummer har egna
+         * hanterare som förhindrar standardbeteendet, och Preact fäster
+         * lyssnare direkt på elementen, så det syns här som `defaultPrevented`
+         * när händelsen bubblat upp. Allt som *inte* redan tagits är alltså
+         * tomrummet, utan att roten behöver veta hur barnen ser ut.
+         */
+        if (e.defaultPrevented) return
+        e.preventDefault()
+        props.onOpenTomrumMenu(e.clientX, e.clientY)
       }}
     >
       <div class="rutnat__rubrikrad" role="row">

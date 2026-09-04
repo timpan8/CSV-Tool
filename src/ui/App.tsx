@@ -20,6 +20,7 @@ import {
   activeTabId,
   aterstallFlikar,
   applyAppearance,
+  verktygsfalt,
   canRedo,
   canUndo,
   clearViewSpec,
@@ -79,6 +80,8 @@ import { anpassadBredd } from './grid/bredd.js'
 import { ColumnPanel } from './ColumnPanel.jsx'
 import { Inspector } from './Inspector.jsx'
 import { EmptyState } from './EmptyState.jsx'
+import { Redigeringsfalt } from './Redigeringsfalt.jsx'
+import { IkonExportera, IkonKugghjul, IkonMane, IkonOppna, IkonProfiler, IkonSol } from './ikoner.jsx'
 import { ImportDialog, type ImportSettings } from './ImportDialog.jsx'
 import { ExportDialog } from './ExportDialog.jsx'
 import { SearchBar } from './SearchBar.jsx'
@@ -231,7 +234,7 @@ export function App() {
   const frame = tab?.frame ?? null
   const rev = revision.value
 
-  useEffect(() => applyAppearance(), [theme.value, tathet.value])
+  useEffect(() => applyAppearance(), [theme.value, tathet.value, verktygsfalt.value])
 
   /* ---------- Filer ---------- */
 
@@ -1571,6 +1574,121 @@ export function App() {
           ? lamnaVerkstad
           : null
 
+  /*
+   * Redigeringsfältet byggs en gång och placeras efter inställningen: som en
+   * rad under flikarna, eller som första spalt i arbetsytan. Samma element,
+   * två platser — det är inställningen som väljer, inte två uppsättningar
+   * knappar.
+   *
+   * Över flerfilsvyerna finns det inte alls, inte ens som en rad avstängda
+   * knappar. Det lodräta läget ligger inne i arbetsytan, som vyerna ersätter,
+   * så radläget får försvinna på samma sätt — annars beter sig de två lägena
+   * olika. Och på en 720 px-skärm är raden precis den höjd som slå ihop-vyn
+   * behöver för att visa alla sina inställningar utan att rulla.
+   */
+  const redigeringsfalt =
+    frame && tab && !egenVy ? (
+      <Redigeringsfalt
+        lage={verktygsfalt.value}
+        angra={{ kan: canUndo(tab), antal: tab.cursor, kor: () => undo(tab) }}
+        goraOm={{ kan: canRedo(tab), kor: () => redo(tab) }}
+        sortera={{
+          antal: harSortering(tab) ? tab.viewSpec.sortering!.length : 0,
+          kor: () => oppnaTabellverktyg('sortera'),
+        }}
+        filter={{
+          antal: harFilter(tab) ? tab.viewSpec.filter!.regler.length : 0,
+          kor: () => oppnaTabellverktyg('filter'),
+        }}
+        dubbletter={{
+          antal: dubblettgrupper ? dubblettgrupper.antalGrupper : null,
+          kor: () => oppnaTabellverktyg('dubbletter'),
+        }}
+        stada={(x, y) =>
+          setMeny({
+            x,
+            y,
+            poster: stadMeny(stada, { tommaRader: stadaTommaRader, tommaKolumner: stadaTommaKolumner }),
+          })
+        }
+        fleraFiler={(x, y) =>
+          setMeny({
+            x,
+            y,
+            poster: flerfilsmeny({
+              slaIhop: () => oppnaSlaIhop(),
+              kombinera: () => oppnaKombinera(),
+              mall: () => oppnaKombinera(true),
+              session: sessionslage(),
+              aterta,
+            }),
+          })
+        }
+        sammanfatta={() => setSammanfatta({ startkolumn: null })}
+      />
+    ) : null
+
+  /*
+   * Inställningsmenyn. Tema finns här av ett skäl som sol/måne-knappen inte
+   * löser: den växlar bara ljust ↔ mörkt och kan aldrig återgå till *följer
+   * systemet*, fast det värdet finns. Språket står inte här — det ska synas i
+   * hörnet, det var hela poängen med att flytta det dit.
+   */
+  const installningsmeny = (): (MenyPost | 'avdelare')[] => [
+    {
+      etikett: t('Verktygsfält: som rad'),
+      aktiv: verktygsfalt.value === 'rad',
+      kor: () => {
+        verktygsfalt.value = 'rad'
+      },
+    },
+    {
+      etikett: t('Verktygsfält: lodrätt'),
+      aktiv: verktygsfalt.value === 'lodrat',
+      kor: () => {
+        verktygsfalt.value = 'lodrat'
+      },
+    },
+    'avdelare',
+    {
+      etikett: t('Tema: följer systemet'),
+      aktiv: theme.value === 'system',
+      kor: () => {
+        theme.value = 'system'
+      },
+    },
+    {
+      etikett: t('Tema: ljust'),
+      aktiv: theme.value === 'light',
+      kor: () => {
+        theme.value = 'light'
+      },
+    },
+    {
+      etikett: t('Tema: mörkt'),
+      aktiv: theme.value === 'dark',
+      kor: () => {
+        theme.value = 'dark'
+      },
+    },
+  ]
+
+  /*
+   * Högerklick i tomrummet: innanför rutnätet men utanför kolumnerna. Det
+   * användaren bad om var kolumnen; raden är samma gest riktad mot tomrummet
+   * under tabellen. `infogaRader` med ett vyindex bortom sista raden lägger
+   * raden sist i filen, oavsett sortering och filter.
+   */
+  const tomrumsmeny = (): (MenyPost | 'avdelare')[] => [
+    { etikett: t('Infoga en ny kolumn'), kor: () => infogaKolumn() },
+    {
+      etikett: t('Lägg till en rad sist'),
+      kor: () => {
+        if (tab && frame) infogaRader(tab, frame.view.length, 1, true)
+      },
+    },
+  ]
+
   return (
     <div class="app">
       <div class="verktygsrad">
@@ -1580,143 +1698,79 @@ export function App() {
           </span>
           CSV-verkstan
         </span>
-        <FilValjare onFiler={oppnaFiler} />
 
         {/*
-          Raden är grupperad efter vad knapparna gör, inte efter när de
-          byggdes. Först vad du ser — sortering, filter och dubbletter ändrar
-          bara vyn. Sedan vad som skapar eller ändrar data. Sist vägen ut.
+          App-raden bär filens ärenden: öppna, spara arbetsgången, skriva ut.
+          Allt som verkar på innehållet står i redigeringsfältet nedanför —
+          det finns bara när det finns ett innehåll att verka på. Längst till
+          höger det som gäller verktyget självt: språk, tema, inställningar.
         */}
-        <span class="verktygsrad__avdelare" aria-hidden="true" />
+        <FilValjare onFiler={oppnaFiler} />
         <button
-          class={`knapp${harSortering(tab) ? ' knapp--primar' : ''}`}
-          disabled={!frame || egenVy}
-          title={t('Flernivåsortering med svensk bokstavsordning. Ändrar bara ordningen, aldrig värdena.')}
-          onClick={() => oppnaTabellverktyg('sortera')}
-        >
-          {t('Sortera')}
-          {harSortering(tab) ? ` (${tab!.viewSpec.sortering!.length})` : ''}
-        </button>
-        <button
-          class={`knapp${harFilter(tab) ? ' knapp--primar' : ''}`}
-          disabled={!frame || egenVy}
-          title={t('Visa bara de rader som stämmer med dina regler. Raderna finns kvar.')}
-          onClick={() => oppnaTabellverktyg('filter')}
-        >
-          {t('Filter')}
-          {harFilter(tab) ? ` (${tab!.viewSpec.filter!.regler.length})` : ''}
-        </button>
-        <button
-          class={`knapp${tab?.viewSpec.dubbletter ? ' knapp--primar' : ''}`}
-          disabled={!frame || egenVy}
-          title={t('Hitta rader som är lika i de kolumner du väljer, och visa dem grupperade.')}
-          onClick={() => oppnaTabellverktyg('dubbletter')}
-        >
-          {t('Dubbletter')}
-          {dubblettgrupper ? ` (${formatCount(dubblettgrupper.antalGrupper)})` : ''}
-        </button>
-
-        <span class="verktygsrad__avdelare" aria-hidden="true" />
-        <button
-          class="knapp"
-          disabled={!frame || egenVy}
-          title={t('Trimma blanksteg, ändra skiftläge och städa bort det osynliga i markeringen.')}
-          onClick={(e) =>
-            setMeny({
-              x: (e.currentTarget as HTMLElement).getBoundingClientRect().left,
-              y: (e.currentTarget as HTMLElement).getBoundingClientRect().bottom + 4,
-              poster: stadMeny(stada, { tommaRader: stadaTommaRader, tommaKolumner: stadaTommaKolumner }),
-            })
-          }
-        >
-          {t('Städa')} ▾
-        </button>
-        <button
-          class="knapp"
-          disabled={!frame || egenVy}
-          title={t('Sätt ihop data ur flera filer — bredvid varandra, ovanpå varandra, eller in i en mall.')}
-          onClick={(e) =>
-            setMeny({
-              x: (e.currentTarget as HTMLElement).getBoundingClientRect().left,
-              y: (e.currentTarget as HTMLElement).getBoundingClientRect().bottom + 4,
-              poster: flerfilsmeny({
-                slaIhop: () => oppnaSlaIhop(),
-                kombinera: () => oppnaKombinera(),
-                mall: () => oppnaKombinera(true),
-                session: sessionslage(),
-                aterta,
-              }),
-            })
-          }
-        >
-          {t('Flera filer')} ▾
-        </button>
-        <button
-          class="knapp"
-          disabled={!frame || egenVy}
-          title={t('En rad per grupp: summa Belopp per Ort, antal ordrar per kund. Resultatet blir en ny flik.')}
-          onClick={() => setSammanfatta({ startkolumn: null })}
-        >
-          {t('Sammanfatta…')}
-        </button>
-
-        <span class="verktygsrad__avdelare" aria-hidden="true" />
-        <button
-          class="knapp"
+          class="knapp knapp--ikon"
           disabled={!frame || egenVy}
           title={t('Spara den här filens arbetsgång och kör om den på nästa fil.')}
           onClick={() => setProfilerOppna(true)}
         >
+          <IkonProfiler />
           {t('Profiler…')}
         </button>
         <button
-          class="knapp"
+          class="knapp knapp--ikon"
           disabled={!frame || egenVy}
           title={t('Skriv ut filen som Excel eller CSV.')}
           onClick={() => setExportOppen(true)}
         >
+          <IkonExportera />
           {t('Exportera')}
         </button>
-        {/*
-          Språkvalet står i verktygsraden och inte bara i paletten.
-          Den som vill ha engelska hittar per definition inte ett svenskt
-          kommando i en palett man måste veta att den finns.
-        */}
-        <button
-          class="knapp knapp--tyst sprakval"
-          title={t(
-            'Gränssnittets text byter språk. Sortering, tal och datum följer alltid svenska regler.',
-          )}
-          onClick={() => sattSprak(sprak.value === 'en' ? 'sv' : 'en')}
-        >
-          {sprak.value === 'en' ? 'SV' : 'EN'}
-        </button>
-        <div class="vaxel">
-          <button
-            class="knapp knapp--tyst"
-            disabled={!canUndo(tab)}
-            title={t('Ångra (Ctrl+Z)')}
-            onClick={() => tab && undo(tab)}
+
+        <div class="verktygsrad__horn">
+          {/*
+            Språkvalet visar båda språken och markerar det aktiva. Den gamla
+            knappen visade nästa språk — "EN" när man var på svenska — och
+            gick att läsa åt båda hållen.
+          */}
+          <div
+            class="sprakval"
+            role="radiogroup"
+            aria-label={t('Språk')}
+            title={t(
+              'Gränssnittets text byter språk. Sortering, tal och datum följer alltid svenska regler.',
+            )}
           >
-            ↺ {t('Ångra')}
-            {tab && tab.cursor > 0 ? ` ${tab.cursor}` : ''}
-          </button>
+            {(['sv', 'en'] as const).map((s) => (
+              <button
+                key={s}
+                class={`sprakval__val${sprak.value === s ? ' sprakval__val--valt' : ''}`}
+                role="radio"
+                aria-checked={sprak.value === s}
+                onClick={() => sattSprak(s)}
+              >
+                {s.toUpperCase()}
+              </button>
+            ))}
+          </div>
           <button
-            class="knapp knapp--tyst"
-            disabled={!canRedo(tab)}
-            title={t('Gör om (Ctrl+Y)')}
-            onClick={() => tab && redo(tab)}
-          >
-            ↻ {t('Gör om')}
-          </button>
-          <button
-            class="knapp knapp--tyst"
+            class="knapp knapp--ikon knapp--rund"
             title={t('Ljust eller mörkt läge')}
+            aria-label={t('Ljust eller mörkt läge')}
             onClick={() => {
               theme.value = theme.value === 'dark' ? 'light' : 'dark'
             }}
           >
-            {theme.value === 'dark' ? '☀' : '☾'}
+            {theme.value === 'dark' ? <IkonSol /> : <IkonMane />}
+          </button>
+          <button
+            class="knapp knapp--ikon knapp--rund"
+            title={t('Inställningar')}
+            aria-label={t('Inställningar')}
+            onClick={(e) => {
+              const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+              setMeny({ x: r.left, y: r.bottom + 4, poster: installningsmeny() })
+            }}
+          >
+            <IkonKugghjul />
           </button>
         </div>
       </div>
@@ -1733,6 +1787,8 @@ export function App() {
           ))}
         </div>
       )}
+
+      {verktygsfalt.value === 'rad' && redigeringsfalt}
 
       {sokOppen && tab && frame && !egenVy && (
         <SearchBar
@@ -1862,8 +1918,9 @@ export function App() {
         <div
           class={`arbetsyta arbetsyta--med-inspektor${
             verktygKolumner.length > 0 ? ' arbetsyta--med-verktyg' : ''
-          }`}
+          }${verktygsfalt.value === 'lodrat' ? ' arbetsyta--lodrat' : ''}`}
         >
+          {verktygsfalt.value === 'lodrat' && redigeringsfalt}
           <ColumnPanel
             frame={frame}
             tab={tab}
@@ -1901,6 +1958,7 @@ export function App() {
               setMeny({ x, y, poster: cellmenyposter(rad, kol) })
             }
             onOpenRowMenu={(x, y) => setMeny({ x, y, poster: radmenyposter() })}
+            onOpenTomrumMenu={(x, y) => setMeny({ x, y, poster: tomrumsmeny() })}
             onMoveColumn={flyttaKolumn}
             onResizeColumn={andraBredd}
             onAutofit={anpassaKolumnbredd}
@@ -2122,6 +2180,9 @@ export function App() {
                 theme.value = theme.value === 'dark' ? 'light' : 'dark'
               },
               vaxlaSprak: () => sattSprak(sprak.value === 'en' ? 'sv' : 'en'),
+              vaxlaVerktygsfalt: () => {
+                verktygsfalt.value = verktygsfalt.value === 'rad' ? 'lodrat' : 'rad'
+              },
             },
           )}
           onStang={() => setPalettOppen(false)}
@@ -2222,7 +2283,7 @@ function stadMeny(
 ): (MenyPost | 'avdelare')[] {
   return [
     ...STADNINGAR.map((s): MenyPost => ({
-      etikett: s.etikett,
+      etikett: t(s.etikett),
       kor: () => stada(s.id),
     })),
     'avdelare',
@@ -2279,9 +2340,12 @@ function flerfilsmeny(handlers: {
       skal: handlers.session.lage === 'ingen' ? undefined : handlers.session.namn,
       inaktiv:
         handlers.session.lage === 'ingen'
-          ? 'Ingen påbörjad sammanslagning att gå tillbaka till.'
+          ? t('Ingen påbörjad sammanslagning att gå tillbaka till.')
           : handlers.session.lage === 'stangd'
-            ? `Filerna är stängda, så det finns inga rader att beta av. ${handlers.session.ogjort} beslut gick förlorade med dem — en fil som öppnas igen är en ny fil för verktyget, så besluten går inte att återansluta.`
+            ? tf(
+                'Filerna är stängda, så det finns inga rader att beta av. {0} beslut gick förlorade med dem — en fil som öppnas igen är en ny fil för verktyget, så besluten går inte att återansluta.',
+                handlers.session.ogjort,
+              )
             : undefined,
       kor: handlers.aterta,
     },
@@ -2377,7 +2441,8 @@ function kolumnMeny(
 
 function FilValjare({ onFiler }: { onFiler: (files: File[]) => void }) {
   return (
-    <label class="knapp">
+    <label class="knapp knapp--ikon">
+      <IkonOppna />
       {t('Öppna')}
       <input
         type="file"

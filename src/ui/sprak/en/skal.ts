@@ -326,4 +326,22 @@ export const SKAL: Record<string, string> = {
   'En påbörjad sammanslagning {0} finns kvar med {1} beslut.':
     'A merge in progress, {0}, is still there with {1} decisions.',
 
+
+  /* ---------- Etapp 25: app-raden, hörnet, redigeringsfältet ---------- */
+  Redigering: 'Editing',
+  Språk: 'Language',
+  Inställningar: 'Settings',
+  'Verktygsfält: som rad': 'Toolbar: as a row',
+  'Verktygsfält: lodrätt': 'Toolbar: vertical',
+  'Tema: följer systemet': 'Theme: follows the system',
+  'Tema: ljust': 'Theme: light',
+  'Tema: mörkt': 'Theme: dark',
+  'Byt verktygsfältets placering': 'Move the toolbar',
+  'Som rad under flikarna, eller lodrätt till vänster om kolumnerna.':
+    'As a row under the tabs, or vertically to the left of the columns.',
+  'Lägg till en rad sist': 'Add a row at the end',
+  'Ingen påbörjad sammanslagning att gå tillbaka till.': 'No merge in progress to go back to.',
+  'Filerna är stängda, så det finns inga rader att beta av. {0} beslut gick förlorade med dem — en fil som öppnas igen är en ny fil för verktyget, så besluten går inte att återansluta.':
+    'The files are closed, so there are no rows left to work through. {0} decisions were lost with them — a file opened again is a new file to the tool, so the decisions cannot be reattached.',
+
 }

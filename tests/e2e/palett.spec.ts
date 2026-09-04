@@ -35,9 +35,9 @@ test('paletten öppnas även innan en fil är öppen', async ({ page }) => {
   await expect(page.locator('.tomt')).toBeVisible()
   await page.keyboard.press('Control+k')
   await expect(palett(page)).toBeVisible()
-  // Utan fil finns bara det som går att göra ändå — och att klistra in ett
-  // nytt dokument är en av dem.
-  await expect(page.locator('.palett__post')).toHaveCount(6)
+  // Utan fil finns bara det som går att göra ändå — att klistra in ett nytt
+  // dokument är en av dem, och verktygets egna val: tema, språk, verktygsfält.
+  await expect(page.locator('.palett__post')).toHaveCount(7)
   await expect(palett(page)).toContainText('Öppna fil…')
   await expect(palett(page)).toContainText('Klistra in som ny fil')
 })
