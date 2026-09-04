@@ -209,9 +209,27 @@ export function Verkstad(props: {
 
   const kvarEfterat = vansterLista.length + rest.hoger.length
 
+  /*
+   * Högerraderna som följer med, när sammanslagningen valdes med *Alla rader
+   * ur båda filerna*.
+   *
+   * Restlistan och inte `full.hogerUtan`: den är redan rensad från de rader
+   * användaren skrivit av. Att skriva av betyder alltså fortfarande precis
+   * vad notisen längre ned lovar — raden är avklarad — och kärnan slipper
+   * känna till att avskrivningar finns.
+   */
+  const hogerRester = s.sammanslagning.omfattning === 'bada' ? rest.hoger : undefined
+
   const kor = () => {
     const omgang = s.omgangar + 1
-    const { frame, fyllda } = slaIhop(vanster, hoger, full, s.sammanslagning)
+    const { frame, fyllda } = slaIhop(
+      vanster,
+      hoger,
+      full,
+      s.sammanslagning,
+      undefined,
+      hogerRester,
+    )
     // Varje omgång blir en egen flik. Namnet säger vilken, så att man ser
     // vilken som är den senaste när man kört flera gånger.
     if (omgang > 1) frame.name = `${frame.name} (omgång ${omgang})`
@@ -401,8 +419,10 @@ export function Verkstad(props: {
 
             <Notis ton="info">
               Att skriva av en rad tar bort den ur listan — inget annat. Rader ur{' '}
-              {vanster.name} utan partner följer ändå med i resultatet, med tomma celler, och
-              rader ur {hoger.name} utan partner blir ändå kvar i sin egen flik.
+              {vanster.name} utan partner följer ändå med i resultatet, med tomma celler.{' '}
+              {hogerRester
+                ? `Rader ur ${hoger.name} utan partner följer också med, sist i resultatet — utom de du skrivit av.`
+                : `Rader ur ${hoger.name} utan partner blir kvar i sin egen flik.`}
             </Notis>
           </div>
         </div>

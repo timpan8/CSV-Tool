@@ -50,6 +50,7 @@ export interface Kommandohandlare {
   filter: () => void
   dubbletter: () => void
   slaIhop: () => void
+  lopnummer: () => void
   fortsattVerkstad: () => void
   kombinera: () => void
   mall: () => void
@@ -119,6 +120,15 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
       etikett: 'Dubbletter…',
       ord: 'dubletter duplicates upprepade',
       kor: h.dubbletter,
+    })
+    lagg({
+      id: 'lopnummer',
+      grupp: 'Tabell',
+      etikett: 'Lägg till kolumn med löpnummer',
+      ord: 'radnummer id index numrera nummer ordning nr row number',
+      beskrivning:
+        'En ny kolumn först i filen med 1, 2, 3 … i radernas nuvarande ordning. Numret följer med vid export, så det går att sortera tillbaka.',
+      kor: h.lopnummer,
     })
     lagg({
       id: 'slaihop',

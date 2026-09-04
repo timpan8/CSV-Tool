@@ -489,11 +489,12 @@ describe('forhandsurval', () => {
 
   it('tar med både träffar och icke-träffar', () => {
     const urval = forhandsurval(m([[0, 0], [2, 1], [4, 2]], [1, 3, 5]), 6)
-    expect(urval).toEqual([0, 1, 2, 3, 4, 5])
+    expect(urval.vanster).toEqual([0, 1, 2, 3, 4, 5])
+    expect(urval.hoger).toEqual([])
   })
 
   it('står i filens ordning', () => {
-    const urval = forhandsurval(m([[7, 0], [9, 1]], [1, 3]), 4)
+    const urval = forhandsurval(m([[7, 0], [9, 1]], [1, 3]), 4).vanster
     expect(urval).toEqual([1, 3, 7, 9])
     expect([...urval].sort((a, b) => a - b)).toEqual(urval)
   })
@@ -501,14 +502,14 @@ describe('forhandsurval', () => {
   it('visar en ensam omatchad rad även bland många träffar', () => {
     // Just den raden är den enda man behöver upptäcka.
     const matchade = Array.from({ length: 200 }, (_, i) => [i, i])
-    const urval = forhandsurval(m(matchade, [200]), 8)
+    const urval = forhandsurval(m(matchade, [200]), 8).vanster
     expect(urval).toContain(200)
     expect(urval).toHaveLength(8)
   })
 
   it('visar en ensam träff även bland många omatchade', () => {
     const utan = Array.from({ length: 200 }, (_, i) => i + 1)
-    const urval = forhandsurval(m([[0, 0]], utan), 8)
+    const urval = forhandsurval(m([[0, 0]], utan), 8).vanster
     expect(urval).toContain(0)
     expect(urval).toHaveLength(8)
   })
@@ -517,30 +518,57 @@ describe('forhandsurval', () => {
     // 75 % träffar ska ge ungefär 75 % träffar i urvalet.
     const matchade = Array.from({ length: 300 }, (_, i) => [i, i])
     const utan = Array.from({ length: 100 }, (_, i) => i + 300)
-    const urval = forhandsurval(m(matchade, utan), 8)
+    const urval = forhandsurval(m(matchade, utan), 8).vanster
     const antalUtan = urval.filter((r) => r >= 300).length
     expect(antalUtan).toBe(2)
     expect(urval).toHaveLength(8)
   })
 
+  it('blandar in högerrader när de skickas med', () => {
+    const matchade = Array.from({ length: 40 }, (_, i) => [i, i])
+    const utan = Array.from({ length: 40 }, (_, i) => i + 40)
+    const urval = forhandsurval(m(matchade, utan), 9, [100, 101, 102, 103])
+    // Alla tre sorterna syns, och taket hålls över båda listorna tillsammans.
+    expect(urval.hoger.length).toBeGreaterThan(0)
+    expect(urval.vanster.some((r) => r < 40)).toBe(true)
+    expect(urval.vanster.some((r) => r >= 40)).toBe(true)
+    expect(urval.vanster.length + urval.hoger.length).toBe(9)
+  })
+
+  it('en ensam högerrad bland många vänsterrader syns ändå', () => {
+    const matchade = Array.from({ length: 500 }, (_, i) => [i, i])
+    const urval = forhandsurval(m(matchade, [500]), 6, [900])
+    expect(urval.hoger).toEqual([900])
+  })
+
+  it('utan högerrader är urvalet identiskt med förut', () => {
+    const matchade = Array.from({ length: 30 }, (_, i) => [i, i])
+    const utan = Array.from({ length: 10 }, (_, i) => i + 30)
+    for (const tak of [1, 2, 5, 12, 99]) {
+      expect(forhandsurval(m(matchade, utan), tak, [])).toEqual(
+        forhandsurval(m(matchade, utan), tak),
+      )
+    }
+  })
+
   it('räknar en vänsterrad med flera träffar en gång', () => {
-    const urval = forhandsurval(m([[0, 0], [0, 1], [0, 2], [3, 3]], [1]), 4)
+    const urval = forhandsurval(m([[0, 0], [0, 1], [0, 2], [3, 3]], [1]), 4).vanster
     expect(urval).toEqual([0, 1, 3])
   })
 
   it('klarar noll träffar, noll rader och ett tak större än filen', () => {
-    expect(forhandsurval(m([], [0, 1]), 5)).toEqual([0, 1])
-    expect(forhandsurval(m([[0, 0]], []), 5)).toEqual([0])
-    expect(forhandsurval(m([], []), 5)).toEqual([])
-    expect(forhandsurval(m([[0, 0]], [1]), 0)).toEqual([])
-    expect(forhandsurval(m([[0, 0]], [1]), -3)).toEqual([])
+    expect(forhandsurval(m([], [0, 1]), 5).vanster).toEqual([0, 1])
+    expect(forhandsurval(m([[0, 0]], []), 5).vanster).toEqual([0])
+    expect(forhandsurval(m([], []), 5).vanster).toEqual([])
+    expect(forhandsurval(m([[0, 0]], [1]), 0).vanster).toEqual([])
+    expect(forhandsurval(m([[0, 0]], [1]), -3).vanster).toEqual([])
   })
 
   it('taket hålls', () => {
     const matchade = Array.from({ length: 50 }, (_, i) => [i * 2, i])
     const utan = Array.from({ length: 50 }, (_, i) => i * 2 + 1)
     for (const tak of [1, 2, 3, 7, 12, 99, 500]) {
-      expect(forhandsurval(m(matchade, utan), tak).length).toBeLessThanOrEqual(tak)
+      expect(forhandsurval(m(matchade, utan), tak).vanster.length).toBeLessThanOrEqual(tak)
     }
   })
 })
@@ -586,6 +614,64 @@ describe('slaIhop med urval', () => {
     const { frame } = slaIhop(v, h, m, val, [0])
     expect(frame.rowCount).toBe(2)
     expect([0, 1].map((r) => getCell(frame.columns[1]!, r))).toEqual(['1', '2'])
+  })
+
+  it('tar med högerrader utan partner när de skickas med', () => {
+    const m = matcha(VANSTER, HOGER, P)
+    // Bo (rad 1) saknar order; ingen orderrad saknar kund här, så vi tar med
+    // rad 1 ur högerfilen för hand för att pröva formen.
+    const { frame, fyllda, rader } = slaIhop(VANSTER, HOGER, m, VAL, undefined, [1])
+    expect(rader).toBe(5)
+    expect(frame.rowCount).toBe(5)
+    // Vänsterraderna först, i filens ordning, högerraden sist.
+    expect([0, 1, 2, 3, 4].map((r) => getCell(frame.columns[0]!, r))).toEqual([
+      'Anna', 'Bo', 'Cia', 'Dan', '',
+    ])
+    // Högerkolumnen är ifylld på den sista raden.
+    expect(getCell(frame.columns[1]!, 4)).toBe('200')
+    // Och den räknas inte som en lyckad sammanslagning.
+    expect(fyllda).toBe(2)
+  })
+
+  it('vänsterkolumnerna är frånvarande, inte tomma, på en högerrad', () => {
+    const m = matcha(VANSTER, HOGER, P)
+    const { frame } = slaIhop(VANSTER, HOGER, m, VAL, undefined, [1])
+    const namn = frame.columns[0]!
+    // Spegelbilden av testet för vänsterrader utan partner.
+    expect(getCell(namn, 4)).toBe('')
+    expect(hasFlag(namn, 4, Flag.Padded)).toBe(true)
+    expect(hasFlag(namn, 0, Flag.Padded)).toBe(false)
+  })
+
+  it('Träff-kolumnen säger att raden bara finns i den andra filen', () => {
+    const m = matcha(VANSTER, HOGER, P)
+    const { frame } = slaIhop(VANSTER, HOGER, m, VAL, undefined, [1])
+    const traff = frame.columns[frame.columns.length - 1]!
+    expect(getCell(traff, 0)).toBe(TRAFFVARDEN.traff)
+    expect(getCell(traff, 1)).toBe(TRAFFVARDEN.utan)
+    expect(getCell(traff, 4)).toBe(TRAFFVARDEN.bara)
+  })
+
+  it('radnumret pekar på den fil raden faktiskt kom ifrån', () => {
+    const m = matcha(VANSTER, HOGER, P)
+    const { frame } = slaIhop(VANSTER, HOGER, m, VAL, undefined, [1])
+    // Fyra vänsterrader ur kunder, sedan rad 2 ur order.
+    expect(Array.from(frame.sourceRow)).toEqual([1, 2, 3, 4, 2])
+  })
+
+  it('utan högerrader är resultatet bit för bit oförändrat — regressionsvakt', () => {
+    const m = matcha(VANSTER, HOGER, P)
+    const utan = slaIhop(VANSTER, HOGER, m, VAL)
+    const tom = slaIhop(VANSTER, HOGER, m, VAL, undefined, [])
+    const dump = (f: typeof utan.frame) =>
+      Array.from({ length: f.rowCount }, (_, r) => f.columns.map((c) => getCell(c, r)))
+    expect(dump(tom.frame)).toEqual(dump(utan.frame))
+    expect(tom.fyllda).toBe(utan.fyllda)
+    // Det fjärde Träff-värdet får inte ligga i ordboken när ingen rad använder
+    // det — annars dyker det upp som ett alternativ med noll rader i filtret.
+    const traff = (f: typeof utan.frame) => f.columns[f.columns.length - 1]!.dict
+    expect(traff(tom.frame)).toEqual(traff(utan.frame))
+    expect(traff(utan.frame)).not.toContain(TRAFFVARDEN.bara)
   })
 
   it('utan urval är resultatet oförändrat — regressionsvakt', () => {
@@ -636,6 +722,24 @@ describe('byggPlan', () => {
     const plan = byggPlan(M(), 'forsta', V.rowCount, [2, 1])
     expect(plan.map((p) => p.v)).toEqual([2, 1])
     expect(plan.map((p) => p.h === null)).toEqual([false, true])
+  })
+
+  it('lägger högerraderna sist, utan vänsterrad', () => {
+    const m = matcha(V, H, [par(V, H, 0, 0)])
+    const plan = byggPlan(m, 'forsta', V.rowCount, undefined, [1, 2])
+    expect(plan.slice(-2)).toEqual([
+      { v: null, h: 1, flera: false },
+      { v: null, h: 2, flera: false },
+    ])
+    // Vänstersvepet är oförändrat före dem.
+    expect(plan.slice(0, -2).every((p) => p.v !== null)).toBe(true)
+  })
+
+  it('utan högerrader ser planen ut precis som förut', () => {
+    const m = matcha(V, H, [par(V, H, 0, 0)])
+    expect(byggPlan(m, 'forsta', V.rowCount, undefined, [])).toEqual(
+      byggPlan(m, 'forsta', V.rowCount),
+    )
   })
 
   it('är exakt den plan slaIhop bygger sitt resultat av', () => {

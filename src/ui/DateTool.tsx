@@ -63,6 +63,10 @@ export function DateTool(props: {
   const [excelSerie, setExcelSerie] = useState(false)
   // null betyder "inte besvarad än" — skiljt från att ha valt dag först.
   const [svar, setSvar] = useState<boolean | null>(null)
+  const [nyKolumn, setNyKolumn] = useState(false)
+  const [namn, setNamn] = useState('')
+  // Sant tills användaren själv skrivit i namnfältet; då slutar det följa med.
+  const [namnFoljer, setNamnFoljer] = useState(true)
 
   // Räknat på ordböckerna med cellantal som vikt: varje unikt värde tolkas en
   // gång, men siffrorna som visas är celler — och över alla valda kolumner,
@@ -81,22 +85,47 @@ export function DateTool(props: {
   const maasteSvara = grundinventering.tvetydig && svar === null
 
   const inst = { dagForst, excelSerie, mal, onError }
+  const malnamn = MALFORMAT.find((m) => m.varde === mal)!.etikett
+
+  /*
+   * Nyläget gäller en kolumn i taget.
+   *
+   * `skapaKolumnerFran` gör ett eget ångra-steg per förhandsvisning, så tolv
+   * markerade kolumner skulle bli tolv steg att backa — tvärtemot vad
+   * omskrivningen lovar. Det är dessutom husets policy sedan tidigare: de
+   * verktyg som *skapar* kolumner arbetar på den första. Panelen säger det i
+   * klartext i stället för att tyst hoppa över resten.
+   */
+  const malkolumner = nyKolumn ? kolumner.slice(0, 1) : kolumner
+  const forsta = kolumner[0]
+  // Namnet följer målformatet: byter man till ÅÅÅÅ-MM följer förslaget med.
+  const forslagsnamn = `${forsta?.name ?? 'Datum'} (${malnamn})`
+  const visatNamn = namnFoljer ? forslagsnamn : namn
+  const rentNamn = visatNamn.trim() === '' ? forslagsnamn : visatNamn.trim()
 
   const forhLista = useMemo(
     () =>
-      kolumner.map((col) =>
+      malkolumner.map((col) =>
         beraknaForhandsvisning(col, {
-          etikett: `Datum i ”${col.name}” → ${MALFORMAT.find((m) => m.varde === mal)!.etikett}`,
+          etikett: nyKolumn
+            ? `Datum ur ”${col.name}” → ${rentNamn}`
+            : `Datum i ”${col.name}” → ${malnamn}`,
           kind: 'dates',
-          profil: { typ: 'datum', kolumn: col.name, inst },
+          profil: {
+            typ: 'datum',
+            kolumn: col.name,
+            inst,
+            ...(nyKolumn ? { nyKolumn: rentNamn } : {}),
+          },
           fn: datumTransform(inst),
           arProblem: (v) => tolkaDatum(v, inst).datum === null,
           // Bara ett rent datum gör kolumnen till en datumkolumn. ÅÅÅÅ-MM och
           // ÅÅÅÅ är sammanfattningar, inte datum, och ska inte typas som sådana.
           nyTyp: mal === 'datum' ? 'date' : undefined,
+          ...(nyKolumn ? { nyaKolumner: [rentNamn] } : {}),
         }),
       ),
-    [nyckel, props.dataRevision, dagForst, excelSerie, mal, onError],
+    [nyckel, props.dataRevision, dagForst, excelSerie, mal, onError, nyKolumn, rentNamn],
   )
   const forh = sammanfatta(forhLista)
 
@@ -131,12 +160,18 @@ export function DateTool(props: {
               maasteSvara
                 ? 'Svara först på om dagen eller månaden står först.'
                 : forh.andrade === 0
-                  ? 'Ingenting skulle ändras.'
+                  ? nyKolumn
+                    ? 'Kolumnen skulle bli tom.'
+                    : 'Ingenting skulle ändras.'
                   : undefined
             }
             onClick={() => props.onTillampa(forhLista)}
           >
-            {kolumner.length > 1 ? `Tillämpa på ${kolumner.length} kolumner` : 'Tillämpa'}
+            {nyKolumn
+              ? 'Skapa kolumnen'
+              : kolumner.length > 1
+                ? `Tillämpa på ${kolumner.length} kolumner`
+                : 'Tillämpa'}
           </button>
         </>
       }
@@ -214,6 +249,36 @@ export function DateTool(props: {
         />
       </div>
 
+      <label class="kryss">
+        <input
+          type="checkbox"
+          checked={nyKolumn}
+          onChange={(e) => setNyKolumn((e.currentTarget as HTMLInputElement).checked)}
+        />
+        Lägg resultatet i en ny kolumn och låt originalet stå kvar
+      </label>
+
+      {nyKolumn && (
+        <div class="falt">
+          <span class="falt__etikett">Namn på den nya kolumnen</span>
+          <input
+            value={visatNamn}
+            aria-label="Namn på den nya kolumnen"
+            onInput={(e) => {
+              setNamnFoljer(false)
+              setNamn((e.currentTarget as HTMLInputElement).value)
+            }}
+          />
+          {kolumner.length > 1 && forsta && (
+            <Notis ton="varning">
+              En ny kolumn skapas åt gången, så det här gäller {forsta.name}. De andra{' '}
+              {kolumner.length - 1} markerade kolumnerna lämnas orörda — stäng av valet för att
+              skriva om allihop på plats i stället.
+            </Notis>
+          )}
+        </div>
+      )}
+
       <div class="falt">
         <span class="falt__etikett">Värden som inte går att tolka</span>
         <Val varden={FELTILLSTAND} valt={onError} onValj={setOnError} />
@@ -222,7 +287,8 @@ export function DateTool(props: {
       <div class="falt">
         <span class="falt__etikett">Vad som händer</span>
         <p class="verktyg__sammanfattning verktyg__resultat">
-          <strong>{formatCount(forh.andrade)}</strong> av {celler(forh.ifyllda)} skrivs om
+          <strong>{formatCount(forh.andrade)}</strong> av {celler(forh.ifyllda)}{' '}
+          {nyKolumn ? `får ett värde i ${rentNamn}` : 'skrivs om'}
           {forh.problem > 0 && (
             <>
               {' · '}
@@ -232,6 +298,23 @@ export function DateTool(props: {
           )}
           .
         </p>
+        {nyKolumn && forh.problem > 0 && (
+          <p class="verktyg__sammanfattning">
+            {/*
+              I nyläget räcker det inte att säga hur många som inte gick att tolka.
+              Originalet står kvar i sin kolumn, och vad de raderna får i den *nya*
+              är en annan fråga — en ny kolumn som innehåller ”i går” är ett annat
+              löfte än en orörd originalcell.
+            */}
+            De {formatCount(forh.problem)} raderna får{' '}
+            {onError === 'behall'
+              ? 'originalvärdet oförändrat'
+              : onError === 'markera'
+                ? 'OGILTIGT'
+                : 'ingenting alls'}{' '}
+            i {rentNamn}.
+          </p>
+        )}
         <div class="val" role="radiogroup">
           <button
             class={`val__knapp${props.visaBara === undefined ? ' val__knapp--vald' : ''}`}
@@ -248,7 +331,7 @@ export function DateTool(props: {
             disabled={forh.andrade === 0}
             onClick={() => props.onVisaBara('andrade')}
           >
-            Bara ändrade
+            {nyKolumn ? 'Bara ifyllda' : 'Bara ändrade'}
           </button>
           <button
             class={`val__knapp${props.visaBara === 'problem' ? ' val__knapp--vald' : ''}`}
@@ -263,9 +346,19 @@ export function DateTool(props: {
       </div>
 
       <Notis ton="info">
-        Tabellen visar <span class="forhand__fore">före</span>{' '}
-        <span class="forhand__pil">→</span> <span class="forhand__efter">efter</span> i kolumnen.
-        Ingenting är ändrat förrän du klickar Tillämpa, och Ctrl+Z tar tillbaka det efteråt.
+        {nyKolumn ? (
+          <>
+            Kolumnen med streckad ram visar vad {rentNamn} kommer att innehålla. Ingenting är
+            skapat förrän du klickar Skapa kolumnen, och Ctrl+Z tar bort den efteråt.
+          </>
+        ) : (
+          <>
+            Tabellen visar <span class="forhand__fore">före</span>{' '}
+            <span class="forhand__pil">→</span> <span class="forhand__efter">efter</span> i
+            kolumnen. Ingenting är ändrat förrän du klickar Tillämpa, och Ctrl+Z tar tillbaka det
+            efteråt.
+          </>
+        )}
       </Notis>
     </Verktygspanel>
   )

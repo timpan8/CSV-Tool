@@ -348,6 +348,47 @@ export function taBortTommaKolumner(tab: Tab): number {
   return tomma.length
 }
 
+/**
+ * Lägger till en kolumn med löpnummer: 1, 2, 3 … i filens nuvarande ordning.
+ *
+ * Rutnätets `#`-ruta svarar på en annan fråga — *vilken rad i filen kom det
+ * här ifrån?* — och den räknar filens fysiska rader, rubriker och spökrader
+ * inräknade. Den blir dessutom 0 för rader man lagt till själv, och den
+ * följer inte med vid export. Det här är i stället riktig data: ett värde att
+ * sortera på, filtrera på och skicka vidare, så att en lista går att få
+ * tillbaka i sin ursprungliga ordning efter att ha sorterats om.
+ *
+ * **Kolumnen låses som tal med flit.** Ordbokskodningen bygger på att en
+ * kolumn har få unika värden, och ett löpnummer har ett per rad — det är
+ * modellens värsta fall. Priset i minne är oundvikligt, men den dyra
+ * följdkostnaden är det inte: som textkolumn skulle sorteringen rangordna
+ * hundratusen unika värden med svensk kollation, vilket `rank.ts` mäter i
+ * sekunder. Som talkolumn går den den numeriska vägen i stället.
+ */
+export function laggTillLopnummer(tab: Tab, onskatNamn = 'Nr'): Column {
+  const namn = uniqueColumnName(
+    tab.frame.columns.map((c) => c.name),
+    onskatNamn,
+  )
+  const col = createColumn(namn, tab.frame.rowCount, 'number')
+  col.typeLocked = true
+  for (let r = 0; r < tab.frame.rowCount; r++) col.codes[r] = intern(col, String(r + 1))
+
+  runStep(tab, {
+    label: `Lade till ${namn} med löpnummer`,
+    kind: 'lopnummer',
+    profil: { typ: 'lopnummer', namn },
+    // Först i filen: numret är radens identitet, och identiteten står först.
+    apply: () => {
+      tab.frame.columns.unshift(col)
+    },
+    revert: () => {
+      tab.frame.columns = tab.frame.columns.filter((c) => c.id !== col.id)
+    },
+  })
+  return col
+}
+
 /* ---------- Städning ---------- */
 
 export function stadaKolumner(tab: Tab, valda: Column[], stadning: Stadning): number {

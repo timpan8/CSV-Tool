@@ -190,3 +190,41 @@ test('Avbryt lämnar kolumnen precis som den var', async ({ page }) => {
   await expect(cell(page, '27/08/2026')).toBeVisible()
   await expect(page.getByRole('button', { name: /Ångra/ })).toBeDisabled()
 })
+
+test('lägger datumet i en ny kolumn och låter originalet stå kvar', async ({ page }) => {
+  await oppnaExempel(page)
+  await oppnaDatumverktyget(page)
+
+  await page.getByRole('checkbox', { name: /ny kolumn/ }).check()
+
+  // Namnet följer målformatet tills man skriver något eget.
+  const namnfalt = page.getByLabel('Namn på den nya kolumnen')
+  await expect(namnfalt).toHaveValue('Registrerad (ÅÅÅÅ-MM-DD)')
+  await page.getByRole('radio', { name: 'ÅÅÅÅ-MM', exact: true }).click()
+  await expect(namnfalt).toHaveValue('Registrerad (ÅÅÅÅ-MM)')
+  await page.getByRole('radio', { name: 'ÅÅÅÅ-MM-DD', exact: true }).click()
+  await namnfalt.fill('Datum')
+
+  // Spökkolumnen visar vad som kommer, ingenting är ändrat än.
+  const spoke = page.locator('.rubrik--spoke')
+  await expect(spoke).toContainText('Datum')
+  await expect(page.locator('.rutnat__cell--spoke').first()).toHaveText('2026-08-27')
+  await expect(page.locator('.rutnat__cell--forhand-andrad')).toHaveCount(0)
+
+  // Panelen säger vad de otolkbara raderna får i den nya kolumnen.
+  await expect(page.locator('.verktyg')).toContainText(
+    'De 2 raderna får originalvärdet oförändrat i Datum.',
+  )
+
+  await page.getByRole('button', { name: 'Skapa kolumnen' }).click()
+
+  await expect(page.locator('.rubrik[title="Datum"]')).toBeVisible()
+  // Originalet med klockslag står kvar bredvid det rena datumet.
+  await expect(cell(page, '2026-08-27 12:55').first()).toBeVisible()
+  await expect(cell(page, '2026-08-27').first()).toBeVisible()
+  await expect(page.locator('.statusrad')).toContainText('9 kolumner')
+
+  await page.keyboard.press('Control+z')
+  await expect(page.locator('.rubrik[title="Datum"]')).toHaveCount(0)
+  await expect(page.locator('.statusrad')).toContainText('8 kolumner')
+})

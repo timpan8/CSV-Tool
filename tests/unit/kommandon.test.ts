@@ -20,6 +20,7 @@ function handlare(): { h: Kommandohandlare; korda: string[] } {
     filter: r('filter'),
     dubbletter: r('dubbletter'),
     slaIhop: r('slaIhop'),
+    lopnummer: r('lopnummer'),
     fortsattVerkstad: r('fortsattVerkstad'),
     kombinera: r('kombinera'),
     mall: r('mall'),

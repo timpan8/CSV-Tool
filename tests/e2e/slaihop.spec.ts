@@ -191,6 +191,53 @@ test('slår ihop till en ny flik där omatchade rader finns kvar tomma', async (
   await expect(page.locator('.rutnat__cell--utfylld').first()).toBeVisible()
 })
 
+test('alla rader ur båda filerna tar med de omatchade orderraderna', async ({ page }) => {
+  await oppnaParet(page)
+  await oppnaVyn(page)
+
+  // Utgångsläget: 16 kunder, 8 matchar, 6 orderrader blir över.
+  const tal = page.locator('.slaihop .vytal')
+  await expect(tal).toContainText('8 av 16 rader hittar en träff')
+  await expect(tal).toContainText('blir över i exempel-order.csv')
+  await expect(tal).toContainText('Resultatet får 16 rader')
+
+  await page.getByRole('radio', { name: 'Alla rader ur båda filerna' }).click()
+
+  // Siffrorna säger nu vad som faktiskt kommer med, innan man klickar.
+  await expect(tal).toContainText('kommer med bara från exempel-order.csv')
+  await expect(tal).toContainText('Resultatet får 22 rader')
+  // Och nyckelkolumnen kryssas i, annars går de raderna inte att känna igen.
+  await expect(page.getByRole('checkbox', { name: /^Name/ })).toBeChecked()
+  await expect(page.locator('.slaihop__installningar')).toContainText(
+    'Nyckelkolumnen följer med automatiskt',
+  )
+
+  // Förhandsvisningen visar det man just slog på.
+  await expect(page.locator('.slaihop__paret--bara').first()).toBeVisible()
+
+  await kor(page).click()
+  await expect(page.locator('.statusrad')).toContainText('22 rader')
+  // ORD-1008 saknade kund och föll bort förut — nu finns den.
+  await expect(page.getByRole('gridcell', { name: 'ORD-1008', exact: true })).toHaveCount(1)
+  // Kundkolumnerna på den raden är frånvarande, inte tomma.
+  await expect(page.locator('.rutnat__cell--utfylld').first()).toBeVisible()
+})
+
+test('Träff-kolumnen skiljer på ingen träff och bara i den andra filen', async ({ page }) => {
+  await oppnaParet(page)
+  await oppnaVyn(page)
+  await page.getByRole('radio', { name: 'Alla rader ur båda filerna' }).click()
+  await kor(page).click()
+
+  // Filtrera fram raderna som bara finns i orderfilen.
+  await page.getByRole('button', { name: /^Filter/ }).click()
+  await page.getByRole('button', { name: '＋ Lägg till regel' }).click()
+  const regel = page.locator('.regel').first()
+  await regel.locator('select').first().selectOption({ label: 'Träff' })
+  await regel.locator('.regel__varde').first().fill('bara i den andra filen')
+  await expect(page.locator('.statusrad')).toContainText('6 av 22 rader')
+})
+
 test('förhandsvisningen och körningen är eniga om radantalet', async ({ page }) => {
   await oppnaParet(page)
   await oppnaVyn(page)
@@ -283,6 +330,7 @@ test('alla inställningar syns utan att rulla, även på en liten skärm', async
     page.getByRole('button', { name: '⇄ Byt håll' }),
     parrad(page).locator('select').first(), // kolumnparet
     page.getByRole('radio', { name: 'En rad per träff' }), // flerträff
+    page.getByRole('radio', { name: 'Alla rader ur båda filerna' }), // omfattning
     page.getByRole('checkbox', { name: /Summa/ }), // kolumner att hämta
     page.getByPlaceholder(/t\.ex\./), // namnprefix
     kor(page),

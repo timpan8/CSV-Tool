@@ -36,7 +36,19 @@ export type Profilsteg =
    * inställning ofta ska köras på tolv månadskolumner. Äldre profiler bar en
    * enkel sträng och läses fortfarande.
    */
-  | { typ: 'datum'; kolumn: string | string[]; inst: Datuminstallning }
+  | {
+      typ: 'datum'
+      kolumn: string | string[]
+      inst: Datuminstallning
+      /**
+       * Namn på kolumnen resultatet läggs i, i stället för att skriva över.
+       *
+       * Valfritt med flit: `undefined` betyder omskrivning på plats, som
+       * alla profiler sparade före det här fältet fanns. Därför behövde
+       * PROFILVERSION inte höjas.
+       */
+      nyKolumn?: string
+    }
   | { typ: 'tal'; kolumn: string | string[]; inst: Talinstallning }
   | { typ: 'telefon'; kolumn: string | string[]; inst: Telefoninstallning }
   /**
@@ -64,6 +76,12 @@ export type Profilsteg =
   | { typ: 'sattTyp'; kolumn: string; kolumntyp: ColumnType }
   | { typ: 'tommaRader' }
   | { typ: 'tommaKolumner' }
+  /**
+   * Löpnummerkolumnen. Bär bara sitt namn — värdena är radernas ordning i den
+   * fil steget körs på, och det är hela poängen: nästa månadsfil får sina egna
+   * nummer, inte förra månadens.
+   */
+  | { typ: 'lopnummer'; namn: string }
 
 export interface Profil {
   /** Stabilt id, så att en omdöpt profil inte blir en ny. */
@@ -116,6 +134,8 @@ export function stegetsKolumner(steg: Profilsteg): string[] {
     case 'formel':
     case 'tommaRader':
     case 'tommaKolumner':
+    case 'lopnummer':
+      // Skapar sin kolumn, kräver ingen.
       return []
   }
 }
@@ -134,7 +154,9 @@ export function beskrivSteg(steg: Profilsteg): string {
       return `${namn} i ${steg.kolumner.join(', ')}`
     }
     case 'datum':
-      return `Skriv om ${kolumnlista(steg.kolumn).join(', ')} till ${MALFORMAT[steg.inst.mal]}`
+      return steg.nyKolumn !== undefined
+        ? `Läs ${kolumnlista(steg.kolumn).join(', ')} som ${MALFORMAT[steg.inst.mal]} i ${steg.nyKolumn}`
+        : `Skriv om ${kolumnlista(steg.kolumn).join(', ')} till ${MALFORMAT[steg.inst.mal]}`
     case 'tal':
       return `Städa tal i ${kolumnlista(steg.kolumn).join(', ')}`
     case 'telefon':
@@ -163,5 +185,7 @@ export function beskrivSteg(steg: Profilsteg): string {
       return 'Ta bort helt tomma rader'
     case 'tommaKolumner':
       return 'Ta bort helt tomma kolumner'
+    case 'lopnummer':
+      return `Lägg till ${steg.namn} med löpnummer`
   }
 }

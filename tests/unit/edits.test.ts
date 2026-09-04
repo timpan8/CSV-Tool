@@ -9,6 +9,7 @@ import {
   dupliceraRader,
   fyllNedat,
   klistraIn,
+  laggTillLopnummer,
   planeraInklistring,
   redigeraCell,
   sattMarkering,
@@ -223,5 +224,57 @@ describe('städning', () => {
       redo(tab)
       expect(dump(tab).map((r) => r[0])).toEqual(['Lund', 'Boden'])
     }
+  })
+})
+
+describe('löpnummer', () => {
+  it('numrerar raderna i nuvarande ordning, först i filen', () => {
+    const tab = bas()
+    const col = laggTillLopnummer(tab)
+
+    expect(tab.frame.columns[0]).toBe(col)
+    expect(col.name).toBe('Nr')
+    expect(dump(tab).map((r) => r[0])).toEqual(['1', '2', '3', '4'])
+    // Namnen efter numret står kvar där de stod.
+    expect(tab.frame.columns.map((c) => c.name)).toEqual(['Nr', 'Namn', 'Ort', 'Belopp'])
+  })
+
+  it('låser typen till tal, så sorteringen slipper svensk kollation', () => {
+    const tab = bas()
+    const col = laggTillLopnummer(tab)
+    expect(col.type).toBe('number')
+    expect(col.typeLocked).toBe(true)
+  })
+
+  it('viker undan för ett upptaget namn', () => {
+    const tab = tabOf(['Nr', 'Ort'], [['x', 'Lund']])
+    expect(laggTillLopnummer(tab).name).toBe('Nr (2)')
+    expect(laggTillLopnummer(tab, 'Rad').name).toBe('Rad')
+  })
+
+  it('är ett enda ångra-steg', () => {
+    const tab = bas()
+    laggTillLopnummer(tab)
+    expect(tab.frame.columns).toHaveLength(4)
+
+    undo(tab)
+    expect(tab.frame.columns.map((c) => c.name)).toEqual(['Namn', 'Ort', 'Belopp'])
+
+    redo(tab)
+    expect(tab.frame.columns.map((c) => c.name)).toEqual(['Nr', 'Namn', 'Ort', 'Belopp'])
+    expect(dump(tab).map((r) => r[0])).toEqual(['1', '2', '3', '4'])
+  })
+
+  it('lämnar ett profilsteg efter sig', () => {
+    const tab = bas()
+    laggTillLopnummer(tab, 'Ordning')
+    expect(tab.history.at(-1)?.profil).toEqual({ typ: 'lopnummer', namn: 'Ordning' })
+  })
+
+  it('klarar en tom fil utan rader', () => {
+    const tab = tabOf(['Ort'], [])
+    const col = laggTillLopnummer(tab)
+    expect(col.codes).toHaveLength(0)
+    expect(tab.frame.columns.map((c) => c.name)).toEqual(['Nr', 'Ort'])
   })
 })

@@ -52,6 +52,16 @@ describe('beskrivSteg', () => {
       'Trimma blanksteg i Namn',
     )
     expect(beskrivSteg({ typ: 'tommaRader' })).toBe('Ta bort helt tomma rader')
+    expect(beskrivSteg({ typ: 'lopnummer', namn: 'Nr' })).toBe('Lägg till Nr med löpnummer')
+    // Ett datumsteg som skapar en kolumn skriver inte om något, och säger det.
+    expect(
+      beskrivSteg({
+        typ: 'datum',
+        kolumn: 'Registrerad',
+        inst: { dagForst: true, excelSerie: false, mal: 'datum', onError: 'behall' },
+        nyKolumn: 'Registrerad (ÅÅÅÅ-MM-DD)',
+      }),
+    ).toBe('Läs Registrerad som ÅÅÅÅ-MM-DD i Registrerad (ÅÅÅÅ-MM-DD)')
     expect(beskrivSteg({ typ: 'dopOm', kolumn: 'Namn', till: 'Kund' })).toBe(
       'Döp om Namn till Kund',
     )
@@ -63,6 +73,8 @@ describe('beskrivSteg', () => {
       'B',
     ])
     expect(stegetsKolumner({ typ: 'tommaKolumner' })).toEqual([])
+    // Kolumnen skapas av steget, så den krävs inte finnas i nästa fil.
+    expect(stegetsKolumner({ typ: 'lopnummer', namn: 'Nr' })).toEqual([])
   })
 })
 
@@ -161,6 +173,22 @@ describe('uppspelning', () => {
     expect(kolumn(tab, 'Datum').type).toBe('date')
   })
 
+  it('lägger datumet i en ny kolumn och låter originalet stå', () => {
+    const tab = tabOf(frameOf('ny', ['Registrerad'], [['2026-08-27 12:55'], ['i går']]))
+    const res = korSteg(tab, {
+      typ: 'datum',
+      kolumn: 'Registrerad',
+      inst: { dagForst: true, excelSerie: false, mal: 'datum', onError: 'behall' },
+      nyKolumn: 'Datum',
+    })
+    expect(res.utfall).toBe('kord')
+    expect(varden(tab, 'Registrerad')).toEqual(['2026-08-27 12:55', 'i går'])
+    // Med ”låt stå” följer det otolkbara värdet med rakt in i den nya kolumnen.
+    expect(varden(tab, 'Datum')).toEqual(['2026-08-27', 'i går'])
+    expect(kolumn(tab, 'Datum').type).toBe('date')
+    expect(tab.frame.columns.map((c) => c.name)).toEqual(['Registrerad', 'Datum'])
+  })
+
   it('delar en kolumn och skapar de nya kolumnerna', () => {
     const tab = tabOf(frameOf('ny', ['Namn'], [['Anna Karlsson']]))
     const res = korSteg(tab, {
@@ -181,6 +209,15 @@ describe('uppspelning', () => {
     expect(korSteg(tab, { typ: 'sattTyp', kolumn: 'Kund', kolumntyp: 'text' }).utfall).toBe('kord')
     expect(tab.frame.columns.map((c) => c.name)).toEqual(['Kund'])
     expect(kolumn(tab, 'Kund').typeLocked).toBe(true)
+  })
+
+  it('lägger till löpnummer i nästa fil, med den filens radantal', () => {
+    const tab = tabOf(frameOf('ny', ['Namn'], [['Anna'], ['Bo'], ['Cia']]))
+    const res = korSteg(tab, { typ: 'lopnummer', namn: 'Nr' })
+    expect(res.utfall).toBe('kord')
+    expect(res.andrade).toBe(3)
+    expect(varden(tab, 'Nr')).toEqual(['1', '2', '3'])
+    expect(tab.frame.columns.map((c) => c.name)).toEqual(['Nr', 'Namn'])
   })
 
   it('ett steg som inte ändrar något rapporteras som sådant', () => {
