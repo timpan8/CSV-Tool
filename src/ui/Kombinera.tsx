@@ -19,9 +19,10 @@ import {
 } from '../core/ops/stapla.js'
 import { tabs, type Tab } from '../state/store.js'
 import { begarMall, mallTabId, stangKombinera, vantarPaMall } from '../state/kombinera.js'
-import { formatCount, kolumner as kolumnerText, rader as raderText } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
 import { Notis, Val } from './parts.js'
 import { Aliaskarta, type Prov } from './Aliaskarta.js'
+import { kolumner as kolumnerText, rader as raderText, t, tf, tj } from './sprak.js'
 
 /**
  * Så många förhandsrader alla filer delar på.
@@ -267,19 +268,28 @@ export function Kombinera(props: {
     <div class="kombinera">
       <div class="kombinera__topp">
         <div>
-          <h2>Kombinera filer</h2>
+          <h2>{t('Kombinera filer')}</h2>
           <span class="kombinera__underrubrik">
             {mallFlik
-              ? `Fyller ${mallFlik.frame.name} med data ur de valda filerna.`
-              : 'Lägger filerna på varandra. Kolumner som betyder samma sak hamnar i samma spalt.'}
+              ? tf('Fyller {0} med data ur de valda filerna.', mallFlik.frame.name)
+              : t(
+                  'Lägger filerna på varandra. Kolumner som betyder samma sak hamnar i samma spalt.',
+                )}
           </span>
         </div>
         <div class="vytal">
           <span>
-            <strong>{formatCount(totalRader)}</strong> rader ur {formatCount(kallor.length)} filer
+            {tj(
+              '{0} rader ur {1} filer',
+              <strong>{formatCount(totalRader)}</strong>,
+              formatCount(kallor.length),
+            )}
           </span>
           <span>
-            <strong>{formatCount(medKolumner.length)}</strong> kolumner i resultatet
+            {tj(
+              '{0} kolumner i resultatet',
+              <strong>{formatCount(medKolumner.length)}</strong>,
+            )}
           </span>
           {kvar.length > 0 && (
             <span class="vytal--okant">
@@ -289,13 +299,13 @@ export function Kombinera(props: {
                * inte till mycket hjälp när raden ligger utanför bild.
                */}
               <button class="vytal__lank" onClick={tillForstaFragan}>
-                <strong>{formatCount(kvar.length)}</strong> väntar på beslut
+                {tj('{0} väntar på beslut', <strong>{formatCount(kvar.length)}</strong>)}
               </button>
             </span>
           )}
           {tommaMed.length > 0 && (
             <span class="vytal--okant" title={tommaMed.map((k) => k.namn).join(', ')}>
-              <strong>{formatCount(tommaMed.length)}</strong> blir tomma
+              {tj('{0} blir tomma', <strong>{formatCount(tommaMed.length)}</strong>)}
             </span>
           )}
         </div>
@@ -304,15 +314,15 @@ export function Kombinera(props: {
       <div class="kombinera__kropp">
         <div class="panel">
           <div class="panel__rubrik">
-            {mallFlik ? 'Filer att hämta data ur' : 'Filer att stapla'}
+            {t(mallFlik ? 'Filer att hämta data ur' : 'Filer att stapla')}
             <span class="panel__rubrik__antal">{formatCount(kallflikar.length)}</span>
           </div>
           <div class="panel__innehall">
             <div class="falt">
-              <span class="falt__etikett">Målform</span>
+              <span class="falt__etikett">{t('Målform')}</span>
               <select
                 class="nivarad__kolumn"
-                aria-label="Målform"
+                aria-label={t('Målform')}
                 ref={malformRef}
                 value={mallId ?? ''}
                 onChange={(e) => {
@@ -321,19 +331,19 @@ export function Kombinera(props: {
                   setEgnaKolumner(null)
                 }}
               >
-                <option value="">Filernas egna kolumner</option>
-                {oppna.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.frame.name} som mall
+                <option value="">{t('Filernas egna kolumner')}</option>
+                {oppna.map((flik) => (
+                  <option key={flik.id} value={flik.id}>
+                    {tf('{0} som mall', flik.frame.name)}
                   </option>
                 ))}
               </select>
               <div class="faltrad">
                 <button class="knapp" onClick={oppnaMallfil}>
-                  Öppna mallfil…
+                  {t('Öppna mallfil…')}
                 </button>
                 <button class="knapp knapp--tyst" onClick={props.onExempelmall}>
-                  Exempelmall
+                  {t('Exempelmall')}
                 </button>
               </div>
               <input
@@ -357,36 +367,41 @@ export function Kombinera(props: {
               <p class="verktyg__sammanfattning">
                 {mallFlik
                   ? mallFlik.frame.rowCount > 0
-                    ? `Mallens ${raderText(mallFlik.frame.rowCount)} är exempel och tas inte med i resultatet.`
-                    : 'Mallen bestämmer kolumnerna, deras namn och deras ordning.'
-                  : 'En mall är en fil med bara rubriker. Den bestämmer resultatets form.'}
+                    ? tf(
+                        'Mallens {0} är exempel och tas inte med i resultatet.',
+                        raderText(mallFlik.frame.rowCount),
+                      )
+                    : t('Mallen bestämmer kolumnerna, deras namn och deras ordning.')
+                  : t('En mall är en fil med bara rubriker. Den bestämmer resultatets form.')}
               </p>
             </div>
 
             <div class="kollista kollista--kryss">
-              {oppna.map((t) => {
-                const begransad = t.frame.view.length < t.frame.rowCount
+              {oppna.map((flik) => {
+                const begransad = flik.frame.view.length < flik.frame.rowCount
                 return (
-                  <label class="kryss" key={t.id}>
+                  <label class="kryss" key={flik.id}>
                     <input
                       type="checkbox"
-                      disabled={t.id === mallId}
-                      checked={valda.includes(t.id) && t.id !== mallId}
+                      disabled={flik.id === mallId}
+                      checked={valda.includes(flik.id) && flik.id !== mallId}
                       onChange={(e) =>
                         setValda(
                           (e.currentTarget as HTMLInputElement).checked
-                            ? [...valda, t.id]
-                            : valda.filter((x) => x !== t.id),
+                            ? [...valda, flik.id]
+                            : valda.filter((x) => x !== flik.id),
                         )
                       }
                     />
-                    {t.frame.name}
+                    {flik.frame.name}
                     <span class="verktyg__sammanfattning">
                       {' '}
-                      {t.id === mallId
-                        ? 'mall'
-                        : `${formatCount(t.frame.rowCount)}${
-                            begransad ? ` · ${formatCount(t.frame.view.length)} visas` : ''
+                      {flik.id === mallId
+                        ? t('mall')
+                        : `${formatCount(flik.frame.rowCount)}${
+                            begransad
+                              ? ` · ${tf('{0} visas', formatCount(flik.frame.view.length))}`
+                              : ''
                           }`}
                     </span>
                   </label>
@@ -395,7 +410,7 @@ export function Kombinera(props: {
             </div>
 
             <div class="falt">
-              <span class="falt__etikett">Rader att ta med</span>
+              <span class="falt__etikett">{t('Rader att ta med')}</span>
               <Val
                 varden={[
                   {
@@ -420,11 +435,12 @@ export function Kombinera(props: {
                 checked={kallkolumn}
                 onChange={(e) => setKallkolumn((e.currentTarget as HTMLInputElement).checked)}
               />
-              Kolumn med källfilens namn
+              {t('Kolumn med källfilens namn')}
             </label>
             <p class="verktyg__sammanfattning">
-              Radnumret börjar om för varje fil, så utan den går rad 12 ur två filer inte att
-              skilja åt.
+              {t(
+                'Radnumret börjar om för varje fil, så utan den går rad 12 ur två filer inte att skilja åt.',
+              )}
             </p>
           </div>
         </div>
@@ -432,38 +448,39 @@ export function Kombinera(props: {
         <div class="kombinera__rutor">
           <div class="ruta">
             <div class="ruta__rubrik">
-              Så här kopplas kolumnerna
+              {t('Så här kopplas kolumnerna')}
               <span class="panel__rubrik__antal">{kolumnerText(kolumner.length)}</span>
             </div>
             {fragor.length > 0 && (
               <div class="kombinera__massbeslut">
                 {kvar.length > 0 && (
                   <span class="kombinera__massbeslut__skal">
-                    {kolumnerText(kvar.length)} finns bara i vissa av filerna. Tas de med blir de
-                    tomma för de andra; hoppas de över försvinner värden som fanns. Båda kan vara
-                    rätt — därför frågar verktyget i stället för att gissa.
+                    {tf(
+                      '{0} finns bara i vissa av filerna. Tas de med blir de tomma för de andra; hoppas de över försvinner värden som fanns. Båda kan vara rätt — därför frågar verktyget i stället för att gissa.',
+                      kolumnerText(kvar.length),
+                    )}
                   </span>
                 )}
                 <div class="faltrad">
                   <button class="knapp knapp--liten" onClick={() => massbeslut(true)}>
-                    Ta med alla
+                    {t('Ta med alla')}
                   </button>
                   <button class="knapp knapp--liten" onClick={() => massbeslut(false)}>
-                    Hoppa över alla
+                    {t('Hoppa över alla')}
                   </button>
                   <button
                     class="knapp knapp--liten knapp--tyst"
                     disabled={kvar.length === fragor.length}
                     onClick={() => massbeslut(null)}
                   >
-                    Fråga igen
+                    {t('Fråga igen')}
                   </button>
                 </div>
               </div>
             )}
             <div class="ruta__kropp ruta__kropp--tabell" ref={kartaRef}>
               {kallflikar.length === 0 ? (
-                <Notis ton="info">Välj minst en fil att stapla.</Notis>
+                <Notis ton="info">{t('Välj minst en fil att stapla.')}</Notis>
               ) : (
                 <Aliaskarta
                   kallor={kallflikar.map((t, i) => ({
@@ -498,10 +515,10 @@ export function Kombinera(props: {
            */}
           <div class="ruta">
             <div class="ruta__rubrik">
-              Så här börjar resultatet
+              {t('Så här börjar resultatet')}
               {forhand && (
                 <span class="panel__rubrik__antal">
-                  {raderText(forhand.frame.rowCount)} av {formatCount(totalRader)}
+                  {tf('{0} av {1}', raderText(forhand.frame.rowCount), formatCount(totalRader))}
                 </span>
               )}
             </div>
@@ -510,9 +527,11 @@ export function Kombinera(props: {
                 <Forhandsvisning resultat={forhand} kolumner={kolumner} />
               ) : (
                 <p class="restlista__tom">
-                  {kallflikar.length === 0
-                    ? 'Välj minst en fil, så visas resultatet här.'
-                    : 'Inga kolumner är med i resultatet.'}
+                  {t(
+                    kallflikar.length === 0
+                      ? 'Välj minst en fil, så visas resultatet här.'
+                      : 'Inga kolumner är med i resultatet.',
+                  )}
                 </p>
               )}
             </div>
@@ -523,25 +542,25 @@ export function Kombinera(props: {
       <div class="kombinera__fot">
         <span class="kombinera__fot__text">
           {kvar.length > 0
-            ? `${kolumnerText(kvar.length)} behöver ett beslut.`
-            : 'Resultatet blir en ny flik. Källfilerna rörs inte.'}
+            ? tf('{0} behöver ett beslut.', kolumnerText(kvar.length))
+            : t('Resultatet blir en ny flik. Källfilerna rörs inte.')}
         </span>
         <button class="knapp" onClick={stangKombinera}>
-          Avbryt
+          {t('Avbryt')}
         </button>
         <button
           class="knapp knapp--primar"
           disabled={kvar.length > 0 || medKolumner.length === 0 || kallor.length === 0}
           title={
             kvar.length > 0
-              ? 'Besluta om kolumnerna som bara finns i vissa filer först.'
+              ? t('Besluta om kolumnerna som bara finns i vissa filer först.')
               : medKolumner.length === 0
-                ? 'Inga kolumner är med i resultatet.'
+                ? t('Inga kolumner är med i resultatet.')
                 : undefined
           }
           onClick={kor}
         >
-          Kombinera
+          {t('Kombinera')}
         </button>
       </div>
     </div>
@@ -576,7 +595,7 @@ function Forhandsvisning(props: { resultat: Staplingsresultat; kolumner: readonl
               return (
                 <th key={c.id} class={obeslutad ? 'fortab__obeslutad' : undefined}>
                   {c.name}
-                  {obeslutad && <span class="fortab__marke"> ej beslutad</span>}
+                  {obeslutad && <span class="fortab__marke"> {t('ej beslutad')}</span>}
                 </th>
               )
             })}
@@ -591,7 +610,7 @@ function Forhandsvisning(props: { resultat: Staplingsresultat; kolumner: readonl
                   <td
                     key={c.id}
                     class={utfylld ? 'fortab__utan' : undefined}
-                    title={utfylld ? 'Stod inte i filen' : undefined}
+                    title={utfylld ? t('Stod inte i filen') : undefined}
                   >
                     {getCell(c, r)}
                   </td>

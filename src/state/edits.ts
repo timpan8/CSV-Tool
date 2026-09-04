@@ -25,9 +25,9 @@ import {
 import type { Forhandsvisning } from './preview.js'
 import { rect, type Selection } from './selection.js'
 import { runStep, type Tab } from './store.js'
-import { celler, kolumner, rader } from '../core/locale/sv.js'
 import type { Stadning } from '../core/ops/clean.js'
 import type { Profilsteg } from '../core/ops/profil.js'
+import { celler, kolumner, rader, t, tf } from '../ui/sprak.js'
 
 /** Kolumner i den ordning markeringen räknar dem: synliga, i visningsordning. */
 export function selectableColumns(tab: Tab): Column[] {
@@ -57,6 +57,16 @@ function selectedColumns(tab: Tab, sel: Selection): Column[] {
  * Bara de berörda kolumnerna kopieras; övriga delas vidare med referens. För
  * en enskild cell är det överdrivet — se `redigeraCell`, som klarar sig med
  * två tal.
+ */
+/*
+ * Om språket i etiketterna.
+ *
+ * Ett ångra-steg heter det språket sa när steget gjordes, och byter inte namn
+ * när man byter språk efteråt. Det är avsiktligt: historiken är en logg över
+ * vad som hänt, och en logg som skrivs om i efterhand är inte en logg. Samma
+ * regel gäller notiserna — texten hör till ögonblicket den skapades i.
+ *
+ * Därför står `tf(...)` här, i skapandet, och inte `t(...)` vid ritningen.
  */
 function korOverKolumner(
   tab: Tab,
@@ -116,7 +126,7 @@ export function redigeraCellFysisk(
 
   let kod = 0
   runStep(tab, {
-    label: `Ändrade ${col.name}: ”${kort(foregaende)}” → ”${kort(value)}”`,
+    label: tf('Ändrade {0}: ”{1}” → ”{2}”', col.name, kort(foregaende), kort(value)),
     kind: 'edit',
     apply: () => {
       kod = setCell(col, fysisk, value)
@@ -144,8 +154,8 @@ export function sattMarkering(tab: Tab, sel: Selection, value: string): number {
   korOverKolumner(
     tab,
     value === ''
-      ? `Tömde ${celler(andrade)}`
-      : `Satte ${celler(andrade)} till ”${kort(value)}”`,
+      ? tf('Tömde {0}', celler(andrade))
+      : tf('Satte {0} till ”{1}”', celler(andrade), kort(value)),
     'setRange',
     valda,
     () => {
@@ -176,7 +186,7 @@ export function fyllNedat(tab: Tab, sel: Selection): number {
   }
   if (andrade === 0) return 0
 
-  korOverKolumner(tab, `Fyllde nedåt i ${celler(andrade)}`, 'fillDown', valda, () => {
+  korOverKolumner(tab, tf('Fyllde nedåt i {0}', celler(andrade)), 'fillDown', valda, () => {
     for (const col of valda) {
       const kalla = getCell(col, forsta)
       for (const rad of resten) setCell(col, rad, kalla)
@@ -225,7 +235,7 @@ export function klistraIn(tab: Tab, sel: Selection, plan: PasteRequest, utoka: b
   let andrade = 0
 
   runStep(tab, {
-    label: `Klistrade in ${rader(plan.rader.length)}`,
+    label: tf('Klistrade in {0}', rader(plan.rader.length)),
     kind: 'paste',
     apply: () => {
       if (utoka && plan.extraRader > 0) insertRows(frame, frame.rowCount, plan.extraRader)
@@ -276,7 +286,7 @@ export function taBortRader(
   if (radlista.length === 0) return
   let sparade: SavedRow[] = []
   runStep(tab, {
-    label: etikett ?? `Tog bort ${rader(radlista.length)}`,
+    label: etikett ?? tf('Tog bort {0}', rader(radlista.length)),
     kind: 'deleteRows',
     profil,
     apply: () => {
@@ -290,7 +300,7 @@ export function infogaRader(tab: Tab, viewRow: number, antal: number, efter: boo
   const fysisk = tab.frame.view[viewRow]
   const at = fysisk === undefined ? tab.frame.rowCount : fysisk + (efter ? 1 : 0)
   runStep(tab, {
-    label: `Infogade ${rader(antal)}`,
+    label: tf('Infogade {0}', rader(antal)),
     kind: 'insertRows',
     apply: () => insertRows(tab.frame, at, antal),
     revert: () => {
@@ -303,7 +313,7 @@ export function dupliceraRader(tab: Tab, radlista: number[]): void {
   if (radlista.length === 0) return
   const sorterade = [...radlista].sort((a, b) => a - b)
   runStep(tab, {
-    label: `Dubblerade ${rader(sorterade.length)}`,
+    label: tf('Dubblerade {0}', rader(sorterade.length)),
     kind: 'duplicateRows',
     apply: () => duplicateRows(tab.frame, sorterade),
     revert: () => {
@@ -318,7 +328,7 @@ export function dupliceraRader(tab: Tab, radlista: number[]): void {
 export function taBortTommaRader(tab: Tab): number {
   const tomma = findEmptyRows(tab.frame)
   if (tomma.length === 0) return 0
-  taBortRader(tab, tomma, `Tog bort ${rader(tomma.length)} som var helt tomma`, {
+  taBortRader(tab, tomma, tf('Tog bort {0} som var helt tomma', rader(tomma.length)), {
     typ: 'tommaRader',
   })
   return tomma.length
@@ -335,7 +345,7 @@ export function taBortTommaKolumner(tab: Tab): number {
     .sort((a, b) => a.index - b.index)
 
   runStep(tab, {
-    label: `Tog bort ${kolumner(tomma.length)} som var helt tomma`,
+    label: tf('Tog bort {0} som var helt tomma', kolumner(tomma.length)),
     kind: 'dropEmptyColumns',
     profil: { typ: 'tommaKolumner' },
     apply: () => {
@@ -375,7 +385,7 @@ export function laggTillLopnummer(tab: Tab, onskatNamn = 'Nr'): Column {
   for (let r = 0; r < tab.frame.rowCount; r++) col.codes[r] = intern(col, String(r + 1))
 
   runStep(tab, {
-    label: `Lade till ${namn} med löpnummer`,
+    label: tf('Lade till {0} med löpnummer', namn),
     kind: 'lopnummer',
     profil: { typ: 'lopnummer', namn },
     // Först i filen: numret är radens identitet, och identiteten står först.
@@ -395,9 +405,7 @@ export function stadaKolumner(tab: Tab, valda: Column[], stadning: Stadning): nu
   let andrade = 0
   korOverKolumner(
     tab,
-    `${stadning.etikett} i ${
-      valda.length === 1 ? valda[0]!.name : kolumner(valda.length)
-    }`,
+    tf('{0} i {1}', t(stadning.etikett), valda.length === 1 ? valda[0]!.name : kolumner(valda.length)),
     `clean:${stadning.id}`,
     valda,
     () => {
@@ -446,7 +454,7 @@ export function tillampaForhandsvisning(
   const forsta = jobb[0]!.f
   korOverKolumner(
     tab,
-    jobb.length === 1 ? forsta.etikett : `${forsta.etikett} — ${kolumner(jobb.length)}`,
+    jobb.length === 1 ? forsta.etikett : tf('{0} — {1}', forsta.etikett, kolumner(jobb.length)),
     forsta.kind,
     jobb.map((j) => j.col),
     () => {

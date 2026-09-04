@@ -464,7 +464,10 @@ function Cell(props: CellProps) {
           : forh?.problem
             ? `Går inte att tolka. ${value}`
             : invalid
-              ? `Kunde inte tolkas som ${TYPE_LABELS[col.type].toLowerCase()}. Värdet står kvar som det är.`
+              ? tf(
+                  'Kunde inte tolkas som {0}. Värdet står kvar som det är.',
+                  t(TYPE_LABELS[col.type]).toLowerCase(),
+                )
               : value
       }
       onPointerDown={(e) => {
@@ -681,7 +684,7 @@ function Header(props: HeaderProps) {
       <div class="rubrik__under">
         <button
           class="typbricka"
-          title={`Typ: ${TYPE_LABELS[col.type]}. Klicka för att byta. Värden skrivs aldrig om.`}
+          title={tf('Typ: {0}. Klicka för att byta. Värden skrivs aldrig om.', t(TYPE_LABELS[col.type]))}
           onClick={(e) => {
             e.stopPropagation()
             props.onCycleType()

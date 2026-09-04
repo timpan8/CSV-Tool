@@ -1,8 +1,9 @@
 import type { ColumnId, Frame } from '../core/types.js'
 import { cellText } from '../core/ops/match.js'
 import type { Forslag, Hinder } from '../core/ops/likhet.js'
-import { formatCount, rader as raderText } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
 import { Notis } from './parts.js'
+import { rader as raderText, t, tf } from './sprak.js'
 
 /**
  * Luddiga förslag att godkänna ett i taget.
@@ -31,32 +32,36 @@ export function Forslagslista(props: {
   if (props.hinder === 'talkolumn') {
     return (
       <Notis ton="varning">
-        Luddig likhet är avstängd för talkolumner. 10021 och 10024 liknar varandra som text, men
-        är olika kunder — och ett förslag som ser rimligt ut är farligare än inget förslag.
+        {t(
+          'Luddig likhet är avstängd för talkolumner. 10021 och 10024 liknar varandra som text, men är olika kunder — och ett förslag som ser rimligt ut är farligare än inget förslag.',
+        )}
       </Notis>
     )
   }
   if (props.hinder === 'forStoraRestlistor') {
     return (
       <Notis ton="varning">
-        Restlistorna har {formatCount(props.restVanster)} och {formatCount(props.restHoger)}{' '}
-        rader. Verkstaden är gjord för tiotal eller hundratal — så många rader betyder nästan
-        alltid att grundmatchningen behöver ett annat kolumnpar först.
+        {tf(
+          'Restlistorna har {0} och {1} rader. Verkstaden är gjord för tiotal eller hundratal — så många rader betyder nästan alltid att grundmatchningen behöver ett annat kolumnpar först.',
+          formatCount(props.restVanster),
+          formatCount(props.restHoger),
+        )}
       </Notis>
     )
   }
   if (props.hinder === 'ingaVarden') {
     return (
       <Notis ton="info">
-        Värdena i de här kolumnerna är för korta för att jämföras luddigt. Tre tecken som liknar
-        varandra är brus.
+        {t(
+          'Värdena i de här kolumnerna är för korta för att jämföras luddigt. Tre tecken som liknar varandra är brus.',
+        )}
       </Notis>
     )
   }
   if (props.forslag.length === 0) {
     return (
       <p class="restlista__tom">
-        Inga rader liknar varandra tillräckligt. Prova en annan kolumn.
+        {t('Inga rader liknar varandra tillräckligt. Prova en annan kolumn.')}
       </p>
     )
   }
@@ -64,7 +69,7 @@ export function Forslagslista(props: {
   return (
     <div class="falt">
       <span class="falt__etikett">
-        Liknande rader ({raderText(props.forslag.length)})
+        {tf('Liknande rader ({0})', raderText(props.forslag.length))}
       </span>
       {props.forslag.map((f) => (
         <div class="forslag" key={`${f.v}:${f.h}`}>
@@ -76,31 +81,32 @@ export function Forslagslista(props: {
           </div>
           <div class="forslag__poang">
             {f.omsesidigt && (
-              <span class="forslag__omsesidigt" title="Raderna är varandras bästa träff">
-                bästa åt båda håll
+              <span class="forslag__omsesidigt" title={t('Raderna är varandras bästa träff')}>
+                {t('bästa åt båda håll')}
               </span>
             )}
-            <span title="Dice över teckentrigram">
-              stavning {f.poang.stavning.toFixed(2)}
+            <span title={t('Dice över teckentrigram')}>
+              {tf('stavning {0}', f.poang.stavning.toFixed(2))}
             </span>
-            <span title="Dice över ordmängderna — fångar omkastad ordföljd">
-              orden {f.poang.orden.toFixed(2)}
+            <span title={t('Dice över ordmängderna — fångar omkastad ordföljd')}>
+              {tf('orden {0}', f.poang.orden.toFixed(2))}
             </span>
           </div>
           <div class="forslag__knappar">
             <button class="knapp knapp--primar" onClick={() => props.onGodkann(f)}>
-              Godkänn
+              {t('Godkänn')}
             </button>
             <button class="knapp knapp--tyst" onClick={() => props.onAvvisa(f)}>
-              Nej
+              {t('Nej')}
             </button>
           </div>
         </div>
       ))}
       {props.avkortat && (
         <p class="restlista__tom">
-          Listan kortades av vid taket. Kör en runda på en annan kolumn för att korta ner den
-          först.
+          {t(
+            'Listan kortades av vid taket. Kör en runda på en annan kolumn för att korta ner den först.',
+          )}
         </p>
       )}
     </div>
@@ -109,5 +115,5 @@ export function Forslagslista(props: {
 
 function text(frame: Frame, kolumner: readonly ColumnId[], rad: number): string {
   const delar = kolumner.map((id) => cellText(frame, id, rad)).filter((t) => t !== '')
-  return delar.length > 0 ? delar.join(' · ') : `rad ${frame.sourceRow[rad] || rad + 1}`
+  return delar.length > 0 ? delar.join(' · ') : tf('rad {0}', frame.sourceRow[rad] || rad + 1)
 }

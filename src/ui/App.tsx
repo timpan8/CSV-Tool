@@ -10,13 +10,7 @@ import {
   sammaInnehall,
   uniqueColumnName,
 } from '../core/frame/frame.js'
-import {
-  celler,
-  formatCount,
-  filer as filerText,
-  kolumner as kolumnerText,
-  rader as raderText,
-} from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
 import { parseDelimitedText } from '../core/csv/parse.js'
 import { toDelimited } from '../core/csv/stringify.js'
 import { STADNINGAR } from '../core/ops/clean.js'
@@ -90,7 +84,7 @@ import { ExportDialog } from './ExportDialog.jsx'
 import { SearchBar } from './SearchBar.jsx'
 import { PasteDialog } from './PasteDialog.jsx'
 import { BorjaOmDialog } from './BorjaOmDialog.jsx'
-import { sattSprak, sprak, t, tf } from './sprak.js'
+import { celler, filer as filerText, kolumner as kolumnerText, rader as raderText, sattSprak, sprak, t, tf } from './sprak.js'
 import { Verktyg, ordnaVerktyg, type Verktygsnamn } from './verktyg.jsx'
 import { innehallsprofil } from '../core/frame/innehall.js'
 import { Statusrad } from './Statusrad.jsx'
@@ -281,7 +275,7 @@ export function App() {
       if (dubblett) {
         parsed.meta.warnings.push({
           kind: 'duplicate-file',
-          message: `Innehållet är identiskt med den redan öppna fliken ”${dubblett.frame.name}”.`,
+          message: tf('Innehållet är identiskt med den redan öppna fliken ”{0}”.', dubblett.frame.name),
         })
       }
       const flik = openFrame(parsed)
@@ -294,16 +288,25 @@ export function App() {
       }
       const varningar = parsed.meta.warnings.filter((w) => w.kind !== 'encoding-uncertain')
       notify(
-        `${file.name} öppnad — ${formatCount(parsed.rowCount)} rader, ${formatCount(parsed.columns.length)} kolumner.` +
-          (dubblett ? ` Identisk med ”${dubblett.frame.name}”.` : '') +
+        tf(
+          '{0} öppnad — {1} rader, {2} kolumner.',
+          file.name,
+          formatCount(parsed.rowCount),
+          formatCount(parsed.columns.length),
+        ) +
+          (dubblett ? ` ${tf('Identisk med ”{0}”.', dubblett.frame.name)}` : '') +
           (varningar.length > (dubblett ? 1 : 0)
-            ? ` ${varningar.length} sak${varningar.length === 1 ? '' : 'er'} att titta på.`
+            ? ` ${
+                varningar.length === 1
+                  ? t('1 sak att titta på.')
+                  : tf('{0} saker att titta på.', varningar.length)
+              }`
             : ''),
         { ton: varningar.length > 0 ? 'varning' : 'info' },
       )
     } catch (error) {
       vantarPaMall.value = false
-      notify(`Kunde inte öppna ${file.name}: ${(error as Error).message}`, { ton: 'fara' })
+      notify(tf('Kunde inte öppna {0}: {1}', file.name, (error as Error).message), { ton: 'fara' })
     } finally {
       setLaddar(null)
     }
@@ -424,7 +427,7 @@ export function App() {
       },
       { typ: 'taBortKolumn', kolumn: col.name },
     )
-    notify(`Kolumnen ”${col.name}” togs bort.`, {
+    notify(tf('Kolumnen ”{0}” togs bort.', col.name), {
       atgard: { etikett: t('Ångra'), kor: () => tab && undo(tab) },
     })
   }
@@ -559,7 +562,9 @@ export function App() {
     const svar = aterupptaVerkstad()
     if (svar === 'omnumrerad') {
       notify(
-        'Rader har lagts till eller tagits bort sedan sist, så verkstadens par pekade inte längre på rätt rader. De har kastats.',
+        t(
+          'Rader har lagts till eller tagits bort sedan sist, så verkstadens par pekade inte längre på rätt rader. De har kastats.',
+        ),
         { ton: 'varning' },
       )
     } else if (svar === 'stangd') {
@@ -578,7 +583,11 @@ export function App() {
     })
     const col = findColumn(frame, id)
     notify(
-      `Visar ${formatCount(frame.view.length)} rader där ”${col?.name ?? ''}” inte går att tolka.`,
+      tf(
+        'Visar {0} rader där ”{1}” inte går att tolka.',
+        formatCount(frame.view.length),
+        col?.name ?? '',
+      ),
       { atgard: { etikett: t('Visa alla igen'), kor: () => tab && clearViewSpec(tab) } },
     )
   }
@@ -679,7 +688,7 @@ export function App() {
     try {
       await navigator.clipboard.writeText(toDelimited(kolumner, rader, '\t'))
       notify(
-        `${celler(rader.length * kolumner.length)} kopierade. Klistra in direkt i Excel.`,
+        tf('{0} kopierade. Klistra in direkt i Excel.', celler(rader.length * kolumner.length)),
       )
     } catch {
       notify(t('Webbläsaren tillät inte kopiering till urklipp.'), { ton: 'varning' })
@@ -845,7 +854,9 @@ export function App() {
     if (!tab) return
     const n = taBortTommaRader(tab)
     notify(
-      n === 0 ? 'Inga helt tomma rader hittades.' : `Tog bort ${raderText(n)} som var helt tomma.`,
+      n === 0
+        ? t('Inga helt tomma rader hittades.')
+        : tf('Tog bort {0} som var helt tomma.', raderText(n)),
       n > 0 ? { atgard: { etikett: t('Ångra'), kor: () => tab && undo(tab) } } : undefined,
     )
   }
@@ -855,8 +866,8 @@ export function App() {
     const n = taBortTommaKolumner(tab)
     notify(
       n === 0
-        ? 'Inga helt tomma kolumner hittades.'
-        : `Tog bort ${kolumnerText(n)} som var helt tomma.`,
+        ? t('Inga helt tomma kolumner hittades.')
+        : tf('Tog bort {0} som var helt tomma.', kolumnerText(n)),
       n > 0 ? { atgard: { etikett: t('Ångra'), kor: () => tab && undo(tab) } } : undefined,
     )
   }
@@ -887,13 +898,16 @@ export function App() {
     const kolumner = nu.kolumner.slice(r.k1, r.k2 + 1)
     const andrade = stadaKolumner(tab, kolumner, stadning)
     if (andrade === 0) {
-      notify(`${stadning.etikett}: inget att ändra i markeringen.`)
+      notify(tf('{0}: inget att ändra i markeringen.', t(stadning.etikett)))
       return
     }
     notify(
-      `${stadning.etikett} — ${celler(andrade)} ändrades i ${
-        kolumner.length === 1 ? `”${kolumner[0]!.name}”` : kolumnerText(kolumner.length)
-      }.`,
+      tf(
+        '{0} — {1} ändrades i {2}.',
+        t(stadning.etikett),
+        celler(andrade),
+        kolumner.length === 1 ? `”${kolumner[0]!.name}”` : kolumnerText(kolumner.length),
+      ),
       { atgard: { etikett: t('Ångra'), kor: () => undo(tab) } },
     )
   }
@@ -971,17 +985,17 @@ export function App() {
       const manga = flera && FLERKOLUMNSVERKTYG.has(namn)
       return {
         etikett: manga
-          ? `${etikett.replace(/…$/, '')} i ${kolumnerText(kolumner.length)}…`
+          ? tf('{0} i {1}…', etikett.replace(/…$/, ''), kolumnerText(kolumner.length))
           : etikett,
         skal,
         kor: () => oppnaVerktyg(namn, manga ? ider : [col.id]),
       }
     }
     return [
-      ...ordning.passande.map((p) => post(p.post.namn, p.post.etikett, p.skal)),
+      ...ordning.passande.map((p) => post(p.post.namn, t(p.post.etikett), p.skal)),
       {
         etikett: t('Fler verktyg'),
-        undermeny: ordning.ovriga.map((v) => post(v.namn, v.etikett)),
+        undermeny: ordning.ovriga.map((v) => post(v.namn, t(v.etikett))),
       },
     ]
   }
@@ -1080,13 +1094,13 @@ export function App() {
       { etikett: t('Töm'), genvag: 'Delete', kor: tomMarkering },
       'avdelare',
       {
-        etikett: `Filtrera på ”${kort(varde)}”`,
-        inaktiv: varde === '' ? 'Cellen är tom. Filtrera på kolumnen i stället.' : undefined,
+        etikett: tf('Filtrera på ”{0}”', kort(varde)),
+        inaktiv: varde === '' ? t('Cellen är tom. Filtrera på kolumnen i stället.') : undefined,
         kor: () => filtreraKolumn(col.id, { operator: 'iLista', varden: [varde] }),
       },
-      { etikett: `Sortera på ${col.name}`, kor: () => vaxlaSortering(nu.tab, col.id, false) },
+      { etikett: tf('Sortera på {0}', col.name), kor: () => vaxlaSortering(nu.tab, col.id, false) },
       {
-        etikett: `Gruppera på ${col.name}…`,
+        etikett: tf('Gruppera på {0}…', col.name),
         skal: t('en rad per värde, med summa och antal för resten av kolumnerna'),
         kor: () => setSammanfatta({ startkolumn: col.id }),
       },
@@ -1121,8 +1135,12 @@ export function App() {
     setTabellverktyg(null)
     notify(
       behall
-        ? `Behöll ${raderText(nu.frame.rowCount)} och tog bort ${raderText(bort.length)}.`
-        : `Tog bort ${raderText(bort.length)}.`,
+        ? tf(
+            'Behöll {0} och tog bort {1}.',
+            raderText(nu.frame.rowCount),
+            raderText(bort.length),
+          )
+        : tf('Tog bort {0}.', raderText(bort.length)),
       { atgard: { etikett: t('Ångra'), kor: () => undo(nu.tab) } },
     )
   }
@@ -1149,7 +1167,7 @@ export function App() {
     sattDubbletter(nu.tab, null)
     setEgnaBehallna(new Map())
     setTabellverktyg(null)
-    notify(`Tog bort ${raderText(bort.length)} som var dubbletter.`, {
+    notify(tf('Tog bort {0} som var dubbletter.', raderText(bort.length)), {
       atgard: { etikett: t('Ångra'), kor: () => undo(nu.tab) },
     })
   }
@@ -1484,7 +1502,7 @@ export function App() {
       if (avbruten) return
       if (antal > 0) {
         notify(
-          `${filerText(antal)} från förra besöket är tillbaka. Ångra-historiken börjar om.`,
+          tf('{0} från förra besöket är tillbaka. Ångra-historiken börjar om.', filerText(antal)),
           { atgard: { etikett: t('Glöm sparade filer'), kor: () => void glomSparat() } },
         )
       }
@@ -1494,7 +1512,7 @@ export function App() {
         if (avbruten) return
         const l = sessionslage()
         if (l.lage === 'redo' && l.ogjort > 0) {
-          notify(`En påbörjad sammanslagning ${l.namn} finns kvar med ${l.ogjort} beslut.`, {
+          notify(tf('En påbörjad sammanslagning {0} finns kvar med {1} beslut.', l.namn, l.ogjort), {
             atgard: { etikett: t('Beta av resten'), kor: () => aterta() },
           })
         }
@@ -1757,7 +1775,7 @@ export function App() {
       )}
 
       {laddar && (
-        <div class="forlopp" role="progressbar" aria-label={`Läser ${laddar}`}>
+        <div class="forlopp" role="progressbar" aria-label={tf('Läser {0}', laddar)}>
           <div class="forlopp__stapel" />
         </div>
       )}
@@ -2190,7 +2208,9 @@ export function App() {
         }}
       />
 
-      {slappOver && <div class="slappoverlagg">Släpp för att öppna som ny flik</div>}
+      {slappOver && (
+        <div class="slappoverlagg">{t('Släpp för att öppna som ny flik')}</div>
+      )}
       <Toastar />
     </div>
   )

@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { dismiss, toasts } from '../state/store.js'
+import { t } from './sprak.js'
 
 export function Modal(props: {
   titel: string
@@ -26,7 +27,7 @@ export function Modal(props: {
         <div class="modal__rubrik">
           <h2>{props.titel}</h2>
           {props.underrubrik && <span class="modal__underrubrik">{props.underrubrik}</span>}
-          <button class="modal__stang" onClick={props.onStang} aria-label="Stäng">
+          <button class="modal__stang" onClick={props.onStang} aria-label={t('Stäng')}>
             ✕
           </button>
         </div>
@@ -355,7 +356,16 @@ export function Notis(props: {
   )
 }
 
-/** `valt: null` betyder att inget är valt — en fråga som ännu inte besvarats. */
+/**
+ * `valt: null` betyder att inget är valt — en fråga som ännu inte besvarats.
+ *
+ * **Etiketterna översätts här och inte i tabellerna de kommer ur.** De flesta
+ * av dem bor i `src/core/ops/` — `FLERTRAFF`, `OMFATTNING`, datumformaten,
+ * talformaten — och kärnan ska inte behöva veta att gränssnittet har ett
+ * språkval. Den skriver svenska; uppslagningen sker på vägen ut. Ett `t()`
+ * här räcker för samtliga anropsställen, och en tabell som läggs till senare
+ * blir översättningsbar utan att någon behöver komma ihåg det.
+ */
 export function Val<T extends string>(props: {
   varden: readonly { varde: T; etikett: string; titel?: string }[]
   valt: T | null
@@ -369,10 +379,10 @@ export function Val<T extends string>(props: {
           class={`val__knapp${v.varde === props.valt ? ' val__knapp--vald' : ''}`}
           role="radio"
           aria-checked={v.varde === props.valt}
-          title={v.titel}
+          title={v.titel === undefined ? undefined : t(v.titel)}
           onClick={() => props.onValj(v.varde)}
         >
-          {v.etikett}
+          {t(v.etikett)}
         </button>
       ))}
     </div>

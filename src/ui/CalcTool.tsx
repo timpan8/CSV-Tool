@@ -5,7 +5,8 @@ import type { Column, Frame } from '../core/types.js'
 import { FUNKTIONSHJALP, formelTransform, tolkaFormel } from '../core/ops/formel.js'
 import { TALFORMAT, skrivTal, type Talformat } from '../core/ops/numbers.js'
 import { beraknaForhandsvisning, type Forhandsvisning } from '../state/preview.js'
-import { celler, formatCount } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
+import { celler, sprak, t, tj } from './sprak.js'
 
 const DECIMALVAL = [
   { varde: 'som-det-blir' as const, etikett: 'Så många som behövs' },
@@ -36,7 +37,7 @@ export function CalcTool(props: {
 }) {
   const { col, frame } = props
   const [uttryck, setUttryck] = useState('')
-  const [namn, setNamn] = useState('Beräknad')
+  const [namn, setNamn] = useState(t('Beräknad'))
   const [format, setFormat] = useState<Talformat>('komma')
   const [decimalval, setDecimalval] = useState<(typeof DECIMALVAL)[number]['varde']>('som-det-blir')
 
@@ -61,7 +62,7 @@ export function CalcTool(props: {
       },
       frame,
     )
-  }, [col, frame, props.dataRevision, tolkning, rent, format, decimaler])
+  }, [col, frame, props.dataRevision, tolkning, rent, format, decimaler, sprak.value])
 
   useEffect(() => {
     props.onForhandsvisning([forh])
@@ -73,49 +74,60 @@ export function CalcTool(props: {
 
   return (
     <Verktygspanel
-      titel="Räkna"
+      titel={t('Räkna')}
       underrubrik={rent}
       onStang={props.onStang}
       fot={
         <>
           <button class="knapp" onClick={props.onStang}>
-            Avbryt
+            {t('Avbryt')}
           </button>
           <button
             class="knapp knapp--primar"
             disabled={!kanKoras}
             title={
               tolkning.rot === null
-                ? 'Skriv en formel som går att räkna.'
+                ? t('Skriv en formel som går att räkna.')
                 : forh.andrade === 0
-                  ? 'Ingen rad gav ett värde.'
+                  ? t('Ingen rad gav ett värde.')
                   : undefined
             }
             onClick={() => props.onTillampa([forh])}
           >
-            Skapa kolumnen
+            {t('Skapa kolumnen')}
           </button>
         </>
       }
     >
       <div class="falt">
-        <span class="falt__etikett">Formel</span>
+        <span class="falt__etikett">{t('Formel')}</span>
         <input
           class="formel__falt"
           value={uttryck}
           placeholder="{Antal} * {Pris}"
-          aria-label="Formel"
+          aria-label={t('Formel')}
           onInput={(e) => setUttryck((e.currentTarget as HTMLInputElement).value)}
         />
-        {tolkning.fel !== null && <div class="regel__fel">{tolkning.fel}</div>}
+        {/*
+          De felmeddelanden som är hela meningar slås upp i ordboken. De som
+          byggs kring det tecken eller kolumnnamn som klickade står kvar på
+          svenska: de sätts ihop i `core/ops/formel.ts`, som skriver svenska
+          och inte känner till språkvalet, och att klippa isär en sådan mening
+          här hade gjort den obegriplig i båda språken.
+        */}
+        {tolkning.fel !== null && <div class="regel__fel">{t(tolkning.fel)}</div>}
         <p class="verktyg__sammanfattning">
-          Fyra räknesätt och parenteser. Skriv <code>{'{Kolumnnamn}'}</code> för ett värde ur
-          raden. Tal skrivs som i filen: <code>1 240,50</code> eller <code>1240.5</code>.
+          {tj(
+            'Fyra räknesätt och parenteser. Skriv {0} för ett värde ur raden. Tal skrivs som i filen: {1} eller {2}.',
+            <code>{'{Kolumnnamn}'}</code>,
+            <code>1 240,50</code>,
+            <code>1240.5</code>,
+          )}
         </p>
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Lägg till kolumn</span>
+        <span class="falt__etikett">{t('Lägg till kolumn')}</span>
         <div class="val" role="group">
           {frame.columns
             .filter((c) => !c.hidden)
@@ -123,7 +135,7 @@ export function CalcTool(props: {
               <button
                 key={c.id}
                 class="val__knapp"
-                title={c.type === 'date' ? 'Datum räknas som antal dagar.' : undefined}
+                title={c.type === 'date' ? t('Datum räknas som antal dagar.') : undefined}
                 onClick={() => infoga(`{${c.name}}`)}
               >
                 {c.name}
@@ -133,13 +145,13 @@ export function CalcTool(props: {
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Funktioner</span>
+        <span class="falt__etikett">{t('Funktioner')}</span>
         <div class="val" role="group">
           {FUNKTIONSHJALP.map((f) => (
             <button
               key={f.namn}
               class="val__knapp"
-              title={f.hjalp}
+              title={t(f.hjalp)}
               onClick={() => infoga(`${f.namn.slice(0, f.namn.indexOf('('))}(`)}
             >
               {f.namn.slice(0, f.namn.indexOf('('))}
@@ -150,19 +162,20 @@ export function CalcTool(props: {
 
       {tolkning.anvanda.some((n) => frame.columns.find((c) => c.name === n)?.type === 'date') && (
         <Notis ton="info">
-          En datumkolumn räknas som antal dagar, så <code>{'{Slut} - {Start}'}</code> ger
-          skillnaden i dagar. Resultatet är alltid ett tal — verktyget gissar aldrig att du ville
-          ha ett datum tillbaka.
+          {tj(
+            'En datumkolumn räknas som antal dagar, så {0} ger skillnaden i dagar. Resultatet är alltid ett tal — verktyget gissar aldrig att du ville ha ett datum tillbaka.',
+            <code>{'{Slut} - {Start}'}</code>,
+          )}
         </Notis>
       )}
 
       <div class="falt">
-        <span class="falt__etikett">Decimaler</span>
+        <span class="falt__etikett">{t('Decimaler')}</span>
         <Val varden={DECIMALVAL} valt={decimalval} onValj={setDecimalval} />
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Decimaltecken</span>
+        <span class="falt__etikett">{t('Decimaltecken')}</span>
         <Val
           varden={TALFORMAT.map((f) => ({ varde: f.varde, etikett: f.etikett, titel: f.exempel }))}
           valt={format}
@@ -171,7 +184,7 @@ export function CalcTool(props: {
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Namn på den nya kolumnen</span>
+        <span class="falt__etikett">{t('Namn på den nya kolumnen')}</span>
         <input value={namn} onInput={(e) => setNamn((e.currentTarget as HTMLInputElement).value)} />
       </div>
 
@@ -181,16 +194,17 @@ export function CalcTool(props: {
         andrade={forh.andrade}
         problem={forh.problem}
       >
-        <strong>{formatCount(forh.andrade)}</strong> av {celler(forh.ifyllda)} får ett värde
-        {forh.andrade < forh.ifyllda && tolkning.rot !== null && (
-          <>
-            {' · '}
-            <strong class="verktyg__problem">
-              {formatCount(forh.ifyllda - forh.andrade)}
-            </strong>{' '}
-            blir tomma, eftersom något värde saknas eller inte är ett tal
-          </>
+        {tj(
+          '{0} av {1} får ett värde',
+          <strong>{formatCount(forh.andrade)}</strong>,
+          celler(forh.ifyllda),
         )}
+        {forh.andrade < forh.ifyllda &&
+          tolkning.rot !== null &&
+          tj(
+            ' · {0} blir tomma, eftersom något värde saknas eller inte är ett tal',
+            <strong class="verktyg__problem">{formatCount(forh.ifyllda - forh.andrade)}</strong>,
+          )}
       </Resultat>
     </Verktygspanel>
   )

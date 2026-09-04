@@ -1,12 +1,12 @@
 import type { Frame } from '../core/types.js'
 import { DELIMITER_NAMES } from '../core/csv/sniff.js'
-import { formatCount, formatSum, rader } from '../core/locale/sv.js'
+import { formatCount, formatSum } from '../core/locale/sv.js'
 import type { Flikensverkstad } from '../state/matchning.js'
 import { beskrivSortering } from '../core/ops/sort.js'
 import { aggregera } from '../state/selection.js'
 import { selectableColumns } from '../state/edits.js'
 import type { Tab } from '../state/store.js'
-import { t, tf } from './sprak.js'
+import { rader, t, tf } from './sprak.js'
 
 /**
  * Statusraden.

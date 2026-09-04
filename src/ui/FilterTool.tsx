@@ -14,7 +14,8 @@ import {
   type Filterregel,
   type Operator,
 } from '../core/ops/filter.js'
-import { formatCount, rader as raderText } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
+import { rader as raderText, t, tf } from './sprak.js'
 
 /**
  * Filterbyggaren.
@@ -73,11 +74,15 @@ export function FilterTool(props: {
 
   return (
     <Verktygspanel
-      titel="Filter"
+      titel={t('Filter')}
       underrubrik={
         aktiva.length === 0
-          ? 'Inga aktiva regler'
-          : `${formatCount(frame.view.length)} av ${formatCount(frame.rowCount)} rader`
+          ? t('Inga aktiva regler')
+          : tf(
+              '{0} av {1} rader',
+              formatCount(frame.view.length),
+              formatCount(frame.rowCount),
+            )
       }
       onStang={props.onStang}
       fot={
@@ -87,17 +92,17 @@ export function FilterTool(props: {
             disabled={filter.regler.length === 0}
             onClick={() => props.onFilter({ ...filter, regler: [] })}
           >
-            Ta bort alla regler
+            {t('Ta bort alla regler')}
           </button>
           <button class="knapp knapp--primar" onClick={props.onStang}>
-            Klar
+            {t('Klar')}
           </button>
         </>
       }
     >
       {filter.regler.length > 1 && (
         <div class="falt">
-          <span class="falt__etikett">En rad visas när</span>
+          <span class="falt__etikett">{t('En rad visas när')}</span>
           <Val
             varden={[
               { varde: 'alla' as const, etikett: 'Alla regler stämmer' },
@@ -110,7 +115,7 @@ export function FilterTool(props: {
       )}
 
       <div class="falt">
-        <span class="falt__etikett">Regler</span>
+        <span class="falt__etikett">{t('Regler')}</span>
         {filter.regler.map((regel) => {
           const col = findColumn(frame, regel.colId)
           const post = operatorpost(regel.operator)
@@ -124,7 +129,7 @@ export function FilterTool(props: {
                 <input
                   type="checkbox"
                   checked={regel.av !== true}
-                  aria-label="Regeln är på"
+                  aria-label={t('Regeln är på')}
                   onChange={(e) =>
                     andra(regel.id, { av: !(e.currentTarget as HTMLInputElement).checked })
                   }
@@ -136,7 +141,7 @@ export function FilterTool(props: {
                 value={regel.colId}
                 onChange={(e) => andra(regel.id, { colId: (e.currentTarget as HTMLSelectElement).value })}
               >
-                {!col && <option value={regel.colId}>Borttagen kolumn</option>}
+                {!col && <option value={regel.colId}>{t('Borttagen kolumn')}</option>}
                 {frame.columns.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -155,7 +160,7 @@ export function FilterTool(props: {
               >
                 {operatorerFor(col?.type ?? 'text').map((o) => (
                   <option key={o.op} value={o.op}>
-                    {o.etikett}
+                    {t(o.etikett)}
                   </option>
                 ))}
               </select>
@@ -166,19 +171,19 @@ export function FilterTool(props: {
                   onClick={() => setOppenLista(oppenLista === regel.id ? null : regel.id)}
                 >
                   {(regel.varden?.length ?? 0) === 0
-                    ? 'Välj värden…'
-                    : `${formatCount(regel.varden!.length)} valda`}
+                    ? t('Välj värden…')
+                    : tf('{0} valda', formatCount(regel.varden!.length))}
                 </button>
               ) : (
                 post.falt > 0 && (
                   <input
                     class="regel__varde"
                     value={regel.varde}
-                    placeholder={
+                    placeholder={t(
                       regel.operator === 'langreAn' || regel.operator === 'kortareAn'
                         ? 'antal tecken'
-                        : 'värde'
-                    }
+                        : 'värde',
+                    )}
                     onInput={(e) => andra(regel.id, { varde: (e.currentTarget as HTMLInputElement).value })}
                   />
                 )
@@ -187,25 +192,26 @@ export function FilterTool(props: {
                 <input
                   class="regel__varde"
                   value={regel.varde2 ?? ''}
-                  placeholder="till"
+                  placeholder={t('till')}
                   onInput={(e) => andra(regel.id, { varde2: (e.currentTarget as HTMLInputElement).value })}
                 />
               )}
 
               <button
                 class="kolrad__oga"
-                aria-label="Ta bort regeln"
-                title="Ta bort regeln"
+                aria-label={t('Ta bort regeln')}
+                title={t('Ta bort regeln')}
                 onClick={() => taBort(regel.id)}
               >
                 ✕
               </button>
 
-              {regelfel && <div class="regel__fel">{regelfel.text}</div>}
+              {regelfel && <div class="regel__fel">{t(regelfel.text)}</div>}
               {!col && (
                 <div class="regel__fel">
-                  Kolumnen finns inte längre. Regeln ligger kvar och börjar gälla igen om du
-                  ångrar borttagningen.
+                  {t(
+                    'Kolumnen finns inte längre. Regeln ligger kvar och börjar gälla igen om du ångrar borttagningen.',
+                  )}
                 </div>
               )}
 
@@ -222,10 +228,10 @@ export function FilterTool(props: {
           )
         })}
         {filter.regler.length === 0 && (
-          <p class="verktyg__sammanfattning">Inga regler än. Alla rader visas.</p>
+          <p class="verktyg__sammanfattning">{t('Inga regler än. Alla rader visas.')}</p>
         )}
         <button class="knapp" onClick={lagg}>
-          ＋ Lägg till regel
+          {t('＋ Lägg till regel')}
         </button>
       </div>
 
@@ -242,37 +248,41 @@ export function FilterTool(props: {
                 })
               }
             />
-            <span>Visa i stället de rader filtret döljer</span>
+            <span>{t('Visa i stället de rader filtret döljer')}</span>
           </label>
           <p class="verktyg__sammanfattning">
-            Vändningen gäller filtret som helhet. Att se vad man sorterat bort är det enda
-            sättet att märka att man sorterat bort fel saker.
+            {t(
+              'Vändningen gäller filtret som helhet. Att se vad man sorterat bort är det enda sättet att märka att man sorterat bort fel saker.',
+            )}
           </p>
         </div>
       )}
 
       {aktiva.length > 0 && (
         <div class="falt">
-          <span class="falt__etikett">Gör urvalet permanent</span>
+          <span class="falt__etikett">{t('Gör urvalet permanent')}</span>
           <div class="insp__knappar" style={{ marginTop: 6 }}>
             <button class="knapp" onClick={props.onBehallSynliga}>
-              Behåll bara de {raderText(frame.view.length)} som visas
+              {tf('Behåll bara de {0} som visas', raderText(frame.view.length))}
             </button>
             <button class="knapp knapp--fara" onClick={props.onTaBortSynliga}>
-              Ta bort de {raderText(frame.view.length)} som visas
+              {tf('Ta bort de {0} som visas', raderText(frame.view.length))}
             </button>
           </div>
           <p class="verktyg__sammanfattning">
-            Båda ändrar filen och går att ångra. Filtret rensas efteråt, eftersom det inte
-            längre har något att dölja.
+            {t(
+              'Båda ändrar filen och går att ångra. Filtret rensas efteråt, eftersom det inte längre har något att dölja.',
+            )}
           </p>
         </div>
       )}
 
       {filter.regler.length > aktiva.length && (
         <Notis ton="info">
-          {formatCount(filter.regler.length - aktiva.length)} av reglerna räknas inte just nu —
-          de är avslagna, ofärdiga eller pekar på en kolumn som tagits bort. De ligger kvar.
+          {tf(
+            '{0} av reglerna räknas inte just nu — de är avslagna, ofärdiga eller pekar på en kolumn som tagits bort. De ligger kvar.',
+            formatCount(filter.regler.length - aktiva.length),
+          )}
         </Notis>
       )}
     </Verktygspanel>
@@ -318,7 +328,7 @@ function Vardelista(props: {
     <div class="vardelista">
       <input
         type="search"
-        placeholder={`Sök bland ${formatCount(poster.length)} värden…`}
+        placeholder={tf('Sök bland {0} värden…', formatCount(poster.length))}
         value={sok}
         onInput={(e) => setSok((e.currentTarget as HTMLInputElement).value)}
       />
@@ -341,10 +351,10 @@ function Vardelista(props: {
         ))}
         {synliga.length > 200 && (
           <p class="verktyg__sammanfattning">
-            Visar de 200 vanligaste av {raderText(synliga.length)}. Sök för att hitta fler.
+            {tf('Visar de 200 vanligaste av {0}. Sök för att hitta fler.', raderText(synliga.length))}
           </p>
         )}
-        {synliga.length === 0 && <p class="verktyg__sammanfattning">Inga värden matchar.</p>}
+        {synliga.length === 0 && <p class="verktyg__sammanfattning">{t('Inga värden matchar.')}</p>}
       </div>
     </div>
   )

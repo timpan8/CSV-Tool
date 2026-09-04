@@ -6,6 +6,7 @@ import { visibleColumns } from '../core/frame/frame.js'
 import { TYPE_LABELS } from '../core/infer.js'
 import type { Riktning, Sorteringsniva } from '../core/ops/sort.js'
 import { formatCount } from '../core/locale/sv.js'
+import { t, tf } from './sprak.js'
 
 /**
  * Flernivåsortering.
@@ -53,11 +54,11 @@ export function SortTool(props: {
 
   return (
     <Verktygspanel
-      titel="Sortera"
+      titel={t('Sortera')}
       underrubrik={
         nivaer.length === 0
-          ? 'Ingen sortering'
-          : `${formatCount(nivaer.length)} ${nivaer.length === 1 ? 'nivå' : 'nivåer'}`
+          ? t('Ingen sortering')
+          : `${formatCount(nivaer.length)} ${t(nivaer.length === 1 ? 'nivå' : 'nivåer')}`
       }
       onStang={props.onStang}
       fot={
@@ -67,25 +68,27 @@ export function SortTool(props: {
             disabled={nivaer.length === 0}
             onClick={() => props.onNivaer([])}
           >
-            Ta bort sorteringen
+            {t('Ta bort sorteringen')}
           </button>
           <button class="knapp knapp--primar" onClick={props.onStang}>
-            Klar
+            {t('Klar')}
           </button>
         </>
       }
     >
       {props.inaktuell && (
         <Notis ton="varning">
-          Ordningen räknades innan de senaste ändringarna, så raderna ligger kvar där de var.{' '}
+          {t(
+            'Ordningen räknades innan de senaste ändringarna, så raderna ligger kvar där de var.',
+          )}{' '}
           <button class="knapp knapp--tyst" onClick={props.onSorteraOm}>
-            Sortera om
+            {t('Sortera om')}
           </button>
         </Notis>
       )}
 
       <div class="falt">
-        <span class="falt__etikett">Nivåer, viktigast först</span>
+        <span class="falt__etikett">{t('Nivåer, viktigast först')}</span>
         <div class="kollista">
           {nivaer.map((niva, i) => {
             const col = props.frame.columns.find((c) => c.id === niva.colId)
@@ -114,7 +117,7 @@ export function SortTool(props: {
                   {props.frame.columns.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
-                      {c.hidden ? ' (dold)' : ''}
+                      {c.hidden ? t(' (dold)') : ''}
                     </option>
                   ))}
                 </select>
@@ -128,8 +131,8 @@ export function SortTool(props: {
                 />
                 <button
                   class="kolrad__oga"
-                  aria-label={`Ta bort nivån ${col?.name ?? ''}`}
-                  title="Ta bort nivån"
+                  aria-label={tf('Ta bort nivån {0}', col?.name ?? '')}
+                  title={t('Ta bort nivån')}
                   onClick={() => taBort(i)}
                 >
                   ✕
@@ -139,33 +142,41 @@ export function SortTool(props: {
           })}
           {nivaer.length === 0 && (
             <p class="verktyg__sammanfattning">
-              Raderna ligger i filens ordning. Lägg till en nivå, eller klicka på pilen i en
-              kolumnrubrik.
+              {t(
+                'Raderna ligger i filens ordning. Lägg till en nivå, eller klicka på pilen i en kolumnrubrik.',
+              )}
             </p>
           )}
         </div>
         <button class="knapp" disabled={allaAnvanda} onClick={lagg}>
-          ＋ Lägg till nivå
+          {t('＋ Lägg till nivå')}
         </button>
       </div>
 
       <Notis ton="info">
-        Sorteringen ändrar bara i vilken ordning raderna visas — inga värden flyttas i filen, och
-        radnumret till vänster fortsätter visa var raden stod. Tomma celler hamnar alltid sist,
-        oavsett riktning: en tom cell är inte det minsta värdet, den saknas.
+        {t(
+          'Sorteringen ändrar bara i vilken ordning raderna visas — inga värden flyttas i filen, och radnumret till vänster fortsätter visa var raden stod. Tomma celler hamnar alltid sist, oavsett riktning: en tom cell är inte det minsta värdet, den saknas.',
+        )}
       </Notis>
     </Verktygspanel>
   )
 }
 
+/*
+ * `A→Ö` och `Ö→A` översätts inte.
+ *
+ * Sorteringen är svensk oavsett gränssnittets språk — å ä ö ligger efter z —
+ * och `A→Z` hade lovat en ordning verktyget inte kör. Riktningen är beteende,
+ * inte etikett.
+ */
 function stigandeText(type: string | undefined): string {
-  if (type === 'number') return 'Minst först'
-  if (type === 'date') return 'Äldst först'
-  return `A→Ö${type ? ` (${TYPE_LABELS[type as never] ?? ''})` : ''}`.trim()
+  if (type === 'number') return t('Minst först')
+  if (type === 'date') return t('Äldst först')
+  return `A→Ö${type ? ` (${t(TYPE_LABELS[type as never] ?? '')})` : ''}`.trim()
 }
 
 function fallandeText(type: string | undefined): string {
-  if (type === 'number') return 'Störst först'
-  if (type === 'date') return 'Nyast först'
+  if (type === 'number') return t('Störst först')
+  if (type === 'date') return t('Nyast först')
   return 'Ö→A'
 }

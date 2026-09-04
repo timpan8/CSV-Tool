@@ -24,8 +24,9 @@ import {
   type Sammanslagning,
 } from '../core/ops/match.js'
 import { getCell } from '../core/frame/column.js'
-import { formatCount, rader as raderText } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
 import { stangSlaIhop } from '../state/slaihop.js'
+import { rader as raderText, t, tf, tj } from './sprak.js'
 
 /**
  * Slå ihop två filer.
@@ -335,9 +336,9 @@ export function SlaIhop(props: {
       <div class="slaihop slaihop--tomt">
         <div class="slaihop__topp">
           <div>
-            <h2>Slå ihop filer</h2>
+            <h2>{t('Slå ihop filer')}</h2>
             <span class="slaihop__underrubrik">
-              Rader som hör ihop läggs sida vid sida, matchat på en nyckel.
+              {t('Rader som hör ihop läggs sida vid sida, matchat på en nyckel.')}
             </span>
           </div>
         </div>
@@ -365,22 +366,29 @@ export function SlaIhop(props: {
             }}
           >
             <p class="tomt__rubrik">
-              {flikar.length === 1
-                ? 'Öppna filen du vill slå ihop med'
-                : 'Öppna de två filer du vill slå ihop'}
+              {t(
+                flikar.length === 1
+                  ? 'Öppna filen du vill slå ihop med'
+                  : 'Öppna de två filer du vill slå ihop',
+              )}
             </p>
             <p class="tomt__underrubrik">
               {flikar.length === 1
-                ? `${flikar[0]!.frame.name} är redan öppen. Släpp den andra här, eller välj den nedan — den blir en egen flik.`
-                : 'Släpp dem här, eller välj dem nedan. Varje fil blir en egen flik.'}
+                ? tf(
+                    '{0} är redan öppen. Släpp den andra här, eller välj den nedan — den blir en egen flik.',
+                    flikar[0]!.frame.name,
+                  )
+                : t('Släpp dem här, eller välj dem nedan. Varje fil blir en egen flik.')}
             </p>
             <Filknappar onFiler={props.onFiler} onExempelpar={props.onExempelpar} visaExempel />
           </div>
         </div>
         <div class="slaihop__fot">
-          <span class="slaihop__fot__text">Filerna blir egna flikar och rörs inte av det här.</span>
+          <span class="slaihop__fot__text">
+            {t('Filerna blir egna flikar och rörs inte av det här.')}
+          </span>
           <button class="knapp" onClick={stangSlaIhop}>
-            Avbryt
+            {t('Avbryt')}
           </button>
         </div>
       </div>
@@ -398,10 +406,14 @@ export function SlaIhop(props: {
         pixel rutorna nedanför inte får.
       */}
       <div class="slaihop__topp">
-        <h2>Slå ihop filer</h2>
+        <h2>{t('Slå ihop filer')}</h2>
           <div class="falt">
             <span class="falt__etikett">
-              {tarMedHoger ? 'Stommen — den står först i resultatet' : 'Stommen — alla rader följer med'}
+              {t(
+                tarMedHoger
+                  ? 'Stommen — den står först i resultatet'
+                  : 'Stommen — alla rader följer med',
+              )}
             </span>
             <Val
               varden={flikar.map((t) => ({
@@ -421,15 +433,15 @@ export function SlaIhop(props: {
           <div class="slaihop__byt">
             <button
               class="knapp knapp--tyst"
-              title="Byt håll: den andra filen blir stommen."
+              title={t('Byt håll: den andra filen blir stommen.')}
               onClick={byt}
             >
-              ⇄ Byt håll
+              {t('⇄ Byt håll')}
             </button>
           </div>
 
           <div class="falt">
-            <span class="falt__etikett">Hämta uppgifter ur</span>
+            <span class="falt__etikett">{t('Hämta uppgifter ur')}</span>
             <Val
               varden={flikar
                 .filter((t) => t.id !== vansterId)
@@ -449,35 +461,50 @@ export function SlaIhop(props: {
         {matchning && vanster && hoger && (
           <div class="vytal">
             <span>
-              <strong>{formatCount(matchning.vansterMatchade)}</strong> av{' '}
-              {formatCount(vanster.rowCount)} rader hittar en träff ({traffprocent} %)
+              {tj(
+                '{0} av {1} rader hittar en träff ({2} %)',
+                <strong>{formatCount(matchning.vansterMatchade)}</strong>,
+                formatCount(vanster.rowCount),
+                traffprocent,
+              )}
             </span>
             {matchning.vansterUtan.length > 0 && (
               <span class="vytal--okant">
-                <strong>{formatCount(matchning.vansterUtan.length)}</strong> hittar ingen
+                {tj(
+                  '{0} hittar ingen',
+                  <strong>{formatCount(matchning.vansterUtan.length)}</strong>,
+                )}
               </span>
             )}
             <span class={tarMedHoger ? undefined : 'vytal--okant'}>
               <strong>{formatCount(matchning.hogerUtan.length)}</strong>
               {tarMedHoger
-                ? ` kommer med bara från ${hoger.name}`
-                : ` blir över i ${hoger.name}`}
+                ? ` ${tf('kommer med bara från {0}', hoger.name)}`
+                : ` ${tf('blir över i {0}', hoger.name)}`}
             </span>
             {matchning.vansterFlera > 0 && (
               <span class="vytal--okant">
-                <strong>{formatCount(matchning.vansterFlera)}</strong> matchar flera (som mest{' '}
-                {formatCount(matchning.storstaTraff)})
+                {tj(
+                  '{0} matchar flera (som mest {1})',
+                  <strong>{formatCount(matchning.vansterFlera)}</strong>,
+                  formatCount(matchning.storstaTraff),
+                )}
               </span>
             )}
             {matchning.hogerFlera > 0 && (
               <span>
-                <strong>{formatCount(matchning.hogerFlera)}</strong> används av flera
+                {tj(
+                  '{0} används av flera',
+                  <strong>{formatCount(matchning.hogerFlera)}</strong>,
+                )}
               </span>
             )}
             {(matchning.tommaVanster > 0 || matchning.tommaHoger > 0) && (
               <span>
-                <strong>{formatCount(matchning.tommaVanster + matchning.tommaHoger)}</strong> har
-                tom nyckel och kan aldrig matcha
+                {tj(
+                  '{0} har tom nyckel och kan aldrig matcha',
+                  <strong>{formatCount(matchning.tommaVanster + matchning.tommaHoger)}</strong>,
+                )}
               </span>
             )}
             {/*
@@ -485,7 +512,7 @@ export function SlaIhop(props: {
               vad man faktiskt får, och den ska gå att läsa innan man trycker.
             */}
             <span class="vytal--resultat">
-              Resultatet får <strong>{formatCount(resultatrader)}</strong> rader
+              {tj('Resultatet får {0} rader', <strong>{formatCount(resultatrader)}</strong>)}
             </span>
           </div>
         )}
@@ -503,13 +530,13 @@ export function SlaIhop(props: {
       */}
       <div class="slaihop__installningar">
             <div class="falt">
-              <span class="falt__etikett">Rader hör ihop när de stämmer i</span>
+              <span class="falt__etikett">{t('Rader hör ihop när de stämmer i')}</span>
               {aktivaPar.map((p, i) => (
                 <div class="slaihop__par" key={i}>
                   <div class="regel">
                     <select
                       class="nivarad__kolumn"
-                      aria-label={`Vänsterkolumn i par ${i + 1}`}
+                      aria-label={tf('Vänsterkolumn i par {0}', i + 1)}
                       value={p.vansterColId}
                       onChange={(e) =>
                         andraPar(i, { vansterColId: (e.currentTarget as HTMLSelectElement).value })
@@ -526,7 +553,7 @@ export function SlaIhop(props: {
                     </span>
                     <select
                       class="nivarad__kolumn"
-                      aria-label={`Högerkolumn i par ${i + 1}`}
+                      aria-label={tf('Högerkolumn i par {0}', i + 1)}
                       value={p.hogerColId}
                       onChange={(e) =>
                         andraPar(i, { hogerColId: (e.currentTarget as HTMLSelectElement).value })
@@ -540,7 +567,7 @@ export function SlaIhop(props: {
                     </select>
                     <button
                       class="kolrad__oga"
-                      aria-label="Ta bort kolumnparet"
+                      aria-label={t('Ta bort kolumnparet')}
                       onClick={() => taBortPar(i)}
                     >
                       ✕
@@ -548,18 +575,18 @@ export function SlaIhop(props: {
                   </div>
                   {kraverTvaHoger(p.typ) && (
                     <div class="regel">
-                      <span class="slaihop__parnot">och</span>
+                      <span class="slaihop__parnot">{t('och')}</span>
                       <select
                         class="nivarad__kolumn"
                         value={p.hogerColId2 ?? ''}
-                        aria-label="Andra högerkolumnen"
+                        aria-label={t('Andra högerkolumnen')}
                         onChange={(e) =>
                           andraPar(i, {
                             hogerColId2: (e.currentTarget as HTMLSelectElement).value || undefined,
                           })
                         }
                       >
-                        <option value="">Välj kolumn…</option>
+                        <option value="">{t('Välj kolumn…')}</option>
                         {hogerKolumner.map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.name}
@@ -570,7 +597,7 @@ export function SlaIhop(props: {
                   )}
                   <select
                     class="nivarad__kolumn"
-                    aria-label={`Jämförelse i par ${i + 1}`}
+                    aria-label={tf('Jämförelse i par {0}', i + 1)}
                     value={p.typ}
                     onChange={(e) =>
                       andraPar(i, {
@@ -578,9 +605,9 @@ export function SlaIhop(props: {
                       })
                     }
                   >
-                    {MATCHNINGSTYPER.map((t) => (
-                      <option key={t.typ} value={t.typ}>
-                        {t.etikett}
+                    {MATCHNINGSTYPER.map((m) => (
+                      <option key={m.typ} value={m.typ}>
+                        {t(m.etikett)}
                       </option>
                     ))}
                   </select>
@@ -590,33 +617,42 @@ export function SlaIhop(props: {
                     val som bara går att förstå med musen är inget val.
                   */}
                   <p class="slaihop__typtext">
-                    {MATCHNINGSTYPER.find((t) => t.typ === p.typ)?.beskrivning}
+                    {t(MATCHNINGSTYPER.find((m) => m.typ === p.typ)?.beskrivning ?? '')}
                   </p>
                 </div>
               ))}
               {aktivaPar.length === 0 && (
                 <p class="verktyg__sammanfattning">
-                  {forslag.skal === 'ingen-traff'
-                    ? `Inget kolumnpar hittar en enda gemensam rad. Alla kombinationer är provade, med tre jämförelser: vanlig, utan å ä ö och bara siffror.`
-                    : 'Inga kolumnpar valda. Lägg till minst ett för att kunna matcha.'}
+                  {t(
+                    forslag.skal === 'ingen-traff'
+                      ? 'Inget kolumnpar hittar en enda gemensam rad. Alla kombinationer är provade, med tre jämförelser: vanlig, utan å ä ö och bara siffror.'
+                      : 'Inga kolumnpar valda. Lägg till minst ett för att kunna matcha.',
+                  )}
                 </p>
               )}
               <div class="faltrad">
                 <button class="knapp" onClick={laggPar}>
-                  ＋ Lägg till kolumnpar
+                  {t('＋ Lägg till kolumnpar')}
                 </button>
               </div>
               {!egnaPar && foreslagna.length > 0 && (
                 <p class="verktyg__sammanfattning">
                   {forslag.skal === 'flest' && forslag.betyg
-                    ? `Föreslaget efter att alla kolumnpar provats mot varandra: det här ger flest träffar (${formatCount(
-                        forslag.betyg.traffar,
-                      )} av ${raderText(vanster?.rowCount ?? 0)}). Ändra fritt.`
+                    ? tf(
+                        'Föreslaget efter att alla kolumnpar provats mot varandra: det här ger flest träffar ({0} av {1}). Ändra fritt.',
+                        formatCount(forslag.betyg.traffar),
+                        raderText(vanster?.rowCount ?? 0),
+                      )
                     : forslag.skal === 'namn-for-stort'
-                      ? 'Föreslaget utifrån kolumnernas namn. Filerna har för många kolumner för att hinna prova alla par mot varandra, så siffrorna fick inte vara med och bestämma.'
-                      : `Föreslaget utifrån kolumnernas namn, och det är också paret som matchar bäst${
-                          forslag.betyg ? ` (${formatCount(forslag.betyg.traffar)} träffar)` : ''
-                        }. Ändra fritt.`}
+                      ? t(
+                          'Föreslaget utifrån kolumnernas namn. Filerna har för många kolumner för att hinna prova alla par mot varandra, så siffrorna fick inte vara med och bestämma.',
+                        )
+                      : tf(
+                          'Föreslaget utifrån kolumnernas namn, och det är också paret som matchar bäst{0}. Ändra fritt.',
+                          forslag.betyg
+                            ? ` ${tf('({0} träffar)', formatCount(forslag.betyg.traffar))}`
+                            : '',
+                        )}
                 </p>
               )}
             </div>
@@ -624,10 +660,11 @@ export function SlaIhop(props: {
             {ofardigaPar > 0 && (
               <Notis ton="varning">
                 {ofardigaPar === 1
-                  ? 'Ett kolumnpar saknar sin andra högerkolumn'
-                  : `${ofardigaPar} kolumnpar saknar sin andra högerkolumn`}
-                . Matchningen kan inte köras förrän den är vald — utan den finns ingen nyckel att
-                jämföra med.
+                  ? t('Ett kolumnpar saknar sin andra högerkolumn')
+                  : tf('{0} kolumnpar saknar sin andra högerkolumn', ofardigaPar)}
+                {t(
+                  '. Matchningen kan inte köras förrän den är vald — utan den finns ingen nyckel att jämföra med.',
+                )}
               </Notis>
             )}
 
@@ -641,27 +678,29 @@ export function SlaIhop(props: {
             */}
             {matchning && matchning.vansterMatchade === 0 && (
               <Notis ton="fara">
-                <strong>Inte en enda rad matchar.</strong> Antingen är det fel kolumnpar, eller
-                så är värdena skrivna på olika sätt i de två filerna — prova en annan jämförelse,
-                eller städa kolumnerna först.
+                {tj(
+                  '{0} Antingen är det fel kolumnpar, eller så är värdena skrivna på olika sätt i de två filerna — prova en annan jämförelse, eller städa kolumnerna först.',
+                  <strong>{t('Inte en enda rad matchar.')}</strong>,
+                )}
                 {forslag.alla.length > 0 && !egnaPar
-                  ? ' Verktyget hittade andra par som ger träffar; klicka ＋ Lägg till kolumnpar för att prova nästa.'
+                  ? ` ${t('Verktyget hittade andra par som ger träffar; klicka ＋ Lägg till kolumnpar för att prova nästa.')}`
                   : ''}
               </Notis>
             )}
 
             {matchning && traffprocent < 20 && matchning.vansterMatchade > 0 && (
               <Notis ton="varning">
-                Bara {traffprocent} % av raderna matchar. Så låg andel beror oftast på fel
-                kolumnpar eller på att värdena är skrivna på olika sätt — prova en annan
-                jämförelse, eller städa kolumnerna först.
+                {tf(
+                  'Bara {0} % av raderna matchar. Så låg andel beror oftast på fel kolumnpar eller på att värdena är skrivna på olika sätt — prova en annan jämförelse, eller städa kolumnerna först.',
+                  traffprocent,
+                )}
               </Notis>
             )}
 
             {matchning && matchning.vansterFlera > 0 && (
               <div class="falt">
                 <span class="falt__etikett">
-                  När en rad matchar flera ({formatCount(matchning.vansterFlera)} gör det)
+                  {tf('När en rad matchar flera ({0} gör det)', formatCount(matchning.vansterFlera))}
                 </span>
                 <Val
                   varden={FLERTRAFF.map((f) => ({
@@ -676,7 +715,7 @@ export function SlaIhop(props: {
             )}
 
             <div class="falt">
-              <span class="falt__etikett">Vilka rader som kommer med</span>
+              <span class="falt__etikett">{t('Vilka rader som kommer med')}</span>
               <Val
                 varden={OMFATTNING.map((o) => ({
                   varde: o.varde,
@@ -689,21 +728,32 @@ export function SlaIhop(props: {
               {matchning && hoger && (
                 <p class="verktyg__sammanfattning">
                   {tarMedHoger
-                    ? `${raderText(matchning.hogerUtan.length)} ur ${hoger.name} följer med sist, med tomma celler i ${vanster?.name ?? 'stommens'} kolumner.`
-                    : `${raderText(matchning.hogerUtan.length)} ur ${hoger.name} hittar ingen kund och kommer inte med.`}
+                    ? tf(
+                        '{0} ur {1} följer med sist, med tomma celler i {2} kolumner.',
+                        raderText(matchning.hogerUtan.length),
+                        hoger.name,
+                        vanster?.name ?? t('stommens'),
+                      )
+                    : tf(
+                        '{0} ur {1} hittar ingen kund och kommer inte med.',
+                        raderText(matchning.hogerUtan.length),
+                        hoger.name,
+                      )}
                 </p>
               )}
             </div>
 
             <div class="falt">
               <span class="falt__etikett">
-                Kolumner att hämta
+                {t('Kolumner att hämta')}
                 <span class="panel__rubrik__antal"> {formatCount(valda.length)}</span>
               </span>
               {tarMedHoger && nyckelkolumner.size > 0 && (
                 <p class="verktyg__sammanfattning">
-                  Nyckelkolumnen följer med automatiskt — annars går raderna som bara finns i{' '}
-                  {hoger?.name ?? 'den andra filen'} inte att känna igen.
+                  {tf(
+                    'Nyckelkolumnen följer med automatiskt — annars går raderna som bara finns i {0} inte att känna igen.',
+                    hoger?.name ?? t('den andra filen'),
+                  )}
                 </p>
               )}
               <div class="kollista kollista--kryss">
@@ -722,7 +772,7 @@ export function SlaIhop(props: {
                     />
                     {c.name}
                     {nyckelkolumner.has(c.id) && (
-                      <span class="verktyg__sammanfattning"> — matchningsnyckel</span>
+                      <span class="verktyg__sammanfattning">{t(' — matchningsnyckel')}</span>
                     )}
                   </label>
                 ))}
@@ -730,10 +780,10 @@ export function SlaIhop(props: {
             </div>
 
             <div class="falt">
-              <span class="falt__etikett">Namnprefix på de hämtade kolumnerna</span>
+              <span class="falt__etikett">{t('Namnprefix på de hämtade kolumnerna')}</span>
               <input
                 value={prefix}
-                placeholder={hoger ? `t.ex. ${hoger.name} – ` : ''}
+                placeholder={hoger ? tf('t.ex. {0} – ', hoger.name) : ''}
                 onInput={(e) => setPrefix((e.currentTarget as HTMLInputElement).value)}
               />
             </div>
@@ -777,16 +827,16 @@ export function SlaIhop(props: {
 
       <div class="slaihop__fot">
         <span class="slaihop__fot__text">
-          Resultatet blir en ny flik. Källfilerna rörs inte.
+          {t('Resultatet blir en ny flik. Källfilerna rörs inte.')}
           {rester > 0 &&
             (tarMedHoger
-              ? ` ${formatCount(rester)} rader hittar ingen partner, men kommer med.`
-              : ` ${formatCount(rester)} rader hittar ingen partner.`)}
+              ? ` ${tf('{0} rader hittar ingen partner, men kommer med.', formatCount(rester))}`
+              : ` ${tf('{0} rader hittar ingen partner.', formatCount(rester))}`)}
           {(matchning?.vansterFlera ?? 0) > 0 &&
-            ` ${formatCount(matchning!.vansterFlera)} matchar flera och behöver ett val.`}
+            ` ${tf('{0} matchar flera och behöver ett val.', formatCount(matchning!.vansterFlera))}`}
         </span>
         <button class="knapp" onClick={stangSlaIhop}>
-          Avbryt
+          {t('Avbryt')}
         </button>
         <button
           class="knapp"
@@ -796,28 +846,30 @@ export function SlaIhop(props: {
           disabled={!matchning || rester + matchning.vansterFlera === 0}
           title={
             !matchning
-              ? 'Välj minst ett kolumnpar först.'
+              ? t('Välj minst ett kolumnpar först.')
               : rester + matchning.vansterFlera === 0
-                ? 'Ingen rad blev över och ingen matchar flera — det finns inget att beta av.'
-                : 'Gå igenom raderna som inte matchade, och de som matchar flera, innan filerna slås ihop.'
+                ? t('Ingen rad blev över och ingen matchar flera — det finns inget att beta av.')
+                : t(
+                    'Gå igenom raderna som inte matchade, och de som matchar flera, innan filerna slås ihop.',
+                  )
           }
           onClick={tillVerkstaden}
         >
-          Beta av resten…
+          {t('Beta av resten…')}
         </button>
         <button
           class="knapp knapp--primar"
           disabled={!matchning || matchning.vansterMatchade === 0}
           title={
             !matchning
-              ? 'Välj minst ett kolumnpar att matcha på.'
+              ? t('Välj minst ett kolumnpar att matcha på.')
               : matchning.vansterMatchade === 0
-                ? 'Inga rader matchar med de här kolumnerna.'
+                ? t('Inga rader matchar med de här kolumnerna.')
                 : undefined
           }
           onClick={kor}
         >
-          Slå ihop
+          {t('Slå ihop')}
         </button>
       </div>
     </div>
@@ -866,7 +918,7 @@ function Filprov(props: {
         <span class="panel__rubrik__antal">
           {antal === frame.rowCount
             ? raderText(frame.rowCount)
-            : `${formatCount(antal)} av ${raderText(frame.rowCount)}`}
+            : tf('{0} av {1}', formatCount(antal), raderText(frame.rowCount))}
         </span>
       </div>
       <div class="ruta__kropp ruta__kropp--tabell">
@@ -877,7 +929,7 @@ function Filprov(props: {
                 {ordnade.map(({ col, parIndex }) => (
                   <th key={col.id} class={parIndex !== null ? 'fortab__nyckel' : undefined}>
                     {col.name}
-                    {parIndex !== null && <span class="fortab__nyckelmark"> nyckel</span>}
+                    {parIndex !== null && <span class="fortab__nyckelmark"> {t('nyckel')}</span>}
                   </th>
                 ))}
               </tr>
@@ -959,12 +1011,12 @@ function Paren(props: {
 
   return (
     <div class="ruta">
-      <div class="ruta__rubrik">Så här paras de</div>
+      <div class="ruta__rubrik">{t('Så här paras de')}</div>
       <div class="ruta__kropp">
         {!vanster || !hoger || !matchning ? (
-          <p class="restlista__tom">Välj ett kolumnpar, så visas de första paren här.</p>
+          <p class="restlista__tom">{t('Välj ett kolumnpar, så visas de första paren här.')}</p>
         ) : props.urval.vanster.length + props.urval.hoger.length === 0 ? (
-          <p class="restlista__tom">Inga rader att visa.</p>
+          <p class="restlista__tom">{t('Inga rader att visa.')}</p>
         ) : (
           props.urval.vanster.map((v) => {
             const traffar = partner.get(v) ?? []
@@ -978,7 +1030,7 @@ function Paren(props: {
                   )}
                 </div>
                 {traffar.length === 0 ? (
-                  <div class="forslag__rad slaihop__ingen">✕ ingen partner</div>
+                  <div class="forslag__rad slaihop__ingen">{t('✕ ingen partner')}</div>
                 ) : (
                   <div class="forslag__rad">
                     ↔{' '}
@@ -988,7 +1040,10 @@ function Paren(props: {
                       traffar[0]!,
                     )}
                     {traffar.length > 1 && (
-                      <span class="slaihop__flera"> +{formatCount(traffar.length - 1)} till</span>
+                      <span class="slaihop__flera">
+                        {' '}
+                        {tf('+{0} till', formatCount(traffar.length - 1))}
+                      </span>
                     )}
                   </div>
                 )}
@@ -1007,7 +1062,9 @@ function Paren(props: {
           matchning &&
           props.urval.hoger.map((h) => (
             <div class="slaihop__paret slaihop__paret--bara" key={`h${h}`}>
-              <div class="forslag__rad slaihop__ingen">✕ ingen rad i {vanster.name}</div>
+              <div class="forslag__rad slaihop__ingen">
+                {tf('✕ ingen rad i {0}', vanster.name)}
+              </div>
               <div class="forslag__rad">
                 ↔{' '}
                 {radtext(
@@ -1084,16 +1141,20 @@ function Resultatet(props: {
   return (
     <div class="ruta">
       <div class="ruta__rubrik">
-        Så här blir resultatet
+        {t('Så här blir resultatet')}
         {forhand && totaltAntal !== null && (
           <span class="panel__rubrik__antal">
-            {formatCount(forhand.rowCount)} av {raderText(totaltAntal)}, valda ur hela filen
+            {tf(
+              '{0} av {1}, valda ur hela filen',
+              formatCount(forhand.rowCount),
+              raderText(totaltAntal),
+            )}
           </span>
         )}
       </div>
       <div class="ruta__kropp ruta__kropp--tabell">
         {!forhand ? (
-          <p class="restlista__tom">Välj ett kolumnpar, så visas resultatet här.</p>
+          <p class="restlista__tom">{t('Välj ett kolumnpar, så visas resultatet här.')}</p>
         ) : (
           <div class="fortab__omslag">
             <table class="fortab">
@@ -1127,9 +1188,11 @@ function Resultatet(props: {
                             class={saknas ? 'fortab__utan' : undefined}
                             title={
                               saknas
-                                ? hamtad
-                                  ? 'Raden hittade ingen partner'
-                                  : 'Raden finns bara i den andra filen'
+                                ? t(
+                                    hamtad
+                                      ? 'Raden hittade ingen partner'
+                                      : 'Raden finns bara i den andra filen',
+                                  )
                                 : undefined
                             }
                           >
@@ -1159,11 +1222,11 @@ function Filknappar(props: {
   return (
     <div class="faltrad">
       <button class="knapp" onClick={() => filinput.current?.click()}>
-        Öppna fil…
+        {t('Öppna fil…')}
       </button>
       {props.visaExempel && props.onExempelpar && (
         <button class="knapp knapp--tyst" onClick={props.onExempelpar}>
-          Öppna exempelparet
+          {t('Öppna exempelparet')}
         </button>
       )}
       <input

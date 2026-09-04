@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact'
 import { useEffect } from 'preact/hooks'
+import { t } from './sprak.js'
 
 /**
  * Sidopanelen som städverktygen bor i.
@@ -34,7 +35,7 @@ export function Verktygspanel(props: {
           <h2>{props.titel}</h2>
           {props.underrubrik && <span class="verktyg__underrubrik">{props.underrubrik}</span>}
         </div>
-        <button class="modal__stang" onClick={props.onStang} aria-label="Stäng">
+        <button class="modal__stang" onClick={props.onStang} aria-label={t('Stäng')}>
           ✕
         </button>
       </div>
@@ -80,13 +81,13 @@ export function Resultat(props: {
 
   return (
     <div class="falt">
-      <span class="falt__etikett">Vad som händer</span>
+      <span class="falt__etikett">{t('Vad som händer')}</span>
       <p class="verktyg__sammanfattning verktyg__resultat">{props.children}</p>
       <div class="val" role="radiogroup">
-        {knapp(undefined, 'Alla rader', false)}
-        {knapp('andrade', props.etikettAndrade ?? 'Bara ändrade', props.andrade === 0)}
+        {knapp(undefined, t('Alla rader'), false)}
+        {knapp('andrade', t(props.etikettAndrade ?? 'Bara ändrade'), props.andrade === 0)}
         {props.etikettProblem !== undefined &&
-          knapp('problem', props.etikettProblem, props.problem === 0)}
+          knapp('problem', t(props.etikettProblem), props.problem === 0)}
       </div>
     </div>
   )

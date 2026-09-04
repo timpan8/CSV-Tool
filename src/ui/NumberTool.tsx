@@ -11,8 +11,9 @@ import {
   type Talformat,
 } from '../core/ops/numbers.js'
 import { beraknaForhandsvisning, sammanfatta, type Forhandsvisning } from '../state/preview.js'
-import { celler, formatCount } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
 import { kolumnrubrik } from './verktyg.js'
+import { celler, sprak, t, tf, tj } from './sprak.js'
 
 type Feltillstand = 'behall' | 'tom' | 'markera'
 
@@ -81,7 +82,7 @@ export function NumberTool(props: {
     () =>
       kolumner.map((col) =>
         beraknaForhandsvisning(col, {
-          etikett: `Städade tal i ”${col.name}”`,
+          etikett: tf('Städade tal i ”{0}”', col.name),
           kind: 'numbers',
           profil: { typ: 'tal', kolumn: col.name, inst },
           fn: talTransform(inst),
@@ -89,7 +90,7 @@ export function NumberTool(props: {
           nyTyp: 'number',
         }),
       ),
-    [nyckel, props.dataRevision, punktArTusental, format, decimaler, onError],
+    [nyckel, props.dataRevision, punktArTusental, format, decimaler, onError, sprak.value],
   )
   const forh = sammanfatta(forhLista)
 
@@ -100,58 +101,58 @@ export function NumberTool(props: {
 
   return (
     <Verktygspanel
-      titel="Tal"
+      titel={t('Tal')}
       underrubrik={kolumnrubrik(kolumner)}
       onStang={props.onStang}
       fot={
         <>
           <button class="knapp" onClick={props.onStang}>
-            Avbryt
+            {t('Avbryt')}
           </button>
           <button
             class="knapp knapp--primar"
             disabled={forh.andrade === 0 || maasteSvara}
             title={
               maasteSvara
-                ? 'Svara först på vad punkten betyder.'
+                ? t('Svara först på vad punkten betyder.')
                 : forh.andrade === 0
-                  ? 'Ingenting skulle ändras.'
+                  ? t('Ingenting skulle ändras.')
                   : undefined
             }
             onClick={() => props.onTillampa(forhLista)}
           >
-            {kolumner.length > 1 ? `Tillämpa på ${kolumner.length} kolumner` : 'Tillämpa'}
+            {kolumner.length > 1 ? tf('Tillämpa på {0} kolumner', kolumner.length) : t('Tillämpa')}
           </button>
         </>
       }
     >
       <div class="falt">
-        <span class="falt__etikett">Det här finns i kolumnen</span>
+        <span class="falt__etikett">{t('Det här finns i kolumnen')}</span>
         <table class="inventering">
           <tbody>
             <tr>
               <td class="inventering__antal">{formatCount(grund.tal)}</td>
-              <td>går att läsa som tal</td>
+              <td>{t('går att läsa som tal')}</td>
               <td class="inventering__exempel" />
             </tr>
             {grund.ejTal > 0 && (
               <tr class="inventering--okant">
                 <td class="inventering__antal">{formatCount(grund.ejTal)}</td>
-                <td>gör det inte</td>
+                <td>{t('gör det inte')}</td>
                 <td class="inventering__exempel" />
               </tr>
             )}
             {grund.enheter.map((e) => (
               <tr key={e.enhet}>
                 <td class="inventering__antal">{formatCount(e.antal)}</td>
-                <td>skalas av</td>
+                <td>{t('skalas av')}</td>
                 <td class="inventering__exempel">{e.enhet}</td>
               </tr>
             ))}
             {grund.negativaFormat > 0 && (
               <tr>
                 <td class="inventering__antal">{formatCount(grund.negativaFormat)}</td>
-                <td>negativa som (1 240) eller 1240–</td>
+                <td>{t('negativa som (1 240) eller 1240–')}</td>
                 <td class="inventering__exempel" />
               </tr>
             )}
@@ -161,15 +162,18 @@ export function NumberTool(props: {
 
       {grund.bevis !== null && (
         <Notis ton="lyckat">
-          Kolumnen svarar själv: <code>{grund.bevis}</code> visar att punkten är{' '}
-          {grund.bevisSagerTusental ? 'tusentalsavgränsare' : 'decimaltecken'}.
+          {tj(
+            'Kolumnen svarar själv: {0} visar att punkten är {1}.',
+            <code>{grund.bevis}</code>,
+            t(grund.bevisSagerTusental ? 'tusentalsavgränsare' : 'decimaltecken'),
+          )}
         </Notis>
       )}
 
       {grund.tvetydig && (
         <div class="falt">
           <span class="falt__etikett">
-            Vad betyder punkten i <code>1.234</code>?
+            {tj('Vad betyder punkten i {0}?', <code>1.234</code>)}
           </span>
           <Val
             varden={[
@@ -181,15 +185,16 @@ export function NumberTool(props: {
           />
           {maasteSvara && (
             <Notis ton="varning">
-              Inget värde i kolumnen avgör saken. Skillnaden är tusen gånger, så frågan måste
-              besvaras.
+              {t(
+                'Inget värde i kolumnen avgör saken. Skillnaden är tusen gånger, så frågan måste besvaras.',
+              )}
             </Notis>
           )}
         </div>
       )}
 
       <div class="falt">
-        <span class="falt__etikett">Decimaltecken</span>
+        <span class="falt__etikett">{t('Decimaltecken')}</span>
         <Val
           varden={TALFORMAT.map((f) => ({ varde: f.varde, etikett: f.etikett, titel: f.exempel }))}
           valt={format}
@@ -198,12 +203,12 @@ export function NumberTool(props: {
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Antal decimaler</span>
+        <span class="falt__etikett">{t('Antal decimaler')}</span>
         <Val
           varden={[
             {
               varde: 'som-i-filen' as const,
-              etikett: `Som i filen (${formatCount(grund.storstaAntalDecimaler)})`,
+              etikett: tf('Som i filen ({0})', formatCount(grund.storstaAntalDecimaler)),
               titel: 'Så många decimaler som kolumnen mest innehåller.',
             },
             {
@@ -221,7 +226,7 @@ export function NumberTool(props: {
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Värden som inte går att läsa som tal</span>
+        <span class="falt__etikett">{t('Värden som inte går att läsa som tal')}</span>
         <Val varden={FELTILLSTAND} valt={onError} onValj={setOnError} />
       </div>
 
@@ -232,20 +237,24 @@ export function NumberTool(props: {
         problem={forh.problem}
         etikettProblem="Bara problem"
       >
-        <strong>{formatCount(forh.andrade)}</strong> av {celler(forh.ifyllda)} skrivs om
-        {forh.problem > 0 && (
-          <>
-            {' · '}
-            <strong class="verktyg__problem">{formatCount(forh.problem)}</strong> är inte tal
-          </>
+        {tj(
+          '{0} av {1} skrivs om',
+          <strong>{formatCount(forh.andrade)}</strong>,
+          celler(forh.ifyllda),
         )}
+        {forh.problem > 0 &&
+          tj(
+            ' · {0} är inte tal',
+            <strong class="verktyg__problem">{formatCount(forh.problem)}</strong>,
+          )}
         .
       </Resultat>
 
       <Notis ton="info">
-        Tusentalsavgränsare skrivs aldrig ut. De är till för att läsas av människor; ett tal i en
-        fil ska kunna läsas av nästa program. Kolumnen typas som tal, vilket gör att{' '}
-        <strong>SUMMA</strong> fungerar direkt i en Excel-export.
+        {tj(
+          'Tusentalsavgränsare skrivs aldrig ut. De är till för att läsas av människor; ett tal i en fil ska kunna läsas av nästa program. Kolumnen typas som tal, vilket gör att {0} fungerar direkt i en Excel-export.',
+          <strong>{t('SUMMA')}</strong>,
+        )}
       </Notis>
     </Verktygspanel>
   )

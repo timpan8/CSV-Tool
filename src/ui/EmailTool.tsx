@@ -11,7 +11,8 @@ import {
   type Epostfalt,
 } from '../core/ops/email.js'
 import { beraknaForhandsvisning, type Forhandsvisning } from '../state/preview.js'
-import { celler, formatCount } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
+import { celler, sprak, t, tf, tj } from './sprak.js'
 
 /**
  * E-post → namn och domän.
@@ -54,7 +55,7 @@ export function EmailTool(props: {
       setNamn('Förnamn')
       setNamn2('Efternamn')
     } else {
-      setNamn(EPOSTFALT.find((f) => f.varde === v)!.etikett)
+      setNamn(t(EPOSTFALT.find((f) => f.varde === v)!.etikett))
     }
   }
 
@@ -62,12 +63,12 @@ export function EmailTool(props: {
 
   const forh = useMemo(() => {
     const namnen = tva
-      ? [rent(namn, 'Förnamn'), rent(namn2, 'Efternamn')]
-      : [rent(namn, 'Ny kolumn')]
+      ? [rent(namn, t('Förnamn')), rent(namn2, t('Efternamn'))]
+      : [rent(namn, t('Ny kolumn'))]
     const en = epostTransform(falt, { efternamnForst })
     const bada = epostNamndelar({ efternamnForst })
     return beraknaForhandsvisning(col, {
-      etikett: `${EPOSTFALT.find((f) => f.varde === falt)!.etikett} ur ”${col.name}”`,
+      etikett: tf('{0} ur ”{1}”', t(EPOSTFALT.find((f) => f.varde === falt)!.etikett), col.name),
       kind: 'email',
       profil: {
         typ: 'epost',
@@ -82,7 +83,7 @@ export function EmailTool(props: {
       arProblem: (v) => (tva ? bada(v).every((d) => d === '') : en(v) === ''),
       nyaKolumner: namnen,
     })
-  }, [col, props.dataRevision, falt, efternamnForst, namn, namn2, tva])
+  }, [col, props.dataRevision, falt, efternamnForst, namn, namn2, tva, sprak.value])
 
   useEffect(() => {
     props.onForhandsvisning([forh])
@@ -97,58 +98,58 @@ export function EmailTool(props: {
 
   return (
     <Verktygspanel
-      titel="E-post"
+      titel={t('E-post')}
       underrubrik={col.name}
       onStang={props.onStang}
       fot={
         <>
           <button class="knapp" onClick={props.onStang}>
-            Avbryt
+            {t('Avbryt')}
           </button>
           <button
             class="knapp knapp--primar"
             disabled={forh.andrade === 0}
-            title={forh.andrade === 0 ? 'Kolumnen skulle bli tom.' : undefined}
+            title={forh.andrade === 0 ? t('Kolumnen skulle bli tom.') : undefined}
             onClick={() => props.onTillampa([forh])}
           >
-            {tva ? 'Skapa kolumnerna' : 'Skapa kolumnen'}
+            {t(tva ? 'Skapa kolumnerna' : 'Skapa kolumnen')}
           </button>
         </>
       }
     >
       <div class="falt">
-        <span class="falt__etikett">Det här finns i kolumnen</span>
+        <span class="falt__etikett">{t('Det här finns i kolumnen')}</span>
         <table class="inventering">
           <tbody>
             <tr>
               <td class="inventering__antal">{formatCount(inv.adresser)}</td>
-              <td>e-postadresser</td>
+              <td>{t('e-postadresser')}</td>
               <td class="inventering__exempel">{exempel?.adress ?? ''}</td>
             </tr>
             {inv.ejAdress > 0 && (
               <tr class="inventering--okant">
                 <td class="inventering__antal">{formatCount(inv.ejAdress)}</td>
-                <td>är inte adresser</td>
+                <td>{t('är inte adresser')}</td>
                 <td class="inventering__exempel" />
               </tr>
             )}
             {inv.rollkonton > 0 && (
               <tr>
                 <td class="inventering__antal">{formatCount(inv.rollkonton)}</td>
-                <td>funktionsadresser</td>
+                <td>{t('funktionsadresser')}</td>
                 <td class="inventering__exempel">{inv.exempelUtanNamn ?? ''}</td>
               </tr>
             )}
             {inv.privata > 0 && (
               <tr>
                 <td class="inventering__antal">{formatCount(inv.privata)}</td>
-                <td>privatadresser</td>
+                <td>{t('privatadresser')}</td>
                 <td class="inventering__exempel" />
               </tr>
             )}
             <tr>
               <td class="inventering__antal">{formatCount(inv.domaner.length)}</td>
-              <td>domäner</td>
+              <td>{t('domäner')}</td>
               <td class="inventering__exempel">
                 {inv.domaner
                   .slice(0, 3)
@@ -161,7 +162,7 @@ export function EmailTool(props: {
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Hämta</span>
+        <span class="falt__etikett">{t('Hämta')}</span>
         <Val
           varden={EPOSTFALT.map((f) => ({ varde: f.varde, etikett: f.etikett, titel: f.exempel }))}
           valt={falt}
@@ -171,7 +172,7 @@ export function EmailTool(props: {
 
       {namnfalt && (
         <div class="falt">
-          <span class="falt__etikett">Vilken del står först i adressen?</span>
+          <span class="falt__etikett">{t('Vilken del står först i adressen?')}</span>
           <Val
             varden={[
               { varde: 'fornamn' as const, etikett: 'Förnamnet', titel: 'anna.karlsson@' },
@@ -182,8 +183,11 @@ export function EmailTool(props: {
           />
           {exempel && (
             <p class="verktyg__sammanfattning">
-              <code>{exempel.adress}</code> läses som{' '}
-              <strong>{[exempel.fornamn, exempel.efternamn].filter(Boolean).join(' ')}</strong>.
+              {tj(
+                '{0} läses som {1}.',
+                <code>{exempel.adress}</code>,
+                <strong>{[exempel.fornamn, exempel.efternamn].filter(Boolean).join(' ')}</strong>,
+              )}
             </p>
           )}
         </div>
@@ -191,12 +195,12 @@ export function EmailTool(props: {
 
       <div class="falt">
         <span class="falt__etikett">
-          {tva ? 'Namn på de nya kolumnerna' : 'Namn på den nya kolumnen'}
+          {t(tva ? 'Namn på de nya kolumnerna' : 'Namn på den nya kolumnen')}
         </span>
         <div class={tva ? 'faltrad' : undefined}>
           <input
             value={namn}
-            aria-label={tva ? 'Namn på förnamnskolumnen' : 'Namn på den nya kolumnen'}
+            aria-label={t(tva ? 'Namn på förnamnskolumnen' : 'Namn på den nya kolumnen')}
             onInput={(e) => {
               setNamnFoljer(false)
               setNamn((e.currentTarget as HTMLInputElement).value)
@@ -205,7 +209,7 @@ export function EmailTool(props: {
           {tva && (
             <input
               value={namn2}
-              aria-label="Namn på efternamnskolumnen"
+              aria-label={t('Namn på efternamnskolumnen')}
               onInput={(e) => {
                 setNamnFoljer(false)
                 setNamn2((e.currentTarget as HTMLInputElement).value)
@@ -216,15 +220,18 @@ export function EmailTool(props: {
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Vad som händer</span>
+        <span class="falt__etikett">{t('Vad som händer')}</span>
         <p class="verktyg__sammanfattning verktyg__resultat">
-          <strong>{formatCount(forh.andrade)}</strong> av {celler(forh.ifyllda)} ger ett värde
-          {forh.problem > 0 && (
-            <>
-              {' · '}
-              <strong class="verktyg__problem">{formatCount(forh.problem)}</strong> blir tomma
-            </>
+          {tj(
+            '{0} av {1} ger ett värde',
+            <strong>{formatCount(forh.andrade)}</strong>,
+            celler(forh.ifyllda),
           )}
+          {forh.problem > 0 &&
+            tj(
+              ' · {0} blir tomma',
+              <strong class="verktyg__problem">{formatCount(forh.problem)}</strong>,
+            )}
           .
         </p>
         <div class="val" role="radiogroup">
@@ -234,7 +241,7 @@ export function EmailTool(props: {
             aria-checked={props.visaBara === undefined}
             onClick={() => props.onVisaBara(undefined)}
           >
-            Alla rader
+            {t('Alla rader')}
           </button>
           <button
             class={`val__knapp${props.visaBara === 'problem' ? ' val__knapp--vald' : ''}`}
@@ -243,17 +250,20 @@ export function EmailTool(props: {
             disabled={forh.problem === 0}
             onClick={() => props.onVisaBara('problem')}
           >
-            Bara tomma
+            {t('Bara tomma')}
           </button>
         </div>
       </div>
 
       {namnfalt && (
         <Notis ton="varning">
-          <strong>Å, ä och ö finns inte i adresser.</strong> <code>erik.oberg@</code> ger{' '}
-          <strong>Erik Oberg</strong>, aldrig <strong>Erik Öberg</strong> — informationen finns
-          inte i adressen, och verktyget kan inte se vilka av namnen det gäller. Har du en
-          namnkolumn i filen är den mer tillförlitlig än den här.
+          {tj(
+            '{0} {1} ger {2}, aldrig {3} — informationen finns inte i adressen, och verktyget kan inte se vilka av namnen det gäller. Har du en namnkolumn i filen är den mer tillförlitlig än den här.',
+            <strong>{t('Å, ä och ö finns inte i adresser.')}</strong>,
+            <code>erik.oberg@</code>,
+            <strong>Erik Oberg</strong>,
+            <strong>Erik Öberg</strong>,
+          )}
         </Notis>
       )}
     </Verktygspanel>

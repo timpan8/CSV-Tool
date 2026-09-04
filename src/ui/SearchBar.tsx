@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { formatCount } from '../core/locale/sv.js'
+import { t, tf } from './sprak.js'
 
 export function SearchBar(props: {
   varde: string
@@ -33,9 +34,9 @@ export function SearchBar(props: {
       <input
         ref={ref}
         type="search"
-        placeholder="Sök i tabellen…"
+        placeholder={t('Sök i tabellen…')}
         value={utkast}
-        aria-label="Sök i tabellen"
+        aria-label={t('Sök i tabellen')}
         onInput={(e) => setUtkast((e.currentTarget as HTMLInputElement).value)}
         onKeyDown={(e) => {
           if (e.key === 'Escape') {
@@ -51,16 +52,16 @@ export function SearchBar(props: {
       {soker && (
         <span class={`sokrad__antal${noll ? ' sokrad__antal--noll' : ''}`}>
           {noll
-            ? 'Inga träffar'
-            : `${formatCount(props.traffar)} av ${formatCount(props.totalt)} rader` +
-              ` · ${formatCount(props.kolumnerMedTraff)} ${
-                props.kolumnerMedTraff === 1 ? 'kolumn' : 'kolumner'
-              }`}
+            ? t('Inga träffar')
+            : tf('{0} av {1} rader', formatCount(props.traffar), formatCount(props.totalt)) +
+              ` · ${formatCount(props.kolumnerMedTraff)} ${t(
+                props.kolumnerMedTraff === 1 ? 'kolumn' : 'kolumner',
+              )}`}
         </span>
       )}
       <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
         <button class="knapp knapp--tyst" onClick={props.onStang}>
-          Stäng
+          {t('Stäng')}
         </button>
       </span>
     </div>

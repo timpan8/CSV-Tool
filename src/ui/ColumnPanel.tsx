@@ -3,6 +3,7 @@ import type { Column, ColumnId, Frame } from '../core/types.js'
 import type { AppliedStep, Tab } from '../state/store.js'
 import { TYPE_LABELS } from '../core/infer.js'
 import { formatCount } from '../core/locale/sv.js'
+import { t, tf } from './sprak.js'
 
 export function ColumnPanel(props: {
   frame: Frame
@@ -29,24 +30,24 @@ export function ColumnPanel(props: {
   return (
     <div class="panel">
       <div class="panel__rubrik">
-        Kolumner
+        {t('Kolumner')}
         <span class="panel__rubrik__antal">
           {formatCount(alla.length)}
-          {dolda > 0 && ` · ${formatCount(dolda)} dolda`}
+          {dolda > 0 && ` · ${tf('{0} dolda', formatCount(dolda))}`}
         </span>
         <button
           class="panel__rubrik__knapp"
-          title="Kolumnöversikt: ifyllnad, unika värden, problem och förslag för alla kolumner"
+          title={t('Kolumnöversikt: ifyllnad, unika värden, problem och förslag för alla kolumner')}
           onClick={props.onOversikt}
         >
-          Översikt
+          {t('Översikt')}
         </button>
       </div>
 
       <div style={{ padding: '0 8px 8px' }}>
         <input
           type="search"
-          placeholder="Sök kolumn…"
+          placeholder={t('Sök kolumn…')}
           value={sok}
           style={{ width: '100%' }}
           onInput={(e) => setSok((e.currentTarget as HTMLInputElement).value)}
@@ -66,7 +67,7 @@ export function ColumnPanel(props: {
                 key={col.id}
                 class={classes.join(' ')}
                 draggable
-                title={`${col.name} — ${TYPE_LABELS[col.type]}`}
+                title={`${col.name} — ${t(TYPE_LABELS[col.type])}`}
                 onClick={() => props.onSelect(col.id)}
                 onDragStart={() => setDrar(col.id)}
                 onDragOver={(e) => {
@@ -89,8 +90,8 @@ export function ColumnPanel(props: {
                 </span>
                 <button
                   class="kolrad__oga"
-                  title={col.hidden ? 'Visa kolumnen' : 'Dölj kolumnen'}
-                  aria-label={col.hidden ? 'Visa kolumnen' : 'Dölj kolumnen'}
+                  title={t(col.hidden ? 'Visa kolumnen' : 'Dölj kolumnen')}
+                  aria-label={t(col.hidden ? 'Visa kolumnen' : 'Dölj kolumnen')}
                   onClick={(e) => {
                     e.stopPropagation()
                     props.onToggleHidden(col.id)
@@ -151,7 +152,7 @@ function StegLista(props: { tab: Tab; onUndoThrough: (index: number) => void }) 
   return (
     <>
       <div class="panel__rubrik" style={{ borderTop: '1px solid var(--linje)' }}>
-        Steg
+        {t('Steg')}
         <span class="panel__rubrik__antal">{formatCount(cursor)}</span>
       </div>
       <div class="panel__innehall" style={{ flex: '0 1 auto', maxHeight: '30%' }}>
@@ -159,7 +160,9 @@ function StegLista(props: { tab: Tab; onUndoThrough: (index: number) => void }) 
           <button
             key={step.id}
             class={`steg${i >= cursor ? ' steg--angrad' : ''}`}
-            title={i < cursor ? 'Ångra till och med det här steget' : 'Ångrat — gör om med Ctrl+Y'}
+            title={t(
+              i < cursor ? 'Ångra till och med det här steget' : 'Ångrat — gör om med Ctrl+Y',
+            )}
             onClick={() => i < cursor && props.onUndoThrough(i)}
           >
             <span class="steg__nr">{i + 1}</span>

@@ -60,7 +60,7 @@ test('verktygsraden, statusraden och menyerna följer med', async ({ page }) => 
 
   // Paletten.
   await page.keyboard.press('Control+k')
-  await expect(page.getByLabel('Sök bland kommandon')).toBeFocused()
+  await expect(page.getByLabel('Search commands')).toBeFocused()
   await expect(page.locator('.palett__post').first()).toContainText('Open file…')
 })
 
@@ -100,4 +100,75 @@ test('svenska regler gäller för datat även på engelska', async ({ page }) =>
       .filter((v) => v !== ''),
   )
   expect(belopp.some((v) => /^\d[\d\u00a0 ]*,\d\d$/.test(v))).toBe(true)
+})
+
+test('ett städverktyg talar engelska', async ({ page }) => {
+  await oppnaExempel(page)
+  await vaxla(page).click()
+
+  await page.getByRole('button', { name: 'Menu for the column Registrerad' }).click()
+  const post = page.getByRole('menuitem', { name: 'Dates' })
+  if ((await post.count()) === 0) {
+    await page.getByRole('menuitem', { name: 'More tools' }).hover()
+  }
+  await page.getByRole('menuitem', { name: 'Dates' }).first().click()
+  const panel = page.locator('.verktyg')
+  await expect(panel).toBeVisible()
+
+  // Panelens egen ram.
+  // Panelens rubrik är `Datum` → `Date`; menyposten är `Datum…` → `Dates…`.
+  await expect(panel.getByRole('heading', { name: 'Date', exact: true })).toBeVisible()
+  await expect(panel).toContainText('What the column contains')
+  await expect(panel).toContainText('Rewrite as')
+  await expect(panel).toContainText('What happens')
+
+  /*
+   * Formatvalen kommer ur `core/ops/dates.ts` och ritas av den delade
+   * `Val`-komponenten. Att de står på engelska är beviset för att hävstången
+   * i Del 1 når hela vägen ut till kärnans tabeller.
+   */
+  await expect(panel.getByRole('radio', { name: 'YYYY-MM-DD', exact: true })).toBeVisible()
+  await expect(panel.getByRole('radio', { name: 'All rows' })).toBeVisible()
+
+  // Och filterknapparna, som `Resultat` äger.
+  await expect(panel.getByRole('radio', { name: 'Only changed' })).toBeVisible()
+})
+
+test('slå ihop-vyns val kommer ur kärnans tabeller', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Öppna två filer att slå ihop' }).click()
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await expect(page.locator('.flik')).toHaveCount(2)
+  await vaxla(page).click()
+
+  await page.keyboard.press('Control+k')
+  await page.getByLabel('Search commands').fill('Merge with another')
+  await page.keyboard.press('Enter')
+  const vy = page.locator('.slaihop')
+  await expect(vy).toBeVisible()
+
+  await expect(vy.getByRole('heading', { name: 'Merge files' })).toBeVisible()
+  await expect(vy).toContainText('Which rows come along')
+  // `OMFATTNING` ur `core/ops/match.ts`.
+  await expect(vy.getByRole('radio', { name: 'Alla rader ur båda filerna' })).toHaveCount(0)
+  await expect(vy.getByRole('radio', { name: 'All rows from both files' })).toBeVisible()
+})
+
+test('räkneorden i en notis följer språket', async ({ page }) => {
+  /*
+   * Etapp 23 översatte notisens mall men inte räkneordet i den, så en engelsk
+   * notis sa ”Removed 3 rader.” Det här testet vaktar lagningen.
+   */
+  await oppnaExempel(page)
+  await vaxla(page).click()
+
+  await page.locator('.rutnat__radnr--valjbar').first().click()
+  await page.locator('.rutnat__radnr--valjbar').first().click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Delete the selected rows' }).click()
+
+  const notis = page.locator('.toast').last()
+  await expect(notis).toContainText('Removed 1 row.')
+  // Och inte ”Removed 1 rad.”, som var läget efter etapp 23.
+  await expect(notis).not.toContainText('rad.')
 })

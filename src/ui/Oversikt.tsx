@@ -3,8 +3,10 @@ import type { ColumnId, ColumnType, Frame } from '../core/types.js'
 import { kolumnstatistik } from '../core/frame/statistik.js'
 import { innehallsprofil } from '../core/frame/innehall.js'
 import { TYPE_LABELS } from '../core/infer.js'
-import { formatCount, kolumner as kolumnerText, rader as raderText } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
 import { ordnaVerktyg, type Verktygsnamn } from './verktyg.js'
+import { kolumner as kolumnerText, rader as raderText } from './sprak.js'
+import { t, tf } from './sprak.js'
 
 const TYPER: ColumnType[] = ['text', 'number', 'date', 'email', 'bool']
 
@@ -49,24 +51,27 @@ export function Oversikt(props: {
     <div class="oversikt">
       <div class="oversikt__topp">
         <div>
-          <h2>Kolumnöversikt</h2>
+          <h2>{t('Kolumnöversikt')}</h2>
           <span class="oversikt__underrubrik">
             {frame.name} · {raderText(frame.view.length)} ·{' '}
             {kolumnerText(frame.columns.length)}
             {frame.view.length !== frame.rowCount &&
-              ` · talen gäller den vy du har framme, inte alla ${formatCount(frame.rowCount)} rader`}
+              ` · ${tf(
+                'talen gäller den vy du har framme, inte alla {0} rader',
+                formatCount(frame.rowCount),
+              )}`}
           </span>
         </div>
         <table class="inventering">
           <tbody>
             <tr class={medProblem > 0 ? 'inventering--okant' : ''}>
               <td class="inventering__antal">{formatCount(medProblem)}</td>
-              <td>kolumner har värden som inte går att tolka som sin typ</td>
+              <td>{t('kolumner har värden som inte går att tolka som sin typ')}</td>
             </tr>
             {tomma > 0 && (
               <tr>
                 <td class="inventering__antal">{formatCount(tomma)}</td>
-                <td>är helt tomma</td>
+                <td>{t('är helt tomma')}</td>
               </tr>
             )}
           </tbody>
@@ -77,18 +82,18 @@ export function Oversikt(props: {
         <table class="oversikt__tabell">
           <thead>
             <tr>
-              <th scope="col">Kolumn</th>
-              <th scope="col">Typ</th>
+              <th scope="col">{t('Kolumn')}</th>
+              <th scope="col">{t('Typ')}</th>
               <th scope="col" class="oversikt__tal">
-                Ifyllt
+                {t('Ifyllt')}
               </th>
               <th scope="col" class="oversikt__tal">
-                Unika
+                {t('Unika')}
               </th>
               <th scope="col" class="oversikt__tal">
-                Problem
+                {t('Problem')}
               </th>
-              <th scope="col">Föreslås</th>
+              <th scope="col">{t('Föreslås')}</th>
             </tr>
           </thead>
           <tbody>
@@ -99,7 +104,9 @@ export function Oversikt(props: {
                   <th scope="row">
                     <button
                       class="oversikt__namn"
-                      title={col.hidden ? `${col.name} är dold` : `Gå till ${col.name}`}
+                      title={
+                        col.hidden ? tf('{0} är dold', col.name) : tf('Gå till {0}', col.name)
+                      }
                       onClick={() => {
                         props.onValjKolumn(col.id)
                         props.onStang()
@@ -112,7 +119,7 @@ export function Oversikt(props: {
                   <td>
                     <select
                       value={col.type}
-                      aria-label={`Typ för ${col.name}`}
+                      aria-label={tf('Typ för {0}', col.name)}
                       onChange={(e) =>
                         props.onSetType(
                           col.id,
@@ -121,17 +128,17 @@ export function Oversikt(props: {
                       }
                     >
                       {!TYPER.includes(col.type) && (
-                        <option value={col.type}>{TYPE_LABELS[col.type]}</option>
+                        <option value={col.type}>{t(TYPE_LABELS[col.type])}</option>
                       )}
-                      {TYPER.map((t) => (
-                        <option value={t} key={t}>
-                          {TYPE_LABELS[t]}
+                      {TYPER.map((typ) => (
+                        <option value={typ} key={typ}>
+                          {t(TYPE_LABELS[typ])}
                         </option>
                       ))}
                     </select>
                   </td>
                   <td class="oversikt__tal">
-                    <span class="oversikt__andel" title={`${formatCount(stat.ifyllda)} ifyllda`}>
+                    <span class="oversikt__andel" title={tf('{0} ifyllda', formatCount(stat.ifyllda))}>
                       {stat.totalt === 0 ? '–' : `${Math.round(andel * 100)} %`}
                     </span>
                     <span
@@ -147,7 +154,11 @@ export function Oversikt(props: {
                     ) : (
                       <button
                         class="knapp knapp--tyst oversikt__problem"
-                        title={`Visa de ${formatCount(stat.ogiltiga)} rader som inte går att tolka som ${TYPE_LABELS[col.type].toLowerCase()}`}
+                        title={tf(
+                          'Visa de {0} rader som inte går att tolka som {1}',
+                          formatCount(stat.ogiltiga),
+                          t(TYPE_LABELS[col.type]).toLowerCase(),
+                        )}
                         onClick={() => {
                           props.onVisaOgiltiga(col.id)
                           props.onStang()
@@ -169,12 +180,12 @@ export function Oversikt(props: {
                             props.onStang()
                           }}
                         >
-                          {post.etikett.replace(/…$/, '')}
+                          {t(post.etikett).replace(/…$/, '')}
                           <span class="oversikt__skal">{skal}</span>
                         </button>
                       ))}
                       {ordning.passande.length === 0 && (
-                        <span class="oversikt__noll">inget som sticker ut</span>
+                        <span class="oversikt__noll">{t('inget som sticker ut')}</span>
                       )}
                     </div>
                   </td>
@@ -187,11 +198,12 @@ export function Oversikt(props: {
 
       <div class="oversikt__fot">
         <span class="oversikt__fot__text">
-          Förslagen kommer ur vad kolumnerna innehåller, inte ur deras typ. Ett klick öppnar
-          verktyget på rätt kolumn.
+          {t(
+            'Förslagen kommer ur vad kolumnerna innehåller, inte ur deras typ. Ett klick öppnar verktyget på rätt kolumn.',
+          )}
         </span>
         <button class="knapp knapp--primar" onClick={props.onStang}>
-          Stäng översikten
+          {t('Stäng översikten')}
         </button>
       </div>
     </div>

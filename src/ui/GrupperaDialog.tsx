@@ -13,7 +13,8 @@ import {
 } from '../core/ops/gruppera.js'
 import { TALFORMAT, type Talformat } from '../core/ops/numbers.js'
 import { visibleColumns } from '../core/frame/frame.js'
-import { celler, formatCount, rader } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
+import { celler, rader, t, tf, tj } from './sprak.js'
 
 /**
  * Gruppera och summera.
@@ -109,38 +110,42 @@ export function GrupperaDialog(props: {
 
   return (
     <Modal
-      titel="Gruppera och summera"
+      titel={t('Gruppera och summera')}
       underrubrik={frame.name}
       onStang={props.onStang}
       fot={
         <>
           <button class="knapp" onClick={props.onStang}>
-            Avbryt
+            {t('Avbryt')}
           </button>
           <button
             class="knapp knapp--primar"
             disabled={utanBerakning || resultat.antalGrupper === 0}
             title={
               utanBerakning
-                ? 'Välj minst en sak att räkna ut.'
+                ? t('Välj minst en sak att räkna ut.')
                 : resultat.antalGrupper === 0
-                  ? 'Det finns inga grupper att sammanfatta.'
+                  ? t('Det finns inga grupper att sammanfatta.')
                   : undefined
             }
             onClick={() =>
               props.onSkapa(
                 { ...resultat.frame, name: slutnamn },
-                `${formatCount(resultat.antalGrupper)} grupper ur ${rader(resultat.radermed)}`,
+                tf(
+                  '{0} grupper ur {1}',
+                  formatCount(resultat.antalGrupper),
+                  rader(resultat.radermed),
+                ),
               )
             }
           >
-            Skapa fliken
+            {t('Skapa fliken')}
           </button>
         </>
       }
     >
       <div class="falt">
-        <span class="falt__etikett">Gruppera på</span>
+        <span class="falt__etikett">{t('Gruppera på')}</span>
         <div class="val" role="group">
           {synliga.map((c) => {
             const i = nycklar.indexOf(c.id)
@@ -161,20 +166,20 @@ export function GrupperaDialog(props: {
         </div>
         <p class="verktyg__sammanfattning">
           {nyckelnamn.length === 0
-            ? 'Ingen kolumn vald — hela filen blir en enda sammanfattningsrad.'
-            : `En rad per ${nyckelnamn.join(' + ')}. Klicka igen för att välja bort.`}
+            ? t('Ingen kolumn vald — hela filen blir en enda sammanfattningsrad.')
+            : tf('En rad per {0}. Klicka igen för att välja bort.', nyckelnamn.join(' + '))}
         </p>
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Räkna ut</span>
+        <span class="falt__etikett">{t('Räkna ut')}</span>
         {berakningar.map((b) => {
           const post = berakningspost(b.typ)
           const las = resultat.lasbarhet.find((l) => l.id === b.id)
           return (
             <div key={b.id} class="gruppera__rad">
               <select
-                aria-label="Beräkning"
+                aria-label={t('Beräkning')}
                 value={b.typ}
                 onChange={(e) => {
                   const typ = (e.currentTarget as HTMLSelectElement).value as Berakningstyp
@@ -186,14 +191,14 @@ export function GrupperaDialog(props: {
                 }}
               >
                 {BERAKNINGAR.map((p) => (
-                  <option key={p.typ} value={p.typ} title={p.hjalp}>
-                    {p.etikett}
+                  <option key={p.typ} value={p.typ} title={t(p.hjalp)}>
+                    {t(p.etikett)}
                   </option>
                 ))}
               </select>
               {post.behoverKolumn ? (
                 <select
-                  aria-label="Kolumn att räkna på"
+                  aria-label={t('Kolumn att räkna på')}
                   value={b.colId ?? ''}
                   onChange={(e) =>
                     andraBerakning(b.id, {
@@ -208,26 +213,30 @@ export function GrupperaDialog(props: {
                   ))}
                 </select>
               ) : (
-                <span class="gruppera__tomval">alla rader</span>
+                <span class="gruppera__tomval">{t('alla rader')}</span>
               )}
               <input
                 class="gruppera__namn"
-                aria-label="Rubrik i resultatet"
+                aria-label={t('Rubrik i resultatet')}
                 placeholder={berakningsnamn({ ...b, namn: '' }, frame)}
                 value={b.namn}
                 onInput={(e) => andraBerakning(b.id, { namn: (e.currentTarget as HTMLInputElement).value })}
               />
               <button
                 class="knapp knapp--tyst"
-                aria-label={`Ta bort ${berakningsnamn(b, frame)}`}
-                title="Ta bort beräkningen"
+                aria-label={tf('Ta bort {0}', berakningsnamn(b, frame))}
+                title={t('Ta bort beräkningen')}
                 onClick={() => setBerakningar((nu) => nu.filter((x) => x.id !== b.id))}
               >
                 ✕
               </button>
               {post.taluppgift && las && las.ifyllda > 0 && las.lasta < las.ifyllda && (
                 <span class="gruppera__varning">
-                  {formatCount(las.lasta)} av {celler(las.ifyllda)} går att läsa som tal
+                  {tf(
+                    '{0} av {1} går att läsa som tal',
+                    formatCount(las.lasta),
+                    celler(las.ifyllda),
+                  )}
                 </span>
               )}
             </div>
@@ -240,15 +249,16 @@ export function GrupperaDialog(props: {
               setBerakningar((nu) => [...nu, forstaBerakningen(frame, nycklar)])
             }
           >
-            + Lägg till beräkning
+            {t('+ Lägg till beräkning')}
           </button>
         </div>
       </div>
 
       {utanBerakning && (
         <Notis ton="varning">
-          Utan någon beräkning blir resultatet bara en lista över de olika värdena. Lägg till minst
-          en sak att räkna ut.
+          {t(
+            'Utan någon beräkning blir resultatet bara en lista över de olika värdena. Lägg till minst en sak att räkna ut.',
+          )}
         </Notis>
       )}
 
@@ -257,13 +267,15 @@ export function GrupperaDialog(props: {
         return berakningspost(b.typ).taluppgift && las && las.ifyllda > 0 && las.lasta === 0
       }) && (
         <Notis ton="fara">
-          En av summorna hittar inga tal alls i sin kolumn. Kör <strong>Tal…</strong> på den först,
-          eller välj en annan kolumn — en summa av ingenting är tom, inte noll.
+          {tj(
+            'En av summorna hittar inga tal alls i sin kolumn. Kör {0} på den först, eller välj en annan kolumn — en summa av ingenting är tom, inte noll.',
+            <strong>{t('Tal…')}</strong>,
+          )}
         </Notis>
       )}
 
       <div class="falt">
-        <span class="falt__etikett">Strunta i</span>
+        <span class="falt__etikett">{t('Strunta i')}</span>
         <div class="faltrad">
           <label class="kryss">
             <input
@@ -273,7 +285,7 @@ export function GrupperaDialog(props: {
                 setStrunta({ ...strunta, skiftlage: (e.currentTarget as HTMLInputElement).checked })
               }
             />
-            VERSALER
+            {t('VERSALER')}
           </label>
           <label class="kryss">
             <input
@@ -283,7 +295,7 @@ export function GrupperaDialog(props: {
                 setStrunta({ ...strunta, blanksteg: (e.currentTarget as HTMLInputElement).checked })
               }
             />
-            Extra blanksteg
+            {t('Extra blanksteg')}
           </label>
           <label class="kryss">
             <input
@@ -297,8 +309,11 @@ export function GrupperaDialog(props: {
           </label>
         </div>
         <p class="verktyg__sammanfattning">
-          Samma jämförelse som dubblettvyn gör, så <em>hitta dubbletter i {nyckelnamn[0] ?? 'Ort'}</em>{' '}
-          och <em>summera per {nyckelnamn[0] ?? 'Ort'}</em> är eniga om vad som är samma värde.
+          {tj(
+            'Samma jämförelse som dubblettvyn gör, så {0} och {1} är eniga om vad som är samma värde.',
+            <em>{tf('hitta dubbletter i {0}', nyckelnamn[0] ?? 'Ort')}</em>,
+            <em>{tf('summera per {0}', nyckelnamn[0] ?? 'Ort')}</em>,
+          )}
         </p>
       </div>
 
@@ -309,17 +324,17 @@ export function GrupperaDialog(props: {
             checked={tommaMed}
             onChange={(e) => setTommaMed((e.currentTarget as HTMLInputElement).checked)}
           />
-          Ta med raderna som saknar värde i grupperingskolumnerna
+          {t('Ta med raderna som saknar värde i grupperingskolumnerna')}
         </label>
       )}
 
       <div class="faltrad">
         <div class="falt">
-          <span class="falt__etikett">Tal skrivs som</span>
+          <span class="falt__etikett">{t('Tal skrivs som')}</span>
           <Val varden={TALFORMAT.map((f) => ({ varde: f.varde, etikett: f.exempel }))} valt={format} onValj={setFormat} />
         </div>
         <div class="falt">
-          <span class="falt__etikett">Decimaler</span>
+          <span class="falt__etikett">{t('Decimaler')}</span>
           <Val
             varden={[
               { varde: 'som-det-blir', etikett: 'Som det blir' },
@@ -334,7 +349,7 @@ export function GrupperaDialog(props: {
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Namn på den nya fliken</span>
+        <span class="falt__etikett">{t('Namn på den nya fliken')}</span>
         <input
           value={namn}
           placeholder={forslagsnamn(frame, nycklar)}
@@ -344,15 +359,24 @@ export function GrupperaDialog(props: {
 
       {resultat.utanNyckel > 0 && (
         <Notis ton="varning">
-          <strong>{rader(resultat.utanNyckel)}</strong> saknar värde i{' '}
-          {nyckelnamn.length === 1 ? nyckelnamn[0] : 'grupperingskolumnerna'} och är inte med i
-          något av talen. Kryssa i rutan ovan för att ta med dem som en egen grupp.
+          {tj(
+            '{0} saknar värde i {1} och är inte med i något av talen. Kryssa i rutan ovan för att ta med dem som en egen grupp.',
+            <strong>{rader(resultat.utanNyckel)}</strong>,
+            nyckelnamn.length === 1 ? nyckelnamn[0] : t('grupperingskolumnerna'),
+          )}
         </Notis>
       )}
 
       <div class="falt">
         <span class="falt__etikett">
-          Så här blir det{resultat.antalGrupper > forhandsrader ? ` (${formatCount(forhandsrader)} av ${formatCount(resultat.antalGrupper)} rader)` : ''}
+          {t('Så här blir det')}
+          {resultat.antalGrupper > forhandsrader
+            ? ` ${tf(
+                '({0} av {1} rader)',
+                formatCount(forhandsrader),
+                formatCount(resultat.antalGrupper),
+              )}`
+            : ''}
         </span>
         <div class="fortab__omslag">
           <table class="fortab">
@@ -375,16 +399,20 @@ export function GrupperaDialog(props: {
           </table>
         </div>
         <p class="verktyg__sammanfattning">
-          <strong>{formatCount(resultat.antalGrupper)}</strong>{' '}
-          {resultat.antalGrupper === 1 ? 'grupp' : 'grupper'} ur {rader(resultat.radermed)}. Största
-          gruppen har {rader(resultat.storsta)}.
+          {tj(
+            '{0} {1} ur {2}. Största gruppen har {3}.',
+            <strong>{formatCount(resultat.antalGrupper)}</strong>,
+            t(resultat.antalGrupper === 1 ? 'grupp' : 'grupper'),
+            rader(resultat.radermed),
+            rader(resultat.storsta),
+          )}
         </p>
       </div>
 
       <Notis ton="info">
-        Resultatet blir en ny flik. Originalet rörs inte, och den nya fliken går att sortera,
-        filtrera och exportera som vilken fil som helst. Steget kommer inte med i en profil — en
-        profil kör om steg på samma fil, och det här skapar en annan.
+        {t(
+          'Resultatet blir en ny flik. Originalet rörs inte, och den nya fliken går att sortera, filtrera och exportera som vilken fil som helst. Steget kommer inte med i en profil — en profil kör om steg på samma fil, och det här skapar en annan.',
+        )}
       </Notis>
     </Modal>
   )

@@ -1,4 +1,13 @@
+import { Fragment, h, type ComponentChildren, type VNode } from 'preact'
 import { signal } from '@preact/signals'
+import {
+  celler as svCeller,
+  filer as svFiler,
+  grupper as svGrupper,
+  kolumner as svKolumner,
+  plural,
+  rader as svRader,
+} from '../core/locale/sv.js'
 import { EN } from './sprak/en.js'
 
 /**
@@ -75,3 +84,52 @@ export function tf(mall: string, ...delar: (string | number)[]): string {
     return del === undefined ? traff : String(del)
   })
 }
+
+/**
+ * Som `tf()`, men delarna får vara JSX.
+ *
+ * Husets stil är förklaringar med markering mitt i meningen — `<strong>{namn}</strong>
+ * saknar värde på {rader(n)} rader`. `tf()` räcker inte, den ger en sträng och
+ * markeringen försvinner. Att i stället klippa meningen i tre JSX-bitar går
+ * heller inte: engelskan har ofta en annan ordföljd, och en mening som är
+ * hopklippt i koden går inte att ordna om i ordboken.
+ *
+ * Här delas den *översatta* mallen på sina platshållare och noderna varvas in.
+ * Ordföljden bestäms då av ordboken, vilket är hela poängen.
+ */
+export function tj(mall: string, ...delar: ComponentChildren[]): VNode {
+  // split med en fångande grupp ger [text, siffra, text, siffra, …, text].
+  const bitar = t(mall).split(/\{(\d+)\}/)
+  const noder: ComponentChildren[] = []
+  for (let i = 0; i < bitar.length; i++) {
+    const bit = bitar[i]!
+    if (i % 2 === 0) {
+      if (bit !== '') noder.push(bit)
+    } else {
+      const del = delar[Number(bit)]
+      // En platshållare utan del skrivs ut som den står, i stället för att
+      // tyst försvinna — då syns felet i stället för att meningen blir kortare.
+      noder.push(del === undefined ? `{${bit}}` : del)
+    }
+  }
+  return h(Fragment, null, ...noder)
+}
+
+/*
+ * Räkneorden.
+ *
+ * `rader(3)` ur `core/locale/sv.ts` ger `3 rader` oavsett språk, och en engelsk
+ * notis blir då "Removed 3 rader." Orden är etiketter och ska följa språket.
+ *
+ * **Siffran gör det inte.** `plural` formaterar den med `sv-SE`, så det blir
+ * `1 240 rows` och inte `1,240 rows`. Talformatet är beteende — samma gräns som
+ * resten av språkvalet drar, och den som ser ett belopp i tabellen ska se det
+ * skrivet likadant i texten om det.
+ */
+export const rader = (n: number) => (sprak.value === 'sv' ? svRader(n) : plural(n, 'row', 'rows'))
+export const kolumner = (n: number) =>
+  sprak.value === 'sv' ? svKolumner(n) : plural(n, 'column', 'columns')
+export const celler = (n: number) => (sprak.value === 'sv' ? svCeller(n) : plural(n, 'cell', 'cells'))
+export const filer = (n: number) => (sprak.value === 'sv' ? svFiler(n) : plural(n, 'file', 'files'))
+export const grupper = (n: number) =>
+  sprak.value === 'sv' ? svGrupper(n) : plural(n, 'group', 'groups')

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'preact/hooks'
 import type { Frame } from '../core/types.js'
-import { beskrivSteg, type Profil, type Profilsteg } from '../core/ops/profil.js'
+import { beskrivStegDelar, type Profil, type Profilsteg } from '../core/ops/profil.js'
 import {
   historikensSteg,
   korProfil,
@@ -14,8 +14,9 @@ import {
   type Stegresultat,
 } from '../state/profiler.js'
 import type { Tab } from '../state/store.js'
-import { formatCount, kolumner as kolumnerText } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
 import { Modal, Notis } from './parts.js'
+import { kolumner as kolumnerText, t, tf, tj } from './sprak.js'
 
 /**
  * Profiler: spara den här filens arbetsgång och kör om den på nästa.
@@ -89,19 +90,19 @@ export function ProfilDialog(props: { tab: Tab; onStang: () => void }) {
 
   return (
     <Modal
-      titel="Profiler"
+      titel={t('Profiler')}
       underrubrik={props.tab.frame.name}
       onStang={props.onStang}
       fot={
         <>
           <button class="knapp" onClick={laddaNer} disabled={profiler.value.length === 0}>
-            Spara till fil
+            {t('Spara till fil')}
           </button>
           <button class="knapp" onClick={() => filinput.current?.click()}>
-            Öppna profilfil…
+            {t('Öppna profilfil…')}
           </button>
           <button class="knapp knapp--primar" onClick={props.onStang}>
-            Stäng
+            {t('Stäng')}
           </button>
         </>
       }
@@ -121,11 +122,12 @@ export function ProfilDialog(props: { tab: Tab; onStang: () => void }) {
       {fel && <Notis ton="fara">{fel}</Notis>}
 
       <div class="falt">
-        <span class="falt__etikett">Det du gjort i den här filen</span>
+        <span class="falt__etikett">{t('Det du gjort i den här filen')}</span>
         {poster.length === 0 ? (
           <p class="verktyg__sammanfattning">
-            Inga steg än. Städa, skriv om eller döp om något först — det som går att upprepa
-            hamnar här.
+            {t(
+              'Inga steg än. Städa, skriv om eller döp om något först — det som går att upprepa hamnar här.',
+            )}
           </p>
         ) : (
           <div class="profilsteg">
@@ -138,10 +140,10 @@ export function ProfilDialog(props: { tab: Tab; onStang: () => void }) {
                   onChange={(e) => vaxla(i, (e.currentTarget as HTMLInputElement).checked)}
                 />
                 <span class="profilsteg__text">
-                  {post.steg ? beskrivSteg(post.steg) : post.label}
+                  {post.steg ? stegtext(post.steg) : post.label}
                 </span>
                 {post.steg === null && (
-                  <span class="profilsteg__skal">hör till den här filen</span>
+                  <span class="profilsteg__skal">{t('hör till den här filen')}</span>
                 )}
               </label>
             ))}
@@ -149,20 +151,21 @@ export function ProfilDialog(props: { tab: Tab; onStang: () => void }) {
         )}
         {poster.length > korbara.length && (
           <p class="verktyg__sammanfattning">
-            Handredigerade celler, inklistringar och borttagna rader pekar på rader i just den
-            här filen och betyder ingenting i nästa. De kan därför inte sparas.
+            {t(
+              'Handredigerade celler, inklistringar och borttagna rader pekar på rader i just den här filen och betyder ingenting i nästa. De kan därför inte sparas.',
+            )}
           </p>
         )}
       </div>
 
       {korbara.length > 0 && (
         <div class="falt">
-          <span class="falt__etikett">Spara som profil</span>
+          <span class="falt__etikett">{t('Spara som profil')}</span>
           <div class="faltrad">
             <input
               value={namn}
-              placeholder="t.ex. Månadsfilen från Fortnox"
-              aria-label="Namn på profilen"
+              placeholder={t('t.ex. Månadsfilen från Fortnox')}
+              aria-label={t('Namn på profilen')}
               onInput={(e) => setNamn((e.currentTarget as HTMLInputElement).value)}
             />
             <button
@@ -170,18 +173,19 @@ export function ProfilDialog(props: { tab: Tab; onStang: () => void }) {
               disabled={namn.trim() === '' || stegAttSpara.length === 0}
               onClick={spara}
             >
-              Spara {formatCount(stegAttSpara.length)} steg
+              {tf('Spara {0} steg', formatCount(stegAttSpara.length))}
             </button>
           </div>
         </div>
       )}
 
       <div class="falt">
-        <span class="falt__etikett">Sparade profiler</span>
+        <span class="falt__etikett">{t('Sparade profiler')}</span>
         {profiler.value.length === 0 ? (
           <p class="verktyg__sammanfattning">
-            Inga sparade profiler. De ligger i den här webbläsaren och lämnar aldrig datorn —
-            spara dem till fil om de ska följa med någon annanstans.
+            {t(
+              'Inga sparade profiler. De ligger i den här webbläsaren och lämnar aldrig datorn — spara dem till fil om de ska följa med någon annanstans.',
+            )}
           </p>
         ) : (
           profiler.value.map((profil) => (
@@ -213,15 +217,15 @@ function Profilrad(props: {
       <div class="profil__rubrik">
         <strong>{props.profil.namn}</strong>
         <span class="profil__antal">
-          {formatCount(props.profil.steg.length)} steg
+          {tf('{0} steg', formatCount(props.profil.steg.length))}
           {props.profil.skapad ? ` · ${props.profil.skapad}` : ''}
         </span>
         <button class="knapp knapp--liten" onClick={props.onKor}>
-          Kör
+          {t('Kör')}
         </button>
         <button
           class="restrad__skriv"
-          aria-label={`Ta bort profilen ${props.profil.namn}`}
+          aria-label={tf('Ta bort profilen {0}', props.profil.namn)}
           onClick={props.onTaBort}
         >
           ✕
@@ -229,13 +233,16 @@ function Profilrad(props: {
       </div>
       <ol class="profil__steg">
         {props.profil.steg.map((steg, i) => (
-          <li key={i}>{beskrivSteg(steg)}</li>
+          <li key={i}>{stegtext(steg)}</li>
         ))}
       </ol>
       {saknade.length > 0 && (
         <p class="profil__saknade">
-          {kolumnerText(saknade.length)} saknas i den här filen:{' '}
-          <strong>{saknade.join(', ')}</strong>. De stegen hoppas över.
+          {tj(
+            '{0} saknas i den här filen: {1}. De stegen hoppas över.',
+            kolumnerText(saknade.length),
+            <strong>{saknade.join(', ')}</strong>,
+          )}
         </p>
       )}
     </div>
@@ -247,7 +254,7 @@ function Rapport(props: { namn: string; rader: readonly Stegresultat[] }) {
   const saknade = props.rader.filter((r) => r.utfall === 'kolumnSaknas')
   return (
     <div class="falt">
-      <span class="falt__etikett">Så gick ”{props.namn}”</span>
+      <span class="falt__etikett">{tf('Så gick ”{0}”', props.namn)}</span>
       <table class="inventering">
         <tbody>
           {props.rader.map((rad, i) => (
@@ -256,15 +263,15 @@ function Rapport(props: { namn: string; rader: readonly Stegresultat[] }) {
                 {rad.utfall === 'kolumnSaknas' ? '—' : formatCount(rad.andrade)}
               </td>
               <td>
-                {beskrivSteg(rad.steg)}
+                {stegtext(rad.steg)}
                 {rad.utfall === 'kolumnSaknas' && (
                   <span class="verktyg__sammanfattning">
                     {' '}
-                    — hittade ingen kolumn som heter {rad.saknad ?? '?'}
+                    {tf('— hittade ingen kolumn som heter {0}', rad.saknad ?? '?')}
                   </span>
                 )}
                 {rad.utfall === 'ingenAndring' && (
-                  <span class="verktyg__sammanfattning"> — inget att ändra</span>
+                  <span class="verktyg__sammanfattning"> {t('— inget att ändra')}</span>
                 )}
               </td>
             </tr>
@@ -273,15 +280,32 @@ function Rapport(props: { namn: string; rader: readonly Stegresultat[] }) {
       </table>
       {saknade.length > 0 ? (
         <Notis ton="varning">
-          {formatCount(korda)} av {formatCount(props.rader.length)} steg kördes.{' '}
-          {saknade.length === 1 ? 'Ett steg' : `${formatCount(saknade.length)} steg`} hittade inte
-          sin kolumn — döp om kolumnen i filen, eller rätta profilen, och kör igen.
+          {tf('{0} av {1} steg kördes.', formatCount(korda), formatCount(props.rader.length))}{' '}
+          {tf(
+            '{0} hittade inte sin kolumn — döp om kolumnen i filen, eller rätta profilen, och kör igen.',
+            saknade.length === 1 ? t('Ett steg') : tf('{0} steg', formatCount(saknade.length)),
+          )}
         </Notis>
       ) : (
         <Notis ton="lyckat">
-          Alla {formatCount(props.rader.length)} steg kördes. Ctrl+Z backar ett steg i taget.
+          {tf(
+            'Alla {0} steg kördes. Ctrl+Z backar ett steg i taget.',
+            formatCount(props.rader.length),
+          )}
         </Notis>
       )}
     </div>
   )
+}
+
+/**
+ * Ett profilsteg på gränssnittets språk.
+ *
+ * Mallen slås upp i ordboken; kolumnnamn och värden lämnas som de står. Bara
+ * de delar kärnan pekat ut som husets egna ord översätts — se
+ * `beskrivStegDelar`.
+ */
+function stegtext(steg: Profilsteg): string {
+  const { mall, delar, etiketter } = beskrivStegDelar(steg)
+  return tf(mall, ...delar.map((d, i) => (etiketter.includes(i) ? t(d) : d)))
 }

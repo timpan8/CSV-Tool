@@ -9,7 +9,8 @@ import {
   type Behall,
   type Dubblettnyckel,
 } from '../core/ops/duplicates.js'
-import { formatCount, grupper as grupperText, rader as raderText } from '../core/locale/sv.js'
+import { formatCount } from '../core/locale/sv.js'
+import { grupper as grupperText, rader as raderText, t, tf, tj } from './sprak.js'
 
 /**
  * Dubbletter.
@@ -70,30 +71,30 @@ export function DuplicateTool(props: {
 
   return (
     <Verktygspanel
-      titel="Dubbletter"
+      titel={t('Dubbletter')}
       underrubrik={
         grupper.antalGrupper === 0
-          ? 'Inga dubbletter med den här nyckeln'
+          ? t('Inga dubbletter med den här nyckeln')
           : `${grupperText(grupper.antalGrupper)} · ${raderText(grupper.antalRader)}`
       }
       onStang={props.onStang}
       fot={
         <>
           <button class="knapp" onClick={props.onStang}>
-            Stäng
+            {t('Stäng')}
           </button>
           <button
             class="knapp knapp--fara"
             disabled={grupper.antalOverflodiga === 0}
             onClick={() => props.onTaBort(nyckel, props.behall)}
           >
-            Ta bort {raderText(grupper.antalOverflodiga)}
+            {tf('Ta bort {0}', raderText(grupper.antalOverflodiga))}
           </button>
         </>
       }
     >
       <div class="falt">
-        <span class="falt__etikett">Rader räknas som lika när de stämmer i</span>
+        <span class="falt__etikett">{t('Rader räknas som lika när de stämmer i')}</span>
         <div class="kollista kollista--kryss">
           {kolumner.map((c) => (
             <label class="kryss" key={c.id}>
@@ -108,14 +109,15 @@ export function DuplicateTool(props: {
         </div>
         {nyckel.kolumner.length === 0 && (
           <p class="verktyg__sammanfattning">
-            Alla kolumner. En hel rad måste vara identisk — kryssa ur det som skiljer sig, som
-            ett löpnummer.
+            {t(
+              'Alla kolumner. En hel rad måste vara identisk — kryssa ur det som skiljer sig, som ett löpnummer.',
+            )}
           </p>
         )}
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Strunta i</span>
+        <span class="falt__etikett">{t('Strunta i')}</span>
         <div class="faltrad">
           <label class="kryss">
             <input
@@ -125,7 +127,7 @@ export function DuplicateTool(props: {
                 andra({ strunta: { ...nyckel.strunta, skiftlage: (e.currentTarget as HTMLInputElement).checked } })
               }
             />
-            VERSALER
+            {t('VERSALER')}
           </label>
           <label class="kryss">
             <input
@@ -135,7 +137,7 @@ export function DuplicateTool(props: {
                 andra({ strunta: { ...nyckel.strunta, blanksteg: (e.currentTarget as HTMLInputElement).checked } })
               }
             />
-            Extra blanksteg
+            {t('Extra blanksteg')}
           </label>
           <label class="kryss">
             <input
@@ -150,32 +152,36 @@ export function DuplicateTool(props: {
         </div>
         {nyckel.strunta.diakriter && (
           <Notis ton="varning">
-            Med å ä ö bortstruket räknas <strong>För</strong> och <strong>For</strong> som samma
-            ord. Det är ofta rätt för namn ur olika system, men det kan också slå ihop två
-            personer som faktiskt heter olika.
+            {tj(
+              'Med å ä ö bortstruket räknas {0} och {1} som samma ord. Det är ofta rätt för namn ur olika system, men det kan också slå ihop två personer som faktiskt heter olika.',
+              <strong>För</strong>,
+              <strong>For</strong>,
+            )}
           </Notis>
         )}
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Vad som hittades</span>
+        <span class="falt__etikett">{t('Vad som hittades')}</span>
         <table class="inventering">
           <tbody>
             <tr>
               <td class="inventering__antal">{formatCount(grupper.antalGrupper)}</td>
-              <td>{grupper.antalGrupper === 1 ? 'grupp med lika rader' : 'grupper med lika rader'}</td>
+              <td>{t(grupper.antalGrupper === 1 ? 'grupp med lika rader' : 'grupper med lika rader')}</td>
               <td class="inventering__exempel" />
             </tr>
             <tr>
               <td class="inventering__antal">{formatCount(grupper.antalRader)}</td>
-              <td>rader ingår</td>
+              <td>{t('rader ingår')}</td>
               <td class="inventering__exempel" />
             </tr>
             <tr>
               <td class="inventering__antal">{formatCount(grupper.antalHeltLika)}</td>
               <td>
-                av grupperna är identiska i <em>varje</em> kolumn — de kan tas bort utan att du
-                tittar
+                {tj(
+                  'av grupperna är identiska i {0} kolumn — de kan tas bort utan att du tittar',
+                  <em>{t('varje')}</em>,
+                )}
               </td>
               <td class="inventering__exempel" />
             </tr>
@@ -185,21 +191,20 @@ export function DuplicateTool(props: {
                   {formatCount(grupper.antalGrupper - grupper.antalHeltLika)}
                 </td>
                 <td>
-                  skiljer sig utanför nyckeln — den ena raden kan bära uppgifter den andra
-                  saknar
+                  {t('skiljer sig utanför nyckeln — den ena raden kan bära uppgifter den andra saknar')}
                 </td>
                 <td class="inventering__exempel" />
               </tr>
             )}
             <tr class={grupper.antalOverflodiga > 0 ? 'inventering--okant' : ''}>
               <td class="inventering__antal">{formatCount(grupper.antalOverflodiga)}</td>
-              <td>skulle tas bort</td>
+              <td>{t('skulle tas bort')}</td>
               <td class="inventering__exempel" />
             </tr>
             {grupper.storsta > 2 && (
               <tr>
                 <td class="inventering__antal">{formatCount(grupper.storsta)}</td>
-                <td>rader i den största gruppen</td>
+                <td>{t('rader i den största gruppen')}</td>
                 <td class="inventering__exempel" />
               </tr>
             )}
@@ -213,12 +218,12 @@ export function DuplicateTool(props: {
               andra({ tommaRaknas: (e.currentTarget as HTMLInputElement).checked })
             }
           />
-          Räkna rader som är tomma i hela nyckeln som lika
+          {t('Räkna rader som är tomma i hela nyckeln som lika')}
         </label>
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Visa</span>
+        <span class="falt__etikett">{t('Visa')}</span>
         <Val
           varden={[
             { varde: 'alla' as const, etikett: 'Alla rader' },
@@ -229,13 +234,13 @@ export function DuplicateTool(props: {
         />
         {visas && (
           <p class="verktyg__sammanfattning">
-            Grupperna ligger intill varandra, med en linje mellan dem.
+            {t('Grupperna ligger intill varandra, med en linje mellan dem.')}
           </p>
         )}
       </div>
 
       <div class="falt">
-        <span class="falt__etikett">Vid borttagning, behåll</span>
+        <span class="falt__etikett">{t('Vid borttagning, behåll')}</span>
         <Val
           varden={[
             { varde: 'forsta' as const, etikett: 'Den första i filen' },
@@ -256,15 +261,20 @@ export function DuplicateTool(props: {
         />
         {props.behall === 'valda' ? (
           <p class="verktyg__sammanfattning">
-            Klicka på ringen vid radnumret för den rad som ska stanna i varje grupp.
+            {t('Klicka på ringen vid radnumret för den rad som ska stanna i varje grupp.')}
             {props.egnaVal > 0
-              ? ` ${formatCount(props.egnaVal)} av ${formatCount(grupper.antalGrupper)} grupper har ett eget val; resten behåller den första.`
-              : ' Utan eget val stannar den första i filen.'}
+              ? ` ${tf(
+                  '{0} av {1} grupper har ett eget val; resten behåller den första.',
+                  formatCount(props.egnaVal),
+                  formatCount(grupper.antalGrupper),
+                )}`
+              : ` ${t('Utan eget val stannar den första i filen.')}`}
           </p>
         ) : (
           <p class="verktyg__sammanfattning">
-            Första och sista räknas i filens ordning, inte i den du tittar på nu — annars skulle
-            valet betyda olika saker beroende på hur du sorterat. Borttagningen går att ångra.
+            {t(
+              'Första och sista räknas i filens ordning, inte i den du tittar på nu — annars skulle valet betyda olika saker beroende på hur du sorterat. Borttagningen går att ångra.',
+            )}
           </p>
         )}
       </div>
