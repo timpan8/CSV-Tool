@@ -78,6 +78,7 @@ export interface Kommandohandlare {
   goraOm: () => void
   vaxlaTema: () => void
   vaxlaSprak: () => void
+  vaxlaVerktygsfalt: () => void
   glomSparat: () => void
   borjaOm: () => void
 }
@@ -303,6 +304,14 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
       'Gränssnittets text byter språk. Sortering, tal och datum följer alltid svenska regler.',
     ),
     kor: h.vaxlaSprak,
+  })
+  lagg({
+    id: 'verktygsfalt',
+    grupp: t('Visa'),
+    etikett: t('Byt verktygsfältets placering'),
+    ord: 'toolbar lodrätt rad vertikal horisontell',
+    beskrivning: t('Som rad under flikarna, eller lodrätt till vänster om kolumnerna.'),
+    kor: h.vaxlaVerktygsfalt,
   })
   return ut
 }
