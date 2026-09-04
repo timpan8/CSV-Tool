@@ -46,6 +46,7 @@ function handlare(): { h: Kommandohandlare; korda: string[] } {
     angra: r('angra'),
     goraOm: r('goraOm'),
     vaxlaTema: r('vaxlaTema'),
+    vaxlaSprak: r('vaxlaSprak'),
     glomSparat: r('glomSparat'),
     borjaOm: r('borjaOm'),
   }
@@ -76,6 +77,7 @@ describe('byggKommandon', () => {
       'glomsparat',
       'borjaom',
       'tema',
+      'sprak',
     ])
   })
 

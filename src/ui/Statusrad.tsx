@@ -6,6 +6,7 @@ import { beskrivSortering } from '../core/ops/sort.js'
 import { aggregera } from '../state/selection.js'
 import { selectableColumns } from '../state/edits.js'
 import type { Tab } from '../state/store.js'
+import { t, tf } from './sprak.js'
 
 /**
  * Statusraden.
@@ -42,9 +43,9 @@ export function Statusrad(props: {
   if (!tab) {
     return (
       <div class="statusrad">
-        <span>Ingen fil öppen</span>
+        <span>{t('Ingen fil öppen')}</span>
         <button class="statusrad__lokal" onClick={props.onBorjaOm} title={LOKALTITEL}>
-          ● Allt lokalt
+          {t('● Allt lokalt')}
         </button>
       </div>
     )
@@ -58,10 +59,10 @@ export function Statusrad(props: {
     <div class="statusrad">
       <span>
         {props.begransad
-          ? `${formatCount(frame.view.length)} av ${formatCount(frame.rowCount)} rader`
-          : `${formatCount(frame.rowCount)} rader`}
+          ? tf('{0} av {1} rader', formatCount(frame.view.length), formatCount(frame.rowCount))
+          : tf('{0} rader', formatCount(frame.rowCount))}
       </span>
-      <span>{formatCount(kolumner.length)} kolumner</span>
+      <span>{tf('{0} kolumner', formatCount(kolumner.length))}</span>
       {parse && (
         <span>
           {parse.encoding.toUpperCase()}
@@ -74,20 +75,20 @@ export function Statusrad(props: {
           class={`sortchip${props.sorteringInaktuell ? ' sortchip--inaktuell' : ''}`}
           title={
             props.sorteringInaktuell
-              ? 'Ordningen räknades innan de senaste ändringarna. Raderna ligger kvar där de var.'
-              : 'Så här är raderna sorterade.'
+              ? t('Ordningen räknades innan de senaste ändringarna. Raderna ligger kvar där de var.')
+              : t('Så här är raderna sorterade.')
           }
         >
-          <span class="sortchip__text">Sorterat: {props.sorterat}</span>
+          <span class="sortchip__text">{tf('Sorterat: {0}', props.sorterat)}</span>
           {props.sorteringInaktuell && (
             <button class="sortchip__knapp" onClick={props.onSorteraOm}>
-              Sortera om
+              {t('Sortera om')}
             </button>
           )}
           <button
             class="sortchip__stang"
-            aria-label="Ta bort sorteringen"
-            title="Ta bort sorteringen"
+            aria-label={t('Ta bort sorteringen')}
+            title={t('Ta bort sorteringen')}
             onClick={props.onRensaSortering}
           >
             ✕
@@ -108,30 +109,33 @@ export function Statusrad(props: {
       {props.verkstad && (
         <span
           class="verkstadchip"
-          title={`Sammanslagningen ${props.verkstad.namn} är påbörjad och har rader kvar att beta av.`}
+          title={tf(
+            'Sammanslagningen {0} är påbörjad och har rader kvar att beta av.',
+            props.verkstad.namn,
+          )}
         >
           <span class="verkstadchip__text">
             {props.verkstad.roll === 'resultat'
-              ? `${rader(props.verkstad.kvar)} kom inte med`
-              : `${rader(props.verkstad.kvar)} kvar att beta av`}
+              ? tf('{0} kom inte med', rader(props.verkstad.kvar))
+              : tf('{0} kvar att beta av', rader(props.verkstad.kvar))}
           </span>
           <button class="verkstadchip__knapp" onClick={props.onFortsattVerkstad}>
-            Fortsätt
+            {t('Fortsätt')}
           </button>
         </span>
       )}
 
       {agg && agg.celler > 1 && (
-        <span title="Snabbsumma för markeringen">
-          {formatCount(agg.celler)} markerade
+        <span title={t('Snabbsumma för markeringen')}>
+          {tf('{0} markerade', formatCount(agg.celler))}
           {agg.tal > 0 && ` · Σ ${formatSum(agg.summa)}`}
           {agg.tal > 1 && ` · ø ${formatSum(agg.medel)}`}
-          {agg.tal === 0 && agg.ifyllda > 0 && ` · ${formatCount(agg.unika)} unika`}
+          {agg.tal === 0 && agg.ifyllda > 0 && ` · ${tf('{0} unika', formatCount(agg.unika))}`}
         </span>
       )}
       {props.begransad && (
         <button class="statusrad__knapp" onClick={props.onRensaVy}>
-          Visa alla rader
+          {t('Visa alla rader')}
         </button>
       )}
       <button
@@ -141,10 +145,10 @@ export function Statusrad(props: {
           props.onRadmeny(r.left, r.top - 150)
         }}
       >
-        Rader ▾
+        {t('Rader ▾')}
       </button>
       <button class="statusrad__lokal" onClick={props.onBorjaOm} title={LOKALTITEL}>
-        ● Allt lokalt
+        {t('● Allt lokalt')}
       </button>
     </div>
   )

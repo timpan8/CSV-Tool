@@ -1,6 +1,7 @@
 import { normalizeAlways, stripDiacritics } from '../core/locale/sv.js'
 import { STADNINGAR } from '../core/ops/clean.js'
 import { VERKTYG, type Verktygsnamn } from './verktyg.js'
+import { t, tf } from './sprak.js'
 
 /**
  * Kommandolistan bakom paletten.
@@ -76,6 +77,7 @@ export interface Kommandohandlare {
   angra: () => void
   goraOm: () => void
   vaxlaTema: () => void
+  vaxlaSprak: () => void
   glomSparat: () => void
   borjaOm: () => void
 }
@@ -85,78 +87,82 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
   const lagg = (k: Kommando) => ut.push(k)
   const kol = lage.kolumn
 
-  lagg({ id: 'oppna', grupp: 'Fil', etikett: 'Öppna fil…', ord: 'open csv excel', kor: h.oppnaFil })
+  lagg({ id: 'oppna', grupp: t('Fil'), etikett: t('Öppna fil…'), ord: 'open csv excel', kor: h.oppnaFil })
   lagg({
     id: 'klistrasomfil',
-    grupp: 'Fil',
-    etikett: 'Klistra in som ny fil',
+    grupp: t('Fil'),
+    etikett: t('Klistra in som ny fil'),
     genvag: 'Ctrl+Skift+V',
     ord: 'paste urklipp klippbord ny flik dokument',
-    beskrivning:
+    beskrivning: t(
       'Öppnar det du kopierat som en egen flik i stället för att skriva in det i tabellen du står i.',
+    ),
     kor: h.klistraSomFil,
   })
   lagg({
     id: 'glomsparat',
-    grupp: 'Fil',
-    etikett: 'Glöm sparade filer',
+    grupp: t('Fil'),
+    etikett: t('Glöm sparade filer'),
     ord: 'rensa radera lagring återställ privat clear storage',
-    beskrivning:
+    beskrivning: t(
       'Tömmer det verktyget sparat i webbläsaren. Flikarna du har öppna står kvar.',
+    ),
     kor: h.glomSparat,
   })
   lagg({
     id: 'borjaom',
-    grupp: 'Fil',
-    etikett: 'Börja om…',
+    grupp: t('Fil'),
+    etikett: t('Börja om…'),
     ord: 'rensa allt stäng nollställ minne töm reset start om',
-    beskrivning:
+    beskrivning: t(
       'Stänger alla filer, kastar en påbörjad sammanslagning och tömmer webbläsarens lagring. Sidan laddas om.',
+    ),
     kor: h.borjaOm,
   })
   if (lage.harFil) {
     lagg({
       id: 'exportera',
-      grupp: 'Fil',
-      etikett: 'Exportera…',
+      grupp: t('Fil'),
+      etikett: t('Exportera…'),
       genvag: 'Ctrl+S',
       ord: 'spara ladda ner xlsx csv export save',
       kor: h.exportera,
     })
     lagg({
       id: 'profiler',
-      grupp: 'Fil',
-      etikett: 'Profiler…',
+      grupp: t('Fil'),
+      etikett: t('Profiler…'),
       ord: 'spara arbetsgång kör om upprepa makro',
-      beskrivning: 'Spara den här filens arbetsgång och kör om den på nästa fil.',
+      beskrivning: t('Spara den här filens arbetsgång och kör om den på nästa fil.'),
       kor: h.profiler,
     })
 
-    lagg({ id: 'sok', grupp: 'Tabell', etikett: 'Sök…', genvag: 'Ctrl+F', ord: 'find', kor: h.sok })
-    lagg({ id: 'sortera', grupp: 'Tabell', etikett: 'Sortera…', ord: 'ordning sort', kor: h.sortera })
-    lagg({ id: 'filter', grupp: 'Tabell', etikett: 'Filter…', ord: 'urval regler', kor: h.filter })
+    lagg({ id: 'sok', grupp: t('Tabell'), etikett: t('Sök…'), genvag: 'Ctrl+F', ord: 'find', kor: h.sok })
+    lagg({ id: 'sortera', grupp: t('Tabell'), etikett: t('Sortera…'), ord: 'ordning sort', kor: h.sortera })
+    lagg({ id: 'filter', grupp: t('Tabell'), etikett: t('Filter…'), ord: 'urval regler', kor: h.filter })
     lagg({
       id: 'dubbletter',
-      grupp: 'Tabell',
-      etikett: 'Dubbletter…',
+      grupp: t('Tabell'),
+      etikett: t('Dubbletter…'),
       ord: 'dubletter duplicates upprepade',
       kor: h.dubbletter,
     })
     lagg({
       id: 'lopnummer',
-      grupp: 'Tabell',
-      etikett: 'Lägg till kolumn med löpnummer',
+      grupp: t('Tabell'),
+      etikett: t('Lägg till kolumn med löpnummer'),
       ord: 'radnummer id index numrera nummer ordning nr row number',
-      beskrivning:
+      beskrivning: t(
         'En ny kolumn först i filen med 1, 2, 3 … i radernas nuvarande ordning. Numret följer med vid export, så det går att sortera tillbaka.',
+      ),
       kor: h.lopnummer,
     })
     lagg({
       id: 'slaihop',
-      grupp: 'Tabell',
-      etikett: 'Slå ihop med en annan fil…',
+      grupp: t('Tabell'),
+      etikett: t('Slå ihop med en annan fil…'),
       ord: 'matcha merge join koppla',
-      beskrivning: 'Rader som hör ihop läggs sida vid sida, matchat på en nyckel.',
+      beskrivning: t('Rader som hör ihop läggs sida vid sida, matchat på en nyckel.'),
       kor: h.slaIhop,
     })
     if (lage.parkerad !== null) {
@@ -165,51 +171,52 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
       // inte den gången den betyder något.
       lagg({
         id: 'fortsatt-verkstad',
-        grupp: 'Tabell',
-        etikett: 'Fortsätt beta av resten…',
+        grupp: t('Tabell'),
+        etikett: t('Fortsätt beta av resten…'),
         ord: 'verkstad rest kvar matcha beta omatchade',
-        beskrivning: `Tar upp den påbörjade sammanslagningen ${lage.parkerad} igen.`,
+        beskrivning: tf('Tar upp den påbörjade sammanslagningen {0} igen.', lage.parkerad),
         kor: h.fortsattVerkstad,
       })
     }
     lagg({
       id: 'sammanfatta',
-      grupp: 'Tabell',
-      etikett: 'Gruppera och summera…',
+      grupp: t('Tabell'),
+      etikett: t('Gruppera och summera…'),
       ord: 'summa summera antal snitt medel pivot grupp group by aggregera sammanfatta total',
-      beskrivning: 'En rad per grupp: summa Belopp per Ort, antal ordrar per kund.',
+      beskrivning: t('En rad per grupp: summa Belopp per Ort, antal ordrar per kund.'),
       kor: h.sammanfatta,
     })
     lagg({
       id: 'oversikt',
-      grupp: 'Tabell',
-      etikett: 'Kolumnöversikt…',
+      grupp: t('Tabell'),
+      etikett: t('Kolumnöversikt…'),
       ord: 'översikt sammanfattning profil vad innehåller filen overview',
-      beskrivning: 'Alla kolumner med ifyllnad, unika värden, problem och förslag.',
+      beskrivning: t('Alla kolumner med ifyllnad, unika värden, problem och förslag.'),
       kor: h.oversikt,
     })
     lagg({
       id: 'kombinera',
-      grupp: 'Tabell',
-      etikett: 'Kombinera filer…',
+      grupp: t('Tabell'),
+      etikett: t('Kombinera filer…'),
       ord: 'stapla lägg på varandra append',
-      beskrivning: 'Filerna läggs på varandra, kolumner som betyder samma sak i samma spalt.',
+      beskrivning: t('Filerna läggs på varandra, kolumner som betyder samma sak i samma spalt.'),
       kor: h.kombinera,
     })
     lagg({
       id: 'mall',
-      grupp: 'Tabell',
-      etikett: 'Fyll en mall med data…',
+      grupp: t('Tabell'),
+      etikett: t('Fyll en mall med data…'),
       ord: 'mall rubriker form template mapping',
-      beskrivning:
+      beskrivning: t(
         'En fil med bara rubriker bestämmer formen, data hämtas ur de filer du väljer.',
+      ),
       kor: h.mall,
     })
     if (lage.begransadVy) {
       lagg({
         id: 'visaalla',
-        grupp: 'Tabell',
-        etikett: 'Visa alla rader',
+        grupp: t('Tabell'),
+        etikett: t('Visa alla rader'),
         ord: 'rensa filter sökning',
         kor: h.visaAllaRader,
       })
@@ -219,9 +226,9 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
       for (const s of STADNINGAR) {
         lagg({
           id: `stada:${s.id}`,
-          grupp: 'Städa',
-          etikett: s.etikett,
-          beskrivning: s.beskrivning,
+          grupp: t('Städa'),
+          etikett: t(s.etikett),
+          beskrivning: t(s.beskrivning),
           ord: 'text trimma blanksteg versaler gemener',
           kor: () => h.stada(s.id),
         })
@@ -232,58 +239,71 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
       for (const v of VERKTYG) {
         lagg({
           id: `verktyg:${v.namn}`,
-          grupp: 'Verktyg',
-          etikett: `${v.etikett.replace(/…$/, '')} i ${kol}…`,
+          grupp: t('Verktyg'),
+          etikett: tf('{0} i {1}…', t(v.etikett).replace(/…$/, ''), kol),
           ord: v.namn,
           kor: () => h.verktyg(v.namn),
         })
       }
 
-      lagg({ id: 'dopom', grupp: 'Kolumn', etikett: `Byt namn på ${kol}…`, genvag: 'F2', ord: 'rename döp', kor: h.dopOm })
-      lagg({ id: 'dupl', grupp: 'Kolumn', etikett: `Duplicera ${kol}`, ord: 'kopiera', kor: h.duplicera })
+      lagg({ id: 'dopom', grupp: t('Kolumn'), etikett: tf('Byt namn på {0}…', kol), genvag: 'F2', ord: 'rename döp', kor: h.dopOm })
+      lagg({ id: 'dupl', grupp: t('Kolumn'), etikett: tf('Duplicera {0}', kol), ord: 'kopiera', kor: h.duplicera })
       lagg({
         id: 'dolj',
-        grupp: 'Kolumn',
-        etikett: `${lage.kolumnDold ? 'Visa' : 'Dölj'} ${kol}`,
+        grupp: t('Kolumn'),
+        etikett: tf(lage.kolumnDold ? 'Visa {0}' : 'Dölj {0}', kol),
         ord: 'hide show',
         kor: h.vaxlaDold,
       })
-      lagg({ id: 'tabortkol', grupp: 'Kolumn', etikett: `Ta bort ${kol}`, ord: 'radera delete', kor: h.taBortKolumn })
-      lagg({ id: 'infogakol', grupp: 'Kolumn', etikett: 'Infoga en ny kolumn', ord: 'lägg till', kor: h.infogaKolumn })
-      lagg({ id: 'filtrerakol', grupp: 'Kolumn', etikett: `Filtrera på ${kol}…`, kor: h.filtreraKolumn })
+      lagg({ id: 'tabortkol', grupp: t('Kolumn'), etikett: tf('Ta bort {0}', kol), ord: 'radera delete', kor: h.taBortKolumn })
+      lagg({ id: 'infogakol', grupp: t('Kolumn'), etikett: t('Infoga en ny kolumn'), ord: 'lägg till', kor: h.infogaKolumn })
+      lagg({ id: 'filtrerakol', grupp: t('Kolumn'), etikett: tf('Filtrera på {0}…', kol), kor: h.filtreraKolumn })
       lagg({
         id: 'ogiltiga',
-        grupp: 'Kolumn',
-        etikett: `Visa ogiltiga värden i ${kol}`,
+        grupp: t('Kolumn'),
+        etikett: tf('Visa ogiltiga värden i {0}', kol),
         ord: 'problem fel',
         kor: h.visaOgiltiga,
       })
     }
 
     if (lage.harMarkering) {
-      lagg({ id: 'radovan', grupp: 'Rader', etikett: 'Infoga rad ovanför', kor: h.infogaRadOvan })
-      lagg({ id: 'radunder', grupp: 'Rader', etikett: 'Infoga rad nedanför', kor: h.infogaRadUnder })
-      lagg({ id: 'dupllrad', grupp: 'Rader', etikett: 'Dubblera markerade rader', kor: h.dupliceraRader })
-      lagg({ id: 'tabortrad', grupp: 'Rader', etikett: 'Ta bort markerade rader', kor: h.taBortRader })
+      lagg({ id: 'radovan', grupp: t('Rader'), etikett: t('Infoga rad ovanför'), kor: h.infogaRadOvan })
+      lagg({ id: 'radunder', grupp: t('Rader'), etikett: t('Infoga rad nedanför'), kor: h.infogaRadUnder })
+      lagg({ id: 'dupllrad', grupp: t('Rader'), etikett: t('Dubblera markerade rader'), kor: h.dupliceraRader })
+      lagg({ id: 'tabortrad', grupp: t('Rader'), etikett: t('Ta bort markerade rader'), kor: h.taBortRader })
     }
-    lagg({ id: 'tommarader', grupp: 'Rader', etikett: 'Ta bort helt tomma rader', ord: 'städa', kor: h.tommaRader })
+    lagg({ id: 'tommarader', grupp: t('Rader'), etikett: t('Ta bort helt tomma rader'), ord: 'städa', kor: h.tommaRader })
     lagg({
       id: 'tommakolumner',
-      grupp: 'Rader',
-      etikett: 'Ta bort helt tomma kolumner',
+      grupp: t('Rader'),
+      etikett: t('Ta bort helt tomma kolumner'),
       ord: 'städa',
       kor: h.tommaKolumner,
     })
 
     if (lage.kanAngra) {
-      lagg({ id: 'angra', grupp: 'Visa', etikett: 'Ångra', genvag: 'Ctrl+Z', ord: 'undo', kor: h.angra })
+      lagg({ id: 'angra', grupp: t('Visa'), etikett: t('Ångra'), genvag: 'Ctrl+Z', ord: 'undo', kor: h.angra })
     }
     if (lage.kanGoraOm) {
-      lagg({ id: 'goraom', grupp: 'Visa', etikett: 'Gör om', genvag: 'Ctrl+Y', ord: 'redo', kor: h.goraOm })
+      lagg({ id: 'goraom', grupp: t('Visa'), etikett: t('Gör om'), genvag: 'Ctrl+Y', ord: 'redo', kor: h.goraOm })
     }
   }
 
-  lagg({ id: 'tema', grupp: 'Visa', etikett: 'Byt ljust eller mörkt läge', ord: 'dark light tema', kor: h.vaxlaTema })
+  lagg({ id: 'tema', grupp: t('Visa'), etikett: t('Byt ljust eller mörkt läge'), ord: 'dark light tema', kor: h.vaxlaTema })
+  lagg({
+    id: 'sprak',
+    grupp: t('Visa'),
+    // Etiketten säger vad klicket *gör*, inte var man är. Den svenska texten
+    // är därför "byt till engelska", och dess engelska motsvarighet är "switch
+    // to Swedish" — samma knapp, sett från två håll.
+    etikett: t('Byt språk till engelska'),
+    ord: 'language english svenska sprak byt',
+    beskrivning: t(
+      'Gränssnittets text byter språk. Sortering, tal och datum följer alltid svenska regler.',
+    ),
+    kor: h.vaxlaSprak,
+  })
   return ut
 }
 
