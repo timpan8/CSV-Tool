@@ -1055,18 +1055,42 @@ describe('förslaget på kolumnpar', () => {
     const v = frameOf('v', ['A'], [['x'], ['y']])
     const h = frameOf('h', ['A'], [['x'], ['x'], ['y']])
     const betyg = provaKolumnpar(v, h)!
-    expect(betyg).toHaveLength(1)
     // x möter två rader och räknas som en halv, y möter en och räknas som hel.
     expect(betyg[0]!.traffar).toBe(2)
     expect(betyg[0]!.flertraffar).toBe(1)
     expect(betyg[0]!.poang).toBeCloseTo(1.5)
+    // Värdena har inga prickar, så den lösare jämförelsen ger samma poäng —
+    // och då ska den strängaste stå först.
+    expect(betyg[0]!.par.typ).toBe('oberoende')
+  })
+
+  it('hittar ett par som bara matchar på siffror', () => {
+    /*
+     * Organisationsnumren är samma siffror skrivna på två sätt, med och utan
+     * bindestreck. Med den vanliga jämförelsen matchar ingenting alls, och ett
+     * förslag som bara provade den hade sagt att filerna inte hör ihop.
+     */
+    const v = frameOf('v', ['Xa'], [['556677-8899'], ['991122-3344']])
+    const h = frameOf('h', ['Ya'], [['5566778899'], ['9911223344']])
+    const f = foreslaPar(v, h)
+    expect(f.skal).toBe('flest')
+    expect(f.par[0]!.typ).toBe('siffror')
+    expect(f.betyg?.traffar).toBe(2)
+  })
+
+  it('väljer den strängaste jämförelsen när den hittar lika mycket', () => {
+    // Öberg matchar öberg utan att prickarna behöver strykas. Att ändå välja
+    // ”utan å ä ö” hade slagit ihop För och For utan att någon bett om det.
+    const v = frameOf('v', ['Namn'], [['Öberg'], ['Ängström']])
+    const h = frameOf('h', ['Namn'], [['öberg'], ['ängström']])
+    expect(foreslaPar(v, h).par[0]!.typ).toBe('oberoende')
   })
 
   it('struntar i tomma nycklar, precis som hashjoinen', () => {
     const v = frameOf('v', ['Xa'], [[''], ['']])
     const h = frameOf('h', ['Ya'], [[''], ['']])
     const f = foreslaPar(v, h)
-    expect(f.skal).toBe('inget')
+    expect(f.skal).toBe('ingen-traff')
     expect(f.par).toEqual([])
   })
 
@@ -1076,15 +1100,36 @@ describe('förslaget på kolumnpar', () => {
     v.columns[0]!.hidden = true
     h.columns[0]!.hidden = true
     const betyg = provaKolumnpar(v, h)!
-    expect(betyg).toHaveLength(1)
-    expect(namnet(v, betyg[0]!.par.vansterColId)).toBe('Namn')
+    for (const b of betyg) {
+      expect(namnet(v, b.par.vansterColId)).toBe('Namn')
+      expect(namnet(h, b.par.hogerColId)).toBe('Namn')
+    }
   })
 
-  it('faller tillbaka på namnen när ingenting matchar', () => {
+  it('föreslår ingenting alls när inget par matchar en enda rad', () => {
+    /*
+     * Förut föll det här tillbaka på namnparet och sa att det ”också är
+     * paret som matchar bäst”. Det är osant när ingenting matchar, och gav
+     * användaren ett kolumnpar med noll träffar som såg ut som ett förslag.
+     */
     const v = frameOf('v', ['Namn'], [['Anna']])
     const h = frameOf('h', ['Namn'], [['Bo']])
     const f = foreslaPar(v, h)
-    expect(f.skal).toBe('namn')
-    expect(f.par).toHaveLength(1)
+    expect(f.skal).toBe('ingen-traff')
+    expect(f.par).toEqual([])
+    expect(f.alla).toEqual([])
+  })
+
+  it('listar alla par som ger träffar, bäst först', () => {
+    const v = frameOf('v', ['Xa', 'Xb'], [['1', 'a'], ['2', 'b']])
+    const h = frameOf('h', ['Ya', 'Yb'], [['1', 'a'], ['2', 'q']])
+    const f = foreslaPar(v, h)
+    // Xa ↔ Ya matchar båda raderna, Xb ↔ Yb bara den ena.
+    expect(namnet(v, f.alla[0]!.par.vansterColId)).toBe('Xa')
+    expect(f.alla.length).toBeGreaterThan(1)
+    // Och listan är sorterad: poängen faller aldrig uppåt.
+    for (let i = 1; i < f.alla.length; i++) {
+      expect(f.alla[i - 1]!.poang).toBeGreaterThanOrEqual(f.alla[i]!.poang)
+    }
   })
 })

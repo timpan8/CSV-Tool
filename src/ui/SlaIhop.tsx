@@ -132,7 +132,7 @@ export function SlaIhop(props: {
     () =>
       vanster && hoger
         ? foreslaPar(vanster, hoger)
-        : ({ par: [], skal: 'inget', betyg: null } as Parforslag),
+        : ({ par: [], skal: 'inget', betyg: null, alla: [] } as Parforslag),
     [vanster, hoger],
   )
   const foreslagna = forslag.par
@@ -239,15 +239,30 @@ export function SlaIhop(props: {
     setPar(nya)
   }
 
+  /**
+   * Lägger till ett kolumnpar.
+   *
+   * Det bäst betygsatta paret som inte redan står i listan, inte första
+   * kolumnen i vardera filen. Den gamla förvalet gav nästan alltid ett par
+   * som matchar noll rader — och ett förslag som matchar noll är inget
+   * förslag. Finns inget betygsatt par kvar (ingenting matchar, eller
+   * provningen slog i taket) faller den tillbaka på de första kolumnerna, för
+   * då är en rad att ställa in på bättre än ingen rad alls.
+   */
   const laggPar = () => {
-    const v = vansterKolumner[0]
-    const h = hogerKolumner[0]
-    if (!v || !h) return
+    const tagna = new Set(aktivaPar.map((p) => `${p.vansterColId}\u0000${p.hogerColId}`))
+    const nasta = forslag.alla.find(
+      (b) => !tagna.has(`${b.par.vansterColId}\u0000${b.par.hogerColId}`),
+    )
+    const reserv = (): Matchningspar | null => {
+      const v = vansterKolumner[0]
+      const h = hogerKolumner[0]
+      return v && h ? { vansterColId: v.id, hogerColId: h.id, typ: 'oberoende' } : null
+    }
+    const nytt = nasta ? { ...nasta.par } : reserv()
+    if (!nytt) return
     setEgnaPar(true)
-    setPar([
-      ...aktivaPar.map((p) => ({ ...p })),
-      { vansterColId: v.id, hogerColId: h.id, typ: 'oberoende' },
-    ])
+    setPar([...aktivaPar.map((p) => ({ ...p })), nytt])
   }
 
   const taBortPar = (i: number) => {
@@ -581,7 +596,9 @@ export function SlaIhop(props: {
               ))}
               {aktivaPar.length === 0 && (
                 <p class="verktyg__sammanfattning">
-                  Inga kolumnpar valda. Lägg till minst ett för att kunna matcha.
+                  {forslag.skal === 'ingen-traff'
+                    ? `Inget kolumnpar hittar en enda gemensam rad. Alla kombinationer är provade, med tre jämförelser: vanlig, utan å ä ö och bara siffror.`
+                    : 'Inga kolumnpar valda. Lägg till minst ett för att kunna matcha.'}
                 </p>
               )}
               <div class="faltrad">
@@ -597,7 +614,9 @@ export function SlaIhop(props: {
                       )} av ${raderText(vanster?.rowCount ?? 0)}). Ändra fritt.`
                     : forslag.skal === 'namn-for-stort'
                       ? 'Föreslaget utifrån kolumnernas namn. Filerna har för många kolumner för att hinna prova alla par mot varandra, så siffrorna fick inte vara med och bestämma.'
-                      : 'Föreslaget utifrån kolumnernas namn, och det är också paret som matchar bäst. Ändra fritt.'}
+                      : `Föreslaget utifrån kolumnernas namn, och det är också paret som matchar bäst${
+                          forslag.betyg ? ` (${formatCount(forslag.betyg.traffar)} träffar)` : ''
+                        }. Ändra fritt.`}
                 </p>
               )}
             </div>
@@ -609,6 +628,25 @@ export function SlaIhop(props: {
                   : `${ofardigaPar} kolumnpar saknar sin andra högerkolumn`}
                 . Matchningen kan inte köras förrän den är vald — utan den finns ingen nyckel att
                 jämföra med.
+              </Notis>
+            )}
+
+            {/*
+              Noll är den högljuddaste siffran, inte den tystaste.
+
+              Villkoret krävde förut `vansterMatchade > 0`, så just det värsta
+              utfallet — inte en enda rad matchar — gick fram utan ett ord.
+              Då står man med ett kolumnpar som ger noll och verktyget säger
+              ingenting om varför.
+            */}
+            {matchning && matchning.vansterMatchade === 0 && (
+              <Notis ton="fara">
+                <strong>Inte en enda rad matchar.</strong> Antingen är det fel kolumnpar, eller
+                så är värdena skrivna på olika sätt i de två filerna — prova en annan jämförelse,
+                eller städa kolumnerna först.
+                {forslag.alla.length > 0 && !egnaPar
+                  ? ' Verktyget hittade andra par som ger träffar; klicka ＋ Lägg till kolumnpar för att prova nästa.'
+                  : ''}
               </Notis>
             )}
 

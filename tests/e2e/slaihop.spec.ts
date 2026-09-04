@@ -411,6 +411,69 @@ test('Escape stänger vyn', async ({ page }) => {
   await expect(page.locator('.rutnat')).toBeVisible()
 })
 
+test('siffrorna hittar paret som den vanliga jämförelsen missar', async ({ page }) => {
+  // Organisationsnumren är samma siffror skrivna på två sätt. Provningen kör
+  // tre jämförelser, så paret hittas — och jämförelsen ställs in åt en.
+  const csv = ['Orgnr;Bonus', '556677-8899;100', '991122-3344;200', ''].join('\r\n')
+
+  await page.goto('/')
+  await page.locator('input[type=file]').first().setInputFiles({
+    name: 'vanster.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(['Kund;Nummer', 'Alfa;5566778899', 'Beta;9911223344', ''].join('\r\n'), 'utf8'),
+  })
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await page.locator('input[type=file]').first().setInputFiles({
+    name: 'hoger.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(csv, 'utf8'),
+  })
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await page.locator('.flik__namn', { hasText: 'vanster.csv' }).click()
+  await oppnaVyn(page)
+
+  await expect(parrad(page).locator('select').nth(0).locator('option:checked')).toHaveText('Nummer')
+  await expect(parrad(page).locator('select').nth(1).locator('option:checked')).toHaveText('Orgnr')
+  await expect(parrad(page).locator('select').last().locator('option:checked')).toHaveText(
+    'Bara siffror',
+  )
+  await expect(page.locator('.slaihop .vytal')).toContainText('2 av 2 rader hittar en träff')
+})
+
+test('två filer utan ett enda gemensamt värde får inget förslag, och det sägs', async ({ page }) => {
+  /*
+   * Förut föll förslaget tillbaka på rubriknamnen och sa att paret "också är
+   * det som matchar bäst" — med noll träffar. Sedan gav ＋ Lägg till
+   * kolumnpar första kolumnen i varje fil, vilket också matchade noll.
+   */
+  await page.goto('/')
+  await page.locator('input[type=file]').first().setInputFiles({
+    name: 'grupper.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(['Namn;Kod', 'GRP-Ekonomi;E1', 'GRP-IT;I1', ''].join('\r\n'), 'utf8'),
+  })
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await page.locator('input[type=file]').first().setInputFiles({
+    name: 'anvandare.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(['Namn;Kod', 'Anna;A9', 'Bo;B9', ''].join('\r\n'), 'utf8'),
+  })
+  await page.getByRole('button', { name: 'Öppna filen' }).click()
+  await page.locator('.flik__namn', { hasText: 'grupper.csv' }).click()
+  await oppnaVyn(page)
+
+  // Inget par alls, och skälet står i klartext.
+  await expect(page.locator('.slaihop__par')).toHaveCount(0)
+  await expect(vy(page)).toContainText('Inget kolumnpar hittar en enda gemensam rad')
+  await expect(vy(page)).toContainText('tre jämförelser')
+
+  // Väljer man ändå ett par säger vyn att det ger noll — förut gick just den
+  // siffran fram utan ett ord.
+  await page.getByRole('button', { name: '＋ Lägg till kolumnpar' }).click()
+  await expect(page.locator('.slaihop .vytal')).toContainText('0 av 2 rader hittar en träff')
+  await expect(vy(page)).toContainText('Inte en enda rad matchar')
+})
+
 test('namn mot förnamn + efternamn matchar över två högerkolumner', async ({ page }) => {
   const csv = [
     'Fornamn;Efternamn;Rabatt',
@@ -435,8 +498,9 @@ test('namn mot förnamn + efternamn matchar över två högerkolumner', async ({
 
   await oppnaVyn(page)
 
-  // Rubrikerna liknar ingenting i kundfilen, så förslaget hittar inget par.
-  await expect(vy(page)).toContainText('Inga kolumnpar valda')
+  // Varken rubrikerna eller värdena hör ihop rakt av — Karlsson är inte Anna
+  // Karlsson — så provningen hittar inget par, och säger det.
+  await expect(vy(page)).toContainText('Inget kolumnpar hittar en enda gemensam rad')
   await page.getByRole('button', { name: '＋ Lägg till kolumnpar' }).click()
 
   await parrad(page).locator('select').nth(0).selectOption({ label: 'Namn' })
