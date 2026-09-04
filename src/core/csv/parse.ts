@@ -1,4 +1,5 @@
 import Papa from 'papaparse'
+import { parseNumber } from '../infer.js'
 import {
   Flag,
   type Delimiter,
@@ -227,6 +228,30 @@ export function parseCsvBytes(
  *
  * Ingen rubrikrad antas: det som klistras in i ett rutnät är celler.
  */
+/**
+ * Sant när det inklistrades första rad ser ut som en rubrikrad.
+ *
+ * Skillnaden mellan *celler ur Excel* och *ett helt dokument* går inte att
+ * avgöra säkert, men rubrikraden är det starkaste tecknet som finns: den som
+ * kopierat ett par celler har sällan med sig kolumnnamnen. Regeln är därför
+ * medvetet snäv — varje kolumn ifylld, alla namn olika, och inget av dem ett
+ * tal. En rad med mätvärden i är data, hur den än ser ut i övrigt.
+ *
+ * Svaret styr bara vilken knapp som är förvald i inklistringsdialogen.
+ * Ingenting sker automatiskt på den här gissningen; den flyttar bara det
+ * troligaste valet dit fingret redan är.
+ */
+export function serUtSomRubrikrad(rader: readonly string[][]): boolean {
+  const forsta = rader[0]
+  // En ensam rad är ingen tabell, och en ensam kolumn har ingen rubrikrad
+  // att skilja från sitt innehåll.
+  if (!forsta || forsta.length < 2 || rader.length < 2) return false
+  const varden = forsta.map((v) => v.trim())
+  if (varden.some((v) => v === '')) return false
+  if (new Set(varden.map((v) => v.toLocaleLowerCase('sv'))).size !== varden.length) return false
+  return varden.every((v) => parseNumber(v) === null)
+}
+
 export function parseDelimitedText(text: string): { rows: string[][]; delimiter: Delimiter } {
   const trimmed = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '')
   if (trimmed === '') return { rows: [], delimiter: '\t' }
