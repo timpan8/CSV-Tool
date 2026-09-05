@@ -9,9 +9,17 @@
  * sticky` fäster mot närmaste rullande förfader, och rullar kroppen i stället
  * lossnar både rubrikraden och radrubrikspalten samtidigt.
  */
+/*
+ * Flex och inte ett fast radschema.
+ *
+ * Diagrammet har ett eget band som bara finns ibland, och ett schema med ett
+ * bestämt antal rader hamnar ur fas så fort en rad tillkommer eller
+ * försvinner — `1fr` landar på fel barn, och då blir inställningsbandet
+ * skyhögt medan tabellen kläms ihop. Samma skäl som `.app` bytte av.
+ */
 .pivot {
-  display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   overflow: hidden;
   background: var(--yta);
@@ -97,7 +105,18 @@
   padding: 0 4px;
 }
 
+/*
+ * Kroppen sträcker sitt innehåll.
+ *
+ * Utan `grid-template-rows: 1fr` hämtar barnet sin höjd ur innehållet — och
+ * diagrammet har inget innehåll förrän det vet sin höjd. Den cirkeln syntes
+ * som en duk mätt till noll pixlar som aldrig växte, eftersom observatören
+ * inte hade något att observera.
+ */
 .pivot__kropp {
+  flex: 1 1 0;
+  display: grid;
+  grid-template-rows: 1fr;
   min-height: 0;
   overflow: hidden;
   padding: 10px 14px;
@@ -109,6 +128,211 @@
   text-align: center;
   color: var(--text-svag);
   font-size: 13px;
+}
+
+.pivot__vaxlar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pivot__band--diagram {
+  background: var(--yta);
+  border-bottom: 1px solid var(--linje);
+}
+
+/* ---------- Diagrammet ---------- */
+
+/*
+ * Märkspecifikationen bor här, inte i JSX:en.
+ *
+ * Stapelns tjocklek och rundning räknas fram i pixlar och står i
+ * `Diagram.tsx`; allt som bara är stil — linjebredd, ringar, färger på text
+ * och rutnät — står här, som för resten av verktyget. Det är samma spec för
+ * alla fyra formerna, och det är den som gör att de ser ut som ett system.
+ */
+
+.pivot__diagramyta {
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Golvet är sista spärren mot samma cirkel: även i en pressad ruta finns
+   alltid en yta att mäta, och då kan duken börja ritas. */
+.diagram {
+  min-height: 180px;
+  overflow: hidden;
+}
+
+.diagram__duk {
+  display: block;
+}
+
+.diagram__tomt {
+  margin: 0;
+  padding: 24px 0;
+  text-align: center;
+  color: var(--text-svag);
+  font-size: 13px;
+}
+
+/* Rutnätet är hårfint och heldraget. Streckade linjer drar till sig ögat,
+   och rutnätet ska hjälpa avläsningen utan att tävla med datat. */
+.diagram__rutlinje {
+  stroke: var(--linje);
+  stroke-width: 1;
+}
+
+.diagram__axeltal,
+.diagram__kategori {
+  fill: var(--text-svag);
+  font-size: 11px;
+}
+
+/* Texten bär aldrig seriens färg — färgen sitter i märket. */
+.diagram__varde {
+  fill: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* Mellanrummet mellan två staplar är ytfärgen, aldrig en ram. En ram lägger
+   till bläck som inte är data; mellanrummet tar bort det som skymmer. */
+.diagram__stapel {
+  stroke: var(--yta);
+  stroke-width: 0;
+  transition: opacity 0.1s;
+}
+
+.diagram__stapel:hover,
+.diagram__stapel:focus-visible {
+  opacity: 0.82;
+  outline: none;
+}
+
+.diagram__linje {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* Ringen i ytfärgen håller punkten läsbar där två linjer korsar varandra. */
+.diagram__punkt {
+  stroke: var(--yta);
+  stroke-width: 2;
+}
+
+.diagram__harkors {
+  stroke: var(--linje-stark);
+  stroke-width: 1;
+}
+
+.diagram__traffyta {
+  fill: transparent;
+  outline: none;
+}
+
+.diagram__tarta {
+  stroke: var(--yta);
+  stroke-width: 2;
+  transition: opacity 0.1s;
+}
+
+.diagram__tarta:hover,
+.diagram__tarta:focus-visible {
+  opacity: 0.82;
+  outline: none;
+}
+
+/* ---------- Förklaring och inforuta ---------- */
+
+.diagram__forklaring {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--text-svag);
+}
+
+.diagram__forklaring li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.diagram__prick {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.diagram__utelamnade {
+  font-style: italic;
+}
+
+/*
+ * Inforutan.
+ *
+ * Värdet först och i fetstil, serienamnet efter: förklaringens hierarki
+ * vänd, eftersom man här redan vet vilken serie man pekar på och vill ha
+ * talet. `pointer-events: none` så att rutan aldrig kommer i vägen för det
+ * märke den beskriver.
+ */
+.diagram__inforuta {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 10px));
+  pointer-events: none;
+  z-index: 5;
+  padding: 6px 9px;
+  border: 1px solid var(--linje);
+  border-radius: var(--radie);
+  background: var(--yta);
+  box-shadow: var(--skugga);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.diagram__inforuta--under {
+  transform: translate(-50%, 10px);
+}
+
+.diagram__inforuta__kategori {
+  color: var(--text-svag);
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.diagram__inforuta__rad {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.diagram__inforuta__rad strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.diagram__inforuta__rad span:last-child {
+  color: var(--text-svag);
+}
+
+/* Ett streck, inte en fylld ruta: vid inforutans täthet gör en färgklick en
+   etiketts jobb med data-vikt bläck. */
+.diagram__streck {
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+  flex: none;
 }
 
 .pivot__fot {

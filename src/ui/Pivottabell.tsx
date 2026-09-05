@@ -1,22 +1,17 @@
 import { useMemo } from 'preact/hooks'
 import type { Frame } from '../core/types.js'
 import { findColumn } from '../core/frame/frame.js'
-import { formatCount, formatSum, sortCollator } from '../core/locale/sv.js'
+import { formatCount, formatSum } from '../core/locale/sv.js'
 import { berakningspost } from '../core/ops/gruppera.js'
 import type { Berakning } from '../core/ops/gruppera.js'
 import type { Pivotplan, Pivotresultat, Pivotrubrik } from '../core/ops/pivot.js'
+import { dold, ordnaRader, type Sortering } from './pivotordning.js'
 import { t, tf } from './sprak.js'
 
 /** Hur cellernas tal visas. Andelen är en avläsning, inte en annan beräkning. */
 export type Visning = 'tal' | 'andelRad' | 'andelKolumn'
 
-export interface Sortering {
-  /** Kolumnindex i matrisen; `bredd - 1` är Totalt. */
-  kol: number
-  /** Vilket mätvärde inom kolumnen, när de är flera. */
-  m: number
-  ned: boolean
-}
+export type { Sortering }
 
 /**
  * Pivotens tabell.
@@ -50,62 +45,10 @@ export function Pivottabell(props: {
     .map((id) => findColumn(props.frame, id))
     .filter((c) => c !== undefined)
 
-  /*
-   * Radernas ordning.
-   *
-   * Sorteringen gäller syskon inom sin förälder, aldrig hela listan. Att
-   * sortera platt hade slitit isär trädet: en ort hade hamnat under en annan
-   * orts rubrik och delsumman hade stått över rader den inte gällde.
-   */
-  const ordnade = useMemo(() => {
-    const barn = new Map<string, number[]>()
-    resultat.rader.forEach((rad, i) => {
-      const delar = rad.stig.split('/')
-      const foralder = delar.slice(0, -1).join('/')
-      const lista = barn.get(foralder)
-      if (lista) lista.push(i)
-      else barn.set(foralder, [i])
-    })
-
-    const sort = props.sortering
-    if (sort) {
-      const plats = (i: number) => (i * resultat.bredd + sort.kol) * steg + sort.m
-      const tal = (i: number) => resultat.tal[plats(i)]!
-      const text = (i: number) => resultat.text[plats(i)] ?? ''
-      for (const lista of barn.values()) {
-        lista.sort((a, b) => {
-          const ta = tal(a)
-          const tb = tal(b)
-          const atom = Number.isNaN(ta)
-          const btom = Number.isNaN(tb)
-          // Tomma celler ligger sist åt båda hållen. En tom cell är okänd, och
-          // det okända hör inte hemma i toppen bara för att man vände på pilen.
-          if (atom && btom) return sortCollator.compare(text(a), text(b))
-          if (atom) return 1
-          if (btom) return -1
-          return sort.ned ? tb - ta : ta - tb
-        })
-      }
-    }
-
-    const ut: number[] = []
-    const ga = (foralder: string) => {
-      for (const i of barn.get(foralder) ?? []) {
-        ut.push(i)
-        ga(resultat.rader[i]!.stig)
-      }
-    }
-    ga('')
-    return ut
-  }, [resultat, props.sortering, steg])
-
-  const dold = (stig: string): boolean => {
-    const delar = stig.split('/')
-    for (let i = 1; i < delar.length; i++) {
-      if (props.hopfallda.has(delar.slice(0, i).join('/'))) return true
-    }
-    return false
-  }
+  const ordnade = useMemo(
+    () => ordnaRader(resultat, props.sortering, steg),
+    [resultat, props.sortering, steg],
+  )
 
   /**
    * Har raden barn under sig?
@@ -217,7 +160,7 @@ export function Pivottabell(props: {
         <tbody>
           {ordnade.map((i, plats) => {
             const rad = resultat.rader[i]!
-            if (dold(rad.stig)) return null
+            if (dold(rad.stig, props.hopfallda)) return null
             const fallbar = harBarn(plats)
             const hopfalld = props.hopfallda.has(rad.stig)
             const etikett = rad.ovriga
