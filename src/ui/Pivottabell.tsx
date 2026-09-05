@@ -56,6 +56,8 @@ export function Pivottabell(props: {
   onSortera: (kol: number, m: number) => void
   hopfallda: Set<string>
   onVaxlaNod: (stig: string) => void
+  /** Vad tabellen visar, för skärmläsaren. Samma mening som diagrammets rubrik. */
+  rubrik: string
 }) {
   const { resultat, plan } = props
   const steg = Math.max(1, plan.matvarden.length)
@@ -205,7 +207,7 @@ export function Pivottabell(props: {
               <th
                 key={`ovriga-${k}`}
                 class="pivottab__kolrubrik"
-                scope={flera ? 'colgroup' : 'col'}
+                scope={steg > 1 ? 'colgroup' : 'col'}
                 aria-sort={flera ? undefined : sortlage(k, 0)}
                 rowSpan={rubrikvaningar}
                 colSpan={steg}
@@ -231,7 +233,10 @@ export function Pivottabell(props: {
           <th
             key={`k${n}-${k}`}
             class="pivottab__kolrubrik"
-            scope={innerst && !flera ? 'col' : 'colgroup'}
+            // Spännvidden avgör, inte våningen: den innersta våningen med ett
+            // enda mätvärde täcker en spalt, och `colgroup` på en ensam spalt
+            // säger något som inte är sant.
+            scope={(j - k) * steg > 1 ? 'colgroup' : 'col'}
             aria-sort={innerst && !flera ? sortlage(k, 0) : undefined}
             colSpan={(j - k) * steg}
             style={{ top: topp }}
@@ -253,7 +258,7 @@ export function Pivottabell(props: {
           <th
             key="totalt"
             class="pivottab__kolrubrik pivottab__kolrubrik--total"
-            scope={flera ? 'colgroup' : 'col'}
+            scope={steg > 1 ? 'colgroup' : 'col'}
             aria-sort={flera ? undefined : sortlage(totalkol, 0)}
             rowSpan={rubrikvaningar}
             colSpan={steg}
@@ -424,11 +429,11 @@ export function Pivottabell(props: {
           const etikett = radetikett(rad)
           return (
             <div class="pivottab__block" key={rad.stig}>
-              <h4 class="pivottab__blockrubrik" title={etikett}>
+              <h4 class="pivottab__blockrubrik" id={`pivotblock-${rad.stig}`} title={etikett}>
                 {etikett}
                 <span class="pivottab__radantal">{formatCount(rad.antal)}</span>
               </h4>
-              <table class="pivottab">
+              <table class="pivottab" aria-labelledby={`pivotblock-${rad.stig}`}>
                 <thead>
                   {rubrikrader([<>{raddim.slice(1).map((c) => c.name).join(' › ')}</>], RUBRIKHOJD)}
                 </thead>
@@ -466,7 +471,7 @@ export function Pivottabell(props: {
 
   return (
     <div class="pivottab__omslag">
-      <table class={`pivottab${spalter ? ' pivottab--spalter' : ''}`}>
+      <table class={`pivottab${spalter ? ' pivottab--spalter' : ''}`} aria-label={props.rubrik}>
         <thead>{rubrikrader(horn, 0)}</thead>
         <tbody>
           {ordnade.map((i, plats) => {

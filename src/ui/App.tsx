@@ -1899,13 +1899,13 @@ export function App() {
       ) : iPivot && frame ? (
         /*
          * `key` på flikens id, så att pivoten byggs om från grunden när man
-         * byter fil. Flikraden syns även med vyn uppe, och en plan som pekar
-         * på kolumn-id ur en annan fil hade gett en tom tabell utan att säga
-         * varför. Med nyckeln får den nya filen sitt eget förslag i stället.
+         * byter fil: den nya fliken hämtar sin egen plan, eller fyra tomma
+         * rutor. Nyckeln sitter på **gränsen** och inte på vyn inuti — ett
+         * fångat fel lever i gränsens tillstånd, och en gräns utan egen nyckel
+         * hade behållit felläget även efter att man bytt till en annan fil.
          */
-        <Felgrans onStang={stangPivot}>
+        <Felgrans key={tab?.id} onStang={stangPivot}>
           <Pivot
-            key={tab?.id}
             tabId={tab?.id ?? ''}
             frame={frame}
             revision={rev}

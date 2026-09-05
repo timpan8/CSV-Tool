@@ -514,13 +514,12 @@
 
 /* Flera radrubriker per rad, och `left: 0` på alla hade staplat dem på
    varandra i vänsterkanten vid rullning. Den första fäster, resten följer med. */
-.pivottab--spalter .pivottab__radrubrik:not(:first-child),
-.pivottab--spalter .pivottab__horn:not(:first-child) {
+.pivottab--spalter .pivottab__radrubrik:not(:first-child) {
   position: static;
 }
 
-.pivottab--spalter thead .pivottab__horn:not(:first-child) {
-  position: sticky;
+/* Hörncellerna fäster uppåt som förut, men bara den första i vänsterkanten. */
+.pivottab--spalter .pivottab__horn:not(:first-child) {
   left: auto;
 }
 
@@ -583,6 +582,11 @@
   border-left: 1px solid var(--linje);
 }
 
+/* ✕ i panelens högerkant, som de andra panelernas knappar. */
+.pivotpanel__stang {
+  margin-left: auto;
+}
+
 /*
  * Fältlistan har ett eget tak på höjden.
  *
@@ -590,10 +594,6 @@
  * fönsterkanten, och rutorna är det man ska se — listan är bara förrådet man
  * hämtar ur.
  */
-.pivotpanel__stang {
-  margin-left: auto;
-}
-
 .pivotpanel__falt {
   display: flex;
   flex-wrap: wrap;

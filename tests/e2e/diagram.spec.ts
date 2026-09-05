@@ -102,11 +102,13 @@ test('alla fyra formerna går att välja, och cirkeln säger nej med skäl', asy
   await expect(page.locator('.diagram__tarta')).toHaveCount(3)
 
   // Med en kolumndimension finns två serier, och en tårta kan bara dela upp
-  // en. Knappen stängs av med skälet i klartext.
+  // en. Valet stängs av med skälet i klartext — nåbart med tangentbordet,
+  // eftersom ett skäl man inte kan läsa inte är ett skäl.
   await form(page, 'Staplar').click()
   await satt(page, 'Kolumner', 'Ort')
-  await expect(form(page, 'Cirkel')).toBeDisabled()
-  await expect(form(page, 'Cirkel')).toHaveAttribute('title', /en serie i taget/)
+  const cirkel = page.getByRole('radio', { name: /^Cirkel/ })
+  await expect(cirkel).toHaveAttribute('aria-disabled', 'true')
+  await expect(cirkel).toHaveAttribute('title', /en serie i taget/)
 })
 
 test('inforutan visas på hover och på tangentbordsfokus', async ({ page }) => {

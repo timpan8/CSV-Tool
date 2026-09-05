@@ -344,7 +344,9 @@ export class Felgrans extends Component<
   override render() {
     if (this.state.fel === null) return this.props.children
     return (
-      <div class="felgrans">
+      // `role="alert"` läses upp direkt. Vyn har försvunnit under läsaren, och
+      // det är inget man ska behöva upptäcka genom att leta.
+      <div class="felgrans" role="alert">
         <Notis ton="fara">{tf('Något gick fel i vyn: {0}', this.state.fel)}</Notis>
         <button
           class="knapp knapp--primar"
@@ -427,7 +429,7 @@ export function Val<T extends string>(props: {
           // går att läsa — en knapp som bara inte går att klicka på lär ingen
           // något. Samma val som menyposterna gör.
           aria-disabled={v.inaktiv !== undefined}
-          aria-label={v.inaktiv === undefined ? undefined : `${t(v.etikett)} — ${v.inaktiv}`}
+          aria-label={v.inaktiv === undefined ? undefined : tf('{0} — {1}', t(v.etikett), v.inaktiv)}
           title={v.inaktiv ?? (v.titel === undefined ? undefined : t(v.titel))}
           onClick={() => {
             if (v.inaktiv !== undefined) return

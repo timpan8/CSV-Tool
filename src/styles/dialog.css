@@ -203,9 +203,11 @@
   font-size: 13px;
 }
 
+/* Samma uttryck som en avstängd menypost: en blek text och ingen pekare som
+   lovar något. Två stavningar av *avstängd* i samma gränssnitt är en för mycket. */
 .val__knapp--inaktiv {
-  opacity: 0.5;
-  cursor: not-allowed;
+  color: var(--text-svagast);
+  cursor: default;
 }
 
 .val__knapp--vald {

@@ -16,14 +16,16 @@ export const ruta = (page: Page, namn: string) =>
     .locator('.pivotruta')
     .filter({ has: page.getByRole('heading', { name: namn, exact: true }) })
 
+/** Fältlistans chip för en kolumn — exakt namnmatchning, så att Ort inte tar Postnr. */
+export const listchip = (page: Page, namn: string) =>
+  page
+    .locator('.pivotpanel__falt .pivotruta__chip')
+    .filter({ has: page.locator('.pivotruta__namn', { hasText: new RegExp(`^${namn}$`) }) })
+    .first()
+
 /** Lägg ett fält i en ruta, längst ned i den. */
 export async function laggI(page: Page, namnRuta: string, falt: string) {
-  await page
-    .locator('.pivotpanel__falt .pivotruta__chip')
-    .filter({ has: page.locator('.pivotruta__namn', { hasText: new RegExp(`^${falt}$`) }) })
-    .first()
-    .getByRole('button', { name: `Lägg till ${falt}` })
-    .click()
+  await listchip(page, falt).getByRole('button', { name: new RegExp(`^Lägg till ${falt}`) }).click()
   await page.locator('.meny__post', { hasText: `Lägg i ${namnRuta}` }).click()
 }
 
