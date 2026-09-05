@@ -9,6 +9,7 @@ import { PhoneTool } from './PhoneTool.jsx'
 import { ReplaceTool } from './ReplaceTool.jsx'
 import { SplitTool } from './SplitTool.jsx'
 import { MergeTool } from './MergeTool.jsx'
+import { RadTool } from './RadTool.jsx'
 import { CalcTool } from './CalcTool.jsx'
 
 /**
@@ -31,6 +32,7 @@ export const VERKTYG: Verktygspost[] = [
   { namn: 'telefon', etikett: 'Telefon…' },
   { namn: 'epost', etikett: 'E-post → namn…' },
   { namn: 'dela', etikett: 'Dela kolumnen…' },
+  { namn: 'tillrader', etikett: 'Dela till rader…' },
   // Namnet krockar med kommando-id:t 'slaihop' i kommandon.ts, som öppnar
   // fil-sammanslagningen (SlaIhop-vyn). Ingen kollision i drift — paletten
   // prefixar verktygen som 'verktyg:slaihop' — och namnet går inte att byta:
@@ -102,6 +104,16 @@ export interface VerktygProps {
   onVisaBara: (v: 'andrade' | 'problem' | undefined) => void
   onForhandsvisning: (forh: Forhandsvisning[] | null) => void
   onTillampa: (forh: Forhandsvisning[]) => void
+  /**
+   * Väg ut för de verktyg vars resultat inte får plats i en förhandsvisning.
+   *
+   * Nästan alla verktyg svarar med en `Forhandsvisning` — en kolumn som
+   * skrivs om, eller nya kolumner bredvid källan. *Dela till rader* ändrar
+   * radantalet och har därför varken en spökkolumn att rita eller en cell att
+   * visa `före → efter` i: det går ingen utrad på varje inrad. Resultatet blir
+   * en ny flik, som hos Gruppera och Pivot, och originalet rörs aldrig.
+   */
+  onNyFlik: (frame: Frame, text: string) => void
   onStang: () => void
 }
 
@@ -126,6 +138,8 @@ export function Verktyg({ namn, frame, kolumner, ...rest }: VerktygProps) {
       return <EmailTool {...rest} col={col} />
     case 'dela':
       return <SplitTool {...rest} col={col} />
+    case 'tillrader':
+      return <RadTool {...rest} col={col} frame={frame} />
     case 'slaihop':
       return <MergeTool {...rest} col={col} frame={frame} />
     case 'rakna':

@@ -39,6 +39,7 @@ export type Verktygsnamn =
   | 'slaihop'
   | 'rakna'
   | 'ersatt'
+  | 'tillrader'
 
 export interface Verktygsforslag {
   verktyg: Verktygsnamn

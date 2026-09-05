@@ -200,6 +200,24 @@ export const VERKTYG: Record<string, string> = {
   'Bara odelade': 'Only unsplit',
   'Bara omatchade': 'Only unmatched',
 
+  /* ---------- Dela till rader ---------- */
+  'Dela till rader': 'Split into rows',
+  'Dela till rader…': 'Split into rows…',
+  'Radbrytning': 'Line break',
+  'Eget tecken': 'Own character',
+  'Trimma blanksteg runt varje del': 'Trim whitespace around each part',
+  'Hoppa över tomma delar': 'Skip empty parts',
+  'Skapa ny flik med {0} rader': 'Create a new tab with {0} rows',
+  'Välj vad det ska delas vid.': 'Choose what to split at.',
+  '{0} blir {1}.': '{0} becomes {1}.',
+  ' {0} saknar avgränsare och följer med som de är.':
+    ' {0} have no separator and come along as they are.',
+  'Delade till {0} rader i en ny flik.': 'Split into {0} rows in a new tab.',
+  'Delningen går på det du ser: {0} av filens {1} rader kommer med. Rensa filtret om du vill ha allihop.':
+    'The split goes on what you see: {0} of the file’s {1} rows come along. Clear the filter if you want them all.',
+  'Resultatet blir en ny flik. Den här filen rörs inte — övriga kolumners värden följer med ner på de nya raderna.':
+    'The result becomes a new tab. This file is left alone — the other columns’ values come along down onto the new rows.',
+
   /* ---------- Plocka ut med mönster ---------- */
   Mönster: 'Pattern',
   'Efter ett mönster': 'By a pattern',

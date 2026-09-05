@@ -2056,6 +2056,14 @@ export function App() {
                   { atgard: { etikett: t('Ångra'), kor: () => undo(tab) } },
                 )
               }}
+              onNyFlik={(resultat, text) => {
+                // Ordningen spelar roll: panelen stängs medan den här fliken
+                // ännu är den aktiva, så att förhandsvisningen städas bort
+                // från rätt flik innan `openFrame` byter till den nya.
+                stangVerktyg()
+                openFrame(resultat)
+                notify(text)
+              }}
               onStang={stangVerktyg}
             />
           ) : (
