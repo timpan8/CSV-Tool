@@ -17,7 +17,7 @@ Hur du använder CSV-verkstan, ett verktyg i taget. Varje avsnitt säger vad ver
 | **[7. Spara arbetet](#spara-arbetet)** | [Profiler](#profiler) · [Flikarna finns kvar](#flikarna-finns-kvar) · [Börja om](#börja-om) |
 | **[8. Genvägar och inställningar](#genvägar-och-inställningar)** | [Kommandopaletten](#kommandopaletten) · [Tangentbord](#tangentbord) · [Språk, tema och verktygsfält](#språk-tema-och-verktygsfält) |
 
-> Guiden finns också som **sida** — sidomeny, sökruta, svensk/engelsk växlare och skärmbilder som förstoras vid klick. Den publiceras med appen på `…/guide/`, och efter en klon går `docs/guide.html` att öppna direkt från disk.
+> Guiden finns också som **[sida](https://timpan8.github.io/CSV-Tool/guide/)** — sidomeny, sökruta, svensk/engelsk växlare och skärmbilder som förstoras vid klick. Efter en klon går `docs/guide.html` att öppna direkt från disk.
 
 > **Nybörjare?** Läs [Kom igång](#kom-igång) och [Så ser skärmen ut](#så-ser-skärmen-ut), sedan det avsnitt som svarar på din uppgift. Guiden är gjord för att slås upp, inte läsas rakt igenom.
 

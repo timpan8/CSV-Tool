@@ -6,7 +6,9 @@ Ett webbaserat verktyg för att läsa in, städa, matcha och exportera CSV- och 
 
 📖 **[Användarguide](docs/ANVANDARGUIDE.md)** — hur varje verktyg används, med bilder och ett klick till rätt avsnitt. ([User guide in English](docs/USER-GUIDE.md))
 
-Samma guide finns som **sida** med sidomeny, sökruta och svensk/engelsk växlare: den publiceras med appen på `…/guide/`, och `docs/guide.html` går att öppna direkt från disk efter en klon. Innehållet är detsamma — sidan är till för att slå upp i, markdown-filerna för att läsas på GitHub.
+🔎 **[Guiden som sida](https://timpan8.github.io/CSV-Tool/guide/)** — samma innehåll med sidomeny, sökruta, svensk/engelsk växlare och skärmbilder som förstoras vid klick. Efter en klon går `docs/guide.html` att öppna direkt från disk, utan server och utan byggsteg.
+
+Markdown-filerna är till för att läsas på GitHub, sidan för att slås upp i. Innehållet är detsamma, och ett test faller om de två glider isär.
 
 Guiden svarar på *hur gör jag*. Resten av den här filen svarar på *varför är det byggt så*.
 

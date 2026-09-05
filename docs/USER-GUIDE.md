@@ -17,7 +17,7 @@ How to use CSV-verkstan, one tool at a time. Each section says what the tool doe
 | **[7. Keeping your work](#keeping-your-work)** | [Profiles](#profiles) · [Your tabs come back](#your-tabs-come-back) · [Start over](#start-over) |
 | **[8. Shortcuts and settings](#shortcuts-and-settings)** | [The command palette](#the-command-palette) · [Keyboard](#keyboard) · [Language, theme and toolbar](#language-theme-and-toolbar) |
 
-> The guide is also available as a **page** — sidebar, search box, Swedish/English switch and screenshots that enlarge on click. It is published alongside the app at `…/guide/`, and after a clone `docs/guide.html` opens straight from disk.
+> The guide is also available as a **[page](https://timpan8.github.io/CSV-Tool/guide/?sprak=en)** — sidebar, search box, Swedish/English switch and screenshots that enlarge on click. After a clone, `docs/guide.html` opens straight from disk.
 
 > **New here?** Read [Getting started](#getting-started) and [What the screen looks like](#what-the-screen-looks-like), then the section that answers your task. The guide is made to be looked things up in, not read front to back.
 
