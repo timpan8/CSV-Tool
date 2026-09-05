@@ -3,8 +3,8 @@ import type { Column, Frame } from '../core/types.js'
 import { visibleColumns } from '../core/frame/frame.js'
 import { rubriknyckel } from '../core/ops/rubriker.js'
 import { stadningarEfterId } from '../core/ops/clean.js'
-import { delaVarde } from '../core/ops/columns.js'
-import { korMall, tolkaMall } from '../core/ops/columns.js'
+import { byggDelare } from '../core/ops/columns.js'
+import { korMallar, mallensKallor, tolkaMall, type Mallar } from '../core/ops/columns.js'
 import { datumTransform, tolkaDatum } from '../core/ops/dates.js'
 import { epostNamndelar, epostTransform } from '../core/ops/email.js'
 import { skrivTal, talTransform, tolkaTal } from '../core/ops/numbers.js'
@@ -254,14 +254,20 @@ function spec(steg: Profilsteg): Forhandsspec | null {
       if (!ersattare.fn) return null
       return { etikett, kind: 'replace', profil: steg, fn: ersattare.fn }
     }
-    case 'dela':
+    case 'dela': {
+      // Samma delare som panelen bygger, så ett mönster tolkas en gång och
+      // uppförandet inte kan glida isär mellan handgreppet och profilen.
+      const dela = byggDelare(steg.delning)
+      const tomma = new Array<string>(steg.namn.length).fill('')
       return {
         etikett,
         kind: 'split',
         profil: steg,
-        delar: (v) => delaVarde(v, steg.delning),
+        delar: (v) => dela(v) ?? tomma,
+        arProblem: steg.delning.satt === 'monster' ? (v) => dela(v) === null : undefined,
         nyaKolumner: steg.namn,
       }
+    }
     default:
       return null
   }
@@ -320,9 +326,19 @@ export function korSteg(tab: Tab, steg: Profilsteg): Stegresultat {
   }
 
   if (steg.typ === 'mall') {
-    const tolkning = tolkaMall(steg.mall, frame)
-    if (tolkning.okanda.length > 0) {
-      return { steg, utfall: 'kolumnSaknas', andrade: 0, saknad: tolkning.okanda.join(', ') }
+    // Alla tre mallarna tolkas mot filen: ett stavfel i undantaget för sista
+    // raden ska stoppa steget lika säkert som ett i huvudmallen.
+    const tolkningar = [steg.mall, steg.forsta, steg.sista]
+      .filter((m): m is string => m !== undefined)
+      .map((m) => tolkaMall(m, frame))
+    const okanda = [...new Set(tolkningar.flatMap((t) => t.okanda))]
+    if (okanda.length > 0) {
+      return { steg, utfall: 'kolumnSaknas', andrade: 0, saknad: okanda.join(', ') }
+    }
+    const mallar: Mallar = {
+      delar: tolkaMall(steg.mall, frame).delar,
+      forsta: steg.forsta === undefined ? null : tolkaMall(steg.forsta, frame).delar,
+      sista: steg.sista === undefined ? null : tolkaMall(steg.sista, frame).delar,
     }
     const forsta = frame.columns[0]
     if (!forsta) return { steg, utfall: 'kolumnSaknas', andrade: 0 }
@@ -332,7 +348,20 @@ export function korSteg(tab: Tab, steg: Profilsteg): Stegresultat {
         etikett: beskrivSteg(steg),
         kind: 'merge',
         profil: steg,
-        rad: (f, row) => [korMall(f, row, tolkning.delar, { stadaLuckor: steg.stadaLuckor })],
+        rad: (f, row) => [korMallar(f, row, mallar, { stadaLuckor: steg.stadaLuckor })],
+        // Avtrycket räknas mot den *nya* filen när kolumnen skapas, på samma
+        // sätt som löpnumret får nästa månads nummer och inte förra månadens.
+        regel: steg.komIhagMallen
+          ? {
+              typ: 'mall',
+              mall: steg.mall,
+              stadaLuckor: steg.stadaLuckor,
+              forsta: steg.forsta,
+              sista: steg.sista,
+              kallor: mallensKallor(frame, steg.mall, steg.forsta, steg.sista),
+              avtryck: 0,
+            }
+          : undefined,
         nyaKolumner: [steg.namn],
       },
       frame,

@@ -11,7 +11,7 @@ How to use CSV-verkstan, one tool at a time. Each section says what the tool doe
 | **[1. Getting started](#getting-started)** | [What the screen looks like](#what-the-screen-looks-like) |
 | **[2. Opening and exporting](#opening-and-exporting)** | [Open a file](#open-a-file) · [Export](#export) · [Paste as a new file](#paste-as-a-new-file) |
 | **[3. The table](#the-table)** | [Sort](#sort) · [Filter](#filter) · [Duplicates](#duplicates) · [Search](#search) · [Undo and redo](#undo-and-redo) |
-| **[4. Cleaning and rewriting](#cleaning-and-rewriting)** | [Quick text cleanups](#quick-text-cleanups) · [Dates](#dates) · [Numbers](#numbers) · [Phone numbers](#phone-numbers) · [Email to name](#email-to-name) · [Split a column](#split-a-column) · [Merge columns](#merge-columns) · [Calculate](#calculate) · [Find and replace](#find-and-replace) |
+| **[4. Cleaning and rewriting](#cleaning-and-rewriting)** | [Quick text cleanups](#quick-text-cleanups) · [Dates](#dates) · [Numbers](#numbers) · [Phone numbers](#phone-numbers) · [Email to name](#email-to-name) · [Split a column](#split-a-column) · [Split into rows](#split-into-rows) · [Build column from template](#build-column-from-template) · [Calculate](#calculate) · [Find and replace](#find-and-replace) |
 | **[5. Summarising and analysing](#summarising-and-analysing)** | [Group and summarise](#group-and-summarise) · [Pivot](#pivot) · [Column overview](#column-overview) · [The column inspector](#the-column-inspector) |
 | **[6. Multiple files](#multiple-files)** | [Merge two files](#merge-two-files) · [The matching workbench](#the-matching-workbench) · [Combine files](#combine-files) · [Fill a template with data](#fill-a-template-with-data) |
 | **[7. Keeping your work](#keeping-your-work)** | [Profiles](#profiles) · [Your tabs come back](#your-tabs-come-back) · [Start over](#start-over) |
@@ -235,18 +235,55 @@ Splits one column into several new ones. The new columns are drawn as ghost colu
 - **At the last** space keeps double first names together: `Anna Karlsson` and `Carl-Johan Nilsson` both split correctly.
 - Whatever does not fit lands in the last column instead of disappearing. The panel warns when that happens.
 
-### Merge columns
+**By a pattern** is the fifth way, and it is the template in reverse. Write the value the way it looks and put braces around what you want out:
+
+| Pattern | `last1 first1 <last1.first1@exempel.com>` becomes |
+| --- | --- |
+| `{Namn} <{E-post}>` | Namn = `last1 first1` · E-post = `last1.first1@exempel.com` |
+
+The text between the braces is the separators, and every pair of braces becomes a column with its own name. That the trailing text must sit at the end is what strips `<>` for free — no regular expression needed.
+
+- A value that does not match the pattern gets empty cells and is counted as a problem. **Only unmatched** filters those out, and the source column is left untouched, so nothing is lost.
+- Separators inside are searched from the left, exactly like **At the first**.
+
+### Split into rows
+
+Splits a column downwards instead of sideways: one row per part. Addresses copied out of Outlook sit as `a <x@y>; b <z@w>; c <q@r>` in a single cell, and they are not three fields on one person — they are three people.
+
+1. Column menu → **Split into rows…**
+2. Choose the character to split at, and click **Create a new tab with 48 rows**. The number is on the button.
+
+- The result becomes a **new tab**. The original tab is left alone, and the other columns' values come along down onto the new rows.
+- The split goes on **what you see**: if you have filtered, those are the rows that get split, and the panel says so.
+- A cell with no separator gives one unchanged row. No row disappears because a cell was empty.
+- The other direction is **Group and summarise** with the *list* calculation, which lines up the group's values on one row. It caps at 50 values and writes out how many more there were, so a truncated list never looks complete.
+
+If you paste the list as its own file, the import guesses semicolon — the right guess for a CSV, the wrong one for an address list where the semicolons separate *people* and not *fields*. Choose **Pipe** in the import dialog and the row stays whole. That is the only place the choice can be made: afterwards it is already split.
+
+### Build column from template
 
 ![The template tool building a new column](bilder/en/slaihop-kolumner.png)
 
-Builds a new column from a template.
+Builds a new column from a template. Two things in one: the template merges columns, and it wraps each value in a structure.
 
-1. Column menu → **Merge columns…**
-2. Write the template, e.g. `{Förnamn} {Efternamn}` or `{Namn}, {Ort}`. **Add column** inserts a name for you.
+1. Column menu → **Build column from template…**
+2. Write the template, e.g. `{Förnamn} {Efternamn}` or `('{Namn}'),`. **Add column** inserts a name for you.
 3. **Create the column**.
+
+Everything outside the braces comes along as written, so the template builds a line of SQL, a PowerShell array or a JSON list just as readily as a full name.
 
 - Column names that do not exist are reported as an error instead of quietly coming out empty.
 - **Clear out the gaps left by empty values** removes the double spaces that otherwise appear when a field is empty.
+
+**The first and last rows can look different.** A SQL list needs `('Anna'),` on every row except the last, which must lack the comma. Tick **The last row should look different** and the field is filled with the main template, so you only change the ending. The **How it comes out** box shows the first, a middle and the last row from your own file, so the exception is visible without scrolling to the bottom.
+
+The first and last rows are counted in **the order you see now**. That is the same order `Ctrl+C` copies, which is the whole point: a physical reading would have put the comma on the last copied row.
+
+**The column remembers its template.** With **Remember the template for the column** ticked, the header gets a `template` badge. The column **never** recalculates on its own — but when the sources change the badge turns yellow and the status bar offers **Update**, exactly the way *Sort again* does for a sorted list. The update is a single `Ctrl+Z`.
+
+- The column menu has **Update from the template**, **Change the template…** and **Drop the template** when the column has one.
+- If you rename a source column the template comes along, in the same undo step.
+- If you delete a source column the badge says so instead of the column being filled with half values. `Ctrl+Z` brings it back to life.
 
 ### Calculate
 

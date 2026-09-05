@@ -198,13 +198,63 @@ export const VERKTYG: Record<string, string> = {
   '{0} av {1} ger värden': '{0} of {1} give values',
   ' · {0} saknar avgränsare': ' · {0} have no separator',
   'Bara odelade': 'Only unsplit',
+  'Bara omatchade': 'Only unmatched',
+
+  /* ---------- Dela till rader ---------- */
+  'Dela till rader': 'Split into rows',
+  'Dela till rader…': 'Split into rows…',
+  'Radbrytning': 'Line break',
+  'Eget tecken': 'Own character',
+  'Trimma blanksteg runt varje del': 'Trim whitespace around each part',
+  'Hoppa över tomma delar': 'Skip empty parts',
+  'Skapa ny flik med {0} rader': 'Create a new tab with {0} rows',
+  'Välj vad det ska delas vid.': 'Choose what to split at.',
+  '{0} blir {1}.': '{0} becomes {1}.',
+  ' {0} saknar avgränsare och följer med som de är.':
+    ' {0} have no separator and come along as they are.',
+  'Delade till {0} rader i en ny flik.': 'Split into {0} rows in a new tab.',
+  'Delningen går på det du ser: {0} av filens {1} rader kommer med. Rensa filtret om du vill ha allihop.':
+    'The split goes on what you see: {0} of the file’s {1} rows come along. Clear the filter if you want them all.',
+  'Resultatet blir en ny flik. Den här filen rörs inte — övriga kolumners värden följer med ner på de nya raderna.':
+    'The result becomes a new tab. This file is left alone — the other columns’ values come along down onto the new rows.',
+
+  /* ---------- Plocka ut med mönster ---------- */
+  Mönster: 'Pattern',
+  'Efter ett mönster': 'By a pattern',
+  'Skriv värdet som det ser ut och sätt klammer runt det du vill plocka ut: {Namn} <{E-post}>. Texten emellan är avgränsarna, och varje klammer blir en kolumn med sitt namn.':
+    'Write the value the way it looks and put braces around what you want out: {Name} <{Email}>. The text in between is the separators, and every pair of braces becomes a column with its name.',
+  'Skriv värdet som det ser ut och sätt {0} runt det du vill plocka ut. Texten emellan är avgränsarna, och varje klammer blir en kolumn.':
+    'Write the value the way it looks and put {0} around what you want out. The text in between is the separators, and every pair of braces becomes a column.',
+  'Plockade ur ”{0}” med ett mönster': 'Extracted from “{0}” with a pattern',
+  ' · {0} matchar inte mönstret och får tomma celler':
+    ' · {0} do not match the pattern and get empty cells',
+  'Källkolumnen står kvar orörd. Ett värde som inte matchar tappas alltså aldrig — det ligger kvar där det stod.':
+    'The source column is left untouched. A value that does not match is therefore never lost — it stays where it was.',
+  'Mönstret har ingen klammer att plocka ut. Skriv {Namn} där ett värde står.':
+    'The pattern has no braces to pull out. Write {Name} where a value goes.',
+  'En klammer saknar namn. Kolumnen skulle bli namnlös.':
+    'A pair of braces has no name. The column would end up nameless.',
+  'Två klamrar i rad går inte att skilja åt. Sätt tecknet som står emellan i mönstret.':
+    'Two pairs of braces in a row cannot be told apart. Put the character between them into the pattern.',
   'Delade ”{0}” i {1} kolumner': 'Split “{0}” into {1} columns',
 
 
-  /* ---------- Slå ihop kolumner ---------- */
-  'Slå ihop kolumner': 'Merge columns',
+  /* ---------- Bygg kolumn ur mall ---------- */
+  'Bygg kolumn ur mall': 'Build column from template',
+  Undantag: 'Exceptions',
+  'Första raden ska se annorlunda ut': 'The first row should look different',
+  'Sista raden ska se annorlunda ut': 'The last row should look different',
+  'Mall för första raden': 'Template for the first row',
+  'Mall för sista raden': 'Template for the last row',
+  'Första raden': 'First row',
+  'Sista raden': 'Last row',
+  'Så blir det': 'How it comes out',
+  'Kom ihåg mallen för kolumnen': 'Remember the template for the column',
+  'Kolumnen märks som byggd ur mallen. Den räknas aldrig om av sig själv — men när källorna ändrats får du en Uppdatera i statusraden.':
+    'The column is marked as built from the template. It never recalculates on its own — but when the sources change you get an Update in the status bar.',
+  'Första och sista raden är de du ser nu. Sorterar eller filtrerar du om behöver kolumnen byggas om.':
+    'The first and last rows are the ones you see now. Sort or filter differently and the column needs rebuilding.',
   Sammanslagen: 'Merged',
-  'Slog ihop till ”{0}”': 'Merged into “{0}”',
   Mall: 'Template',
   'Skriv {0} där ett värde ska in. Allt annat kommer med som det står.':
     'Write {0} where a value should go. Everything else comes along as written.',
@@ -420,7 +470,7 @@ export const VERKTYG: Record<string, string> = {
   'Telefon…': 'Phone numbers…',
   'E-post → namn…': 'Email → name…',
   'Dela kolumnen…': 'Split the column…',
-  'Slå ihop kolumner…': 'Merge columns…',
+  'Bygg kolumn ur mall…': 'Build column from template…',
   'Räkna…': 'Calculate…',
   'Sök och ersätt…': 'Find and replace…',
   'Trimma blanksteg': 'Trim whitespace',

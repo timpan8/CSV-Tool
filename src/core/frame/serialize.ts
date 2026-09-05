@@ -1,4 +1,4 @@
-import type { Column, ColumnType, Frame, FrameMeta } from '../types.js'
+import type { Column, ColumnType, Frame, FrameMeta, Kolumnregel } from '../types.js'
 import { identityView } from './frame.js'
 
 /**
@@ -28,6 +28,8 @@ export interface SerializedColumn {
    * därför inte höjas — en höjning kastar allt användaren har sparat.
    */
   sortordning?: readonly string[]
+  /** Mallregeln, om kolumnen byggdes ur en. Valfri av samma skäl som ovan. */
+  regel?: Kolumnregel
 }
 
 export interface SerializedFrame {
@@ -72,6 +74,7 @@ export function serializeFrame(frame: Frame): SerializedPayload {
       codes,
       flags,
       ...(col.sortordning ? { sortordning: col.sortordning } : {}),
+      ...(col.regel ? { regel: col.regel } : {}),
     }
   })
   const sourceRow = bufferOf(frame.sourceRow)
@@ -105,6 +108,7 @@ export function deserializeFrame(payload: SerializedFrame): Frame {
       flags: new Uint8Array(c.flags),
       dictIndex,
       ...(c.sortordning ? { sortordning: c.sortordning } : {}),
+      ...(c.regel ? { regel: c.regel } : {}),
     }
   })
   return {

@@ -251,7 +251,7 @@ for (const sprak of SPRAK) {
 
     test('slå ihop kolumner', async ({ page }) => {
       await oppnaExempel(page)
-      await oppnaVerktyg(page, 'Namn', 'Slå ihop kolumner…')
+      await oppnaVerktyg(page, 'Namn', 'Bygg kolumn ur mall…')
       await falt(page, 'Mall').locator('input').first().fill('{Namn}, {Ort}')
       await expect(page.locator('.rubrik--spoke')).toHaveCount(1)
       await bild(page, panel(page), 'slaihop-kolumner')

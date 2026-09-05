@@ -11,7 +11,7 @@ Hur du använder CSV-verkstan, ett verktyg i taget. Varje avsnitt säger vad ver
 | **[1. Kom igång](#kom-igång)** | [Så ser skärmen ut](#så-ser-skärmen-ut) |
 | **[2. Öppna och exportera](#öppna-och-exportera)** | [Öppna en fil](#öppna-en-fil) · [Exportera](#exportera) · [Klistra in som en ny fil](#klistra-in-som-en-ny-fil) |
 | **[3. Tabellen](#tabellen)** | [Sortera](#sortera) · [Filter](#filter) · [Dubbletter](#dubbletter) · [Sök](#sök) · [Ångra och gör om](#ångra-och-gör-om) |
-| **[4. Städa och skriva om](#städa-och-skriva-om)** | [Snabbstädning av text](#snabbstädning-av-text) · [Datum](#datum) · [Tal](#tal) · [Telefon](#telefon) · [E-post till namn](#e-post-till-namn) · [Dela en kolumn](#dela-en-kolumn) · [Slå ihop kolumner](#slå-ihop-kolumner) · [Räkna](#räkna) · [Sök och ersätt](#sök-och-ersätt) |
+| **[4. Städa och skriva om](#städa-och-skriva-om)** | [Snabbstädning av text](#snabbstädning-av-text) · [Datum](#datum) · [Tal](#tal) · [Telefon](#telefon) · [E-post till namn](#e-post-till-namn) · [Dela en kolumn](#dela-en-kolumn) · [Dela till rader](#dela-till-rader) · [Bygg kolumn ur mall](#bygg-kolumn-ur-mall) · [Räkna](#räkna) · [Sök och ersätt](#sök-och-ersätt) |
 | **[5. Sammanfatta och analysera](#sammanfatta-och-analysera)** | [Gruppera och summera](#gruppera-och-summera) · [Pivot](#pivot) · [Kolumnöversikt](#kolumnöversikt) · [Kolumninspektören](#kolumninspektören) |
 | **[6. Flera filer](#flera-filer)** | [Slå ihop två filer](#slå-ihop-två-filer) · [Matchningsverkstaden](#matchningsverkstaden) · [Kombinera filer](#kombinera-filer) · [Fyll en mall med data](#fyll-en-mall-med-data) |
 | **[7. Spara arbetet](#spara-arbetet)** | [Profiler](#profiler) · [Flikarna finns kvar](#flikarna-finns-kvar) · [Börja om](#börja-om) |
@@ -233,18 +233,55 @@ Delar en kolumn i flera nya. De nya kolumnerna ritas som spökkolumner med strec
 - **Vid sista** mellanslaget håller ihop dubbelnamn: `Anna Karlsson` och `Carl-Johan Nilsson` delas lika.
 - Det som inte får plats hamnar i sista kolumnen i stället för att försvinna. Panelen varnar när det händer.
 
-### Slå ihop kolumner
+**Efter ett mönster** är det femte sättet, och det är mallen baklänges. Skriv värdet som det ser ut och sätt klamrar runt det du vill plocka ut:
+
+| Mönster | `last1 first1 <last1.first1@exempel.com>` blir |
+| --- | --- |
+| `{Namn} <{E-post}>` | Namn = `last1 first1` · E-post = `last1.first1@exempel.com` |
+
+Texten mellan klamrarna är avgränsarna, och varje klammer blir en kolumn med sitt eget namn. Att den avslutande texten måste sitta i slutet är det som städar bort `<>` på köpet — inget reguljärt uttryck behövs.
+
+- Ett värde som inte matchar mönstret ger tomma celler och räknas som ett problem. **Bara omatchade** filtrerar fram just dem, och källkolumnen står kvar orörd, så ingenting tappas.
+- Avgränsare inuti söks från vänster, precis som **Vid första**.
+
+### Dela till rader
+
+Delar en kolumn på höjden i stället för på bredden: en rad per del. Adresser klistrade ur Outlook ligger som `a <x@y>; b <z@w>; c <q@r>` i en enda cell, och de är inte tre fält på en person — de är tre personer.
+
+1. Kolumnmenyn → **Dela till rader…**
+2. Välj vid vilket tecken, och klicka **Skapa ny flik med 48 rader**. Antalet står på knappen.
+
+- Resultatet blir en **ny flik**. Originalfliken rörs inte, och övriga kolumners värden följer med ner på de nya raderna.
+- Delningen går på **det du ser**: har du filtrerat är det de raderna som delas, och panelen säger det.
+- En cell utan avgränsare ger en oförändrad rad. Ingen rad försvinner för att en cell var tom.
+- Åt andra hållet finns **Gruppera och summera** med beräkningen *lista*, som radar upp gruppens värden på en rad. Den kapar vid 50 värden och skriver ut hur många fler det fanns, så en kapad lista aldrig ser ut som en fullständig.
+
+Klistrar du in listan som en egen fil gissar importen på semikolon — rätt gissning för en CSV, fel för en adresslista där semikolonen skiljer *personer* och inte *fält*. Välj **Lodstreck** i importdialogen, så håller raden ihop. Det är den enda platsen valet går att göra: efteråt är den redan delad.
+
+### Bygg kolumn ur mall
 
 ![Mallverktyget som bygger en ny kolumn](bilder/sv/slaihop-kolumner.png)
 
-Bygger en ny kolumn ur en mall.
+Bygger en ny kolumn ur en mall. Två saker i ett: mallen slår ihop kolumner, och den lägger en struktur runt varje värde.
 
-1. Kolumnmenyn → **Slå ihop kolumner…**
-2. Skriv mallen, t.ex. `{Förnamn} {Efternamn}` eller `{Namn}, {Ort}`. **Lägg till kolumn** sätter in ett namn åt dig.
+1. Kolumnmenyn → **Bygg kolumn ur mall…**
+2. Skriv mallen, t.ex. `{Förnamn} {Efternamn}` eller `('{Användarnamn}'),`. **Lägg till kolumn** sätter in ett namn åt dig.
 3. **Skapa kolumnen**.
+
+Allt som inte står inom klamrar kommer med som det står, så mallen bygger lika gärna en rad SQL, en PowerShell-array eller en JSON-lista som ett fullständigt namn.
 
 - Kolumnnamn som inte finns rapporteras som ett fel i stället för att tyst bli tomma.
 - **Städa bort luckor efter tomma värden** tar bort de dubbla mellanslag som annars uppstår när ett fält är tomt.
+
+**Första och sista raden kan se annorlunda ut.** En SQL-lista behöver `('Anna'),` på varje rad utom den sista, som ska sakna kommatecknet. Kryssa i **Sista raden ska se annorlunda ut**, så fylls fältet med huvudmallen och du ändrar bara slutet. Rutan **Så blir det** visar första, mitten- och sista raden ur din egen fil, så undantaget syns utan att du behöver scrolla till botten.
+
+Första och sista raden räknas i **den ordning du ser nu**. Det är samma ordning som kopieras med `Ctrl+C`, vilket är hela poängen: en fysisk tolkning hade satt kommatecknet på den sista kopierade raden.
+
+**Kolumnen minns sin mall.** Med **Kom ihåg mallen för kolumnen** ikryssat får rubriken märket `mall`. Kolumnen räknas **aldrig** om av sig själv — men när källorna ändrats blir märket gult och statusraden erbjuder **Uppdatera**, precis som *Sortera om* gör för en sorterad lista. Uppdateringen är ett enda `Ctrl+Z`.
+
+- Kolumnmenyn har **Uppdatera ur mallen**, **Ändra mallen…** och **Släpp mallen** när kolumnen har en.
+- Döper du om en källkolumn följer mallen med, i samma ångra-steg.
+- Tar du bort en källkolumn säger märket ifrån i stället för att kolumnen fylls med halva värden. `Ctrl+Z` väcker den till liv igen.
 
 ### Räkna
 

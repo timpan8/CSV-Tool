@@ -104,11 +104,47 @@ test('varnar när ett värde delas i fler delar än det finns kolumner', async (
   await expect(spokceller(page).nth(2)).toHaveText('se')
 })
 
-/* ---------- Slå ihop ---------- */
+test('plockar ut namn och adress ur ett mönster', async ({ page }) => {
+  await oppnaExempel(page)
+  await oppna(page, 'E-post', 'Dela kolumnen…')
+
+  await page.getByRole('radio', { name: 'Efter ett mönster' }).click()
+  const monsterfalt = page.locator('.verktyg .falt', { hasText: 'Mönster' }).locator('input').first()
+
+  // Exempelfilens adresser är `fornamn.efternamn@domän`, så mönstret plockar
+  // isär dem utan att man behöver skriva ett reguljärt uttryck.
+  await monsterfalt.fill('{Förnamn}.{Efternamn}@{Domän}')
+
+  // Kolumnnamnen kommer ur klamrarna, inte ur källkolumnens namn.
+  await expect(page.locator('.rubrik--spoke')).toHaveCount(3)
+  await expect(spokceller(page).nth(0)).toHaveText('anna')
+  await expect(spokceller(page).nth(1)).toHaveText('karlsson')
+  await expect(spokceller(page).nth(2)).toHaveText('nordbygg.se')
+
+  // `info@angstrom.se` har ingen punkt före krullalfa och matchar inte.
+  await expect(page.locator('.verktyg .verktyg__problem')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Skapa 3 kolumner' }).click()
+  await expect(cell(page, 'nordbygg.se').first()).toBeVisible()
+})
+
+test('vägrar ett mönster med två klamrar i rad', async ({ page }) => {
+  await oppnaExempel(page)
+  await oppna(page, 'E-post', 'Dela kolumnen…')
+
+  await page.getByRole('radio', { name: 'Efter ett mönster' }).click()
+  const monsterfalt = page.locator('.verktyg .falt', { hasText: 'Mönster' }).locator('input').first()
+  await monsterfalt.fill('{Ett}{Tva}')
+
+  await expect(page.locator('.verktyg .notis--fara')).toContainText('Två klamrar i rad')
+  await expect(page.getByRole('button', { name: /Skapa \d+ kolumner/ })).toBeDisabled()
+})
+
+/* ---------- Bygg kolumn ur mall ---------- */
 
 test('slår ihop kolumner efter en mall', async ({ page }) => {
   await oppnaExempel(page)
-  await oppna(page, 'Namn', 'Slå ihop kolumner…')
+  await oppna(page, 'Namn', 'Bygg kolumn ur mall…')
 
   const mallfalt = page.locator('.verktyg .falt', { hasText: 'Mall' }).locator('input').first()
   await mallfalt.fill('{Namn}, {Ort}')
@@ -120,9 +156,36 @@ test('slår ihop kolumner efter en mall', async ({ page }) => {
   await expect(cell(page, 'Anna Karlsson, Malmö').first()).toBeVisible()
 })
 
+test('lägger en SQL-struktur runt värdena och utelämnar kommatecknet sist', async ({ page }) => {
+  await oppnaExempel(page)
+  await oppna(page, 'Namn', 'Bygg kolumn ur mall…')
+
+  const mallfalt = page.locator('.verktyg .falt', { hasText: 'Mall' }).locator('input').first()
+  await mallfalt.fill("('{Namn}'),")
+
+  await page.getByRole('checkbox', { name: 'Sista raden ska se annorlunda ut' }).check()
+  // Undantaget börjar som en kopia av huvudmallen, så bara slutet ändras.
+  const sistafalt = page.getByRole('textbox', { name: 'Mall för sista raden' })
+  await expect(sistafalt).toHaveValue("('{Namn}'),")
+  await sistafalt.fill("('{Namn}')")
+
+  // Rutan visar första och sista raden ur filen, inte bara toppen — annars
+  // hade undantaget krävt att man scrollade till botten för att se det.
+  const prov = page.locator('.verktyg .falt', { hasText: 'Så blir det' })
+  await expect(prov).toContainText("('Anna Karlsson'),")
+  await expect(prov).toContainText("('Greta Öhrn')")
+
+  await page.getByRole('button', { name: 'Skapa kolumnen' }).click()
+  await expect(cell(page, "('Anna Karlsson'),").first()).toBeVisible()
+
+  // Sista radens värde saknar kommatecknet, och bara den.
+  await expect(cell(page, "('Greta Öhrn')")).toHaveCount(1)
+  await expect(cell(page, "('Greta Öhrn'),")).toHaveCount(0)
+})
+
 test('vägrar skapa kolumnen när mallen pekar på en kolumn som inte finns', async ({ page }) => {
   await oppnaExempel(page)
-  await oppna(page, 'Namn', 'Slå ihop kolumner…')
+  await oppna(page, 'Namn', 'Bygg kolumn ur mall…')
 
   const mallfalt = page.locator('.verktyg .falt', { hasText: 'Mall' }).locator('input').first()
   await mallfalt.fill('{Namn} {Stad}')

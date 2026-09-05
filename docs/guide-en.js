@@ -277,22 +277,50 @@ window.GUIDE_EN = {
           ],
           notes: [
             '**At the last** space keeps double first names together: `Anna Karlsson` and `Carl-Johan Nilsson` both split correctly.',
-            'Whatever does not fit lands in the last column instead of disappearing. The panel warns when that happens.'
+            'Whatever does not fit lands in the last column instead of disappearing. The panel warns when that happens.',
+            '**By a pattern** is the fifth way, and it is the template in reverse: write the value the way it looks and put braces around what you want out. The text in between is the separators, and every pair of braces becomes a column with its own name.',
+            'That the trailing text must sit at the end is what strips `<>` for free — no regular expression needed. Separators inside are searched from the left, exactly like **At the first**.',
+            'A value that does not match the pattern gets empty cells and is counted as a problem. **Only unmatched** filters those out, and the source column is left untouched, so nothing is lost.'
+          ],
+          before: { t: 'The value', items: ['last1 first1 <last1.first1@exempel.com>'] },
+          after: { t: 'The pattern {Namn} <{E-post}> gives', items: ['Namn: last1 first1 · E-post: last1.first1@exempel.com'] }
+        },
+        {
+          id: 'dela-till-rader', t: 'Split into rows',
+          lead: 'Splits a column downwards instead of sideways: **one row per part**. Addresses copied out of Outlook sit as `a <x@y>; b <z@w>; c <q@r>` in a single cell, and they are not three fields on one person — they are three people.',
+          steps: [
+            'Column menu → **Split into rows…**',
+            'Choose the character to split at.',
+            'Click **Create a new tab with 48 rows**. The number is on the button.'
+          ],
+          notes: [
+            'The result becomes a **new tab**. The original tab is left alone, and the other columns\' values come along down onto the new rows.',
+            'The split goes on **what you see**: if you have filtered, those are the rows that get split, and the panel says so.',
+            'A cell with no separator gives one unchanged row. No row disappears because a cell was empty.',
+            'If you paste the list as its own file, the import guesses semicolon — right for a CSV, wrong for an address list where the semicolons separate *people* and not *fields*. Choose **Pipe** in the import dialog and the row stays whole. That is the only place the choice can be made: afterwards it is already split.',
+            'The other direction is **Group and summarise** with the *list* calculation. It caps at fifty values and writes out how many more there were, so a truncated list never looks complete.'
           ]
         },
         {
-          id: 'slaihop-kolumner', t: 'Merge columns', img: 'slaihop-kolumner.png',
-          cap: 'The template tool builds a new column from a template.',
-          lead: 'Builds a new column from a template.',
+          id: 'slaihop-kolumner', t: 'Build column from template', img: 'slaihop-kolumner.png',
+          cap: 'The template tool builds a new column from a template, with exceptions for the first and last rows.',
+          lead: 'Builds a new column from a template. Two things in one: the template merges columns, and it wraps each value in a structure. Everything outside the braces comes along as written, so the template builds a line of SQL just as readily as a full name.',
           steps: [
-            'Column menu → **Merge columns…**',
-            'Write the template, e.g. `{Förnamn} {Efternamn}` or `{Namn}, {Ort}`. **Add column** inserts a name for you.',
+            'Column menu → **Build column from template…**',
+            'Write the template, e.g. `{Förnamn} {Efternamn}` or `(\'{Namn}\'),`. **Add column** inserts a name for you.',
+            'If the last row needs to look different — a SQL list has no comma there — tick **The last row should look different** and change only the ending.',
             'Click **Create the column**.'
           ],
           notes: [
             'Column names that do not exist are reported as an error instead of quietly coming out empty.',
-            '**Clear out the gaps left by empty values** removes the double spaces that otherwise appear when a field is empty.'
-          ]
+            '**Clear out the gaps left by empty values** removes the double spaces that otherwise appear when a field is empty.',
+            'The **How it comes out** box shows the first, a middle and the last row from your own file. The exception is otherwise visible in two cells out of a thousand.',
+            'The first and last rows are counted in **the order you see now** — the same order `Ctrl+C` copies. A physical reading would have put the comma on the last copied row.',
+            '**The column remembers its template** with **Remember the template for the column** ticked. The header gets a `template` badge, and the column **never** recalculates on its own — but when the sources change the badge turns yellow and the status bar offers **Update**, exactly the way *Sort again* does for a sorted list. The update is a single `Ctrl+Z`.',
+            'The column menu has **Update from the template**, **Change the template…** and **Drop the template** when the column has one. If you rename a source column the template comes along; if you delete one the badge says so instead of the column being filled with half values.'
+          ],
+          before: { t: 'The template', items: ["('{Namn}'),", "last row: ('{Namn}')"] },
+          after: { t: 'The column', items: ["('Anna Karlsson'),", "('Greta Öhrn')"] }
         },
         {
           id: 'rakna', t: 'Calculate', img: 'rakna.png',

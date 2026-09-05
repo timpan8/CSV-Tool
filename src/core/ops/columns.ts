@@ -1,4 +1,4 @@
-import type { Frame } from '../types.js'
+import type { Frame, Kolumnregel } from '../types.js'
 import { getCell } from '../frame/column.js'
 import { normalizeAlways } from '../locale/sv.js'
 
@@ -14,7 +14,7 @@ import { normalizeAlways } from '../locale/sv.js'
 
 /* ---------- Dela ---------- */
 
-export type Delningssatt = 'avgransare' | 'forsta' | 'sista' | 'position'
+export type Delningssatt = 'avgransare' | 'forsta' | 'sista' | 'position' | 'monster'
 
 export const DELNINGSSATT: { varde: Delningssatt; etikett: string; titel: string }[] = [
   {
@@ -37,6 +37,12 @@ export const DELNINGSSATT: { varde: Delningssatt; etikett: string; titel: string
     etikett: 'Efter antal tecken',
     titel: 'Delar på en fast position. Användbart för koder med fast längd.',
   },
+  {
+    varde: 'monster',
+    etikett: 'Efter ett mönster',
+    titel:
+      'Skriv värdet som det ser ut och sätt klammer runt det du vill plocka ut: {Namn} <{E-post}>. Texten emellan är avgränsarna, och varje klammer blir en kolumn med sitt namn.',
+  },
 ]
 
 export interface Delning {
@@ -49,6 +55,12 @@ export interface Delning {
   antal: number
   /** Trimma blanksteg runt varje del. */
   trimma: boolean
+  /**
+   * Mönstret för `monster`-läget, med mallens egen syntax.
+   *
+   * Valfritt, så att `Delning` i sparade profiler läses oförändrat.
+   */
+  monster?: string
 }
 
 export const STANDARDDELNING: Delning = {
@@ -136,6 +148,30 @@ export interface Malltolkning {
 const PLATSHALLARE = /\{([^{}]*)\}/g
 
 /**
+ * Delar en malltext i text- och platshållardelar.
+ *
+ * Vet ingenting om filen, och det är hela poängen: mönsteruttaget i
+ * `plockaUr` läser samma syntax, men där namnger platshållarna kolumner som
+ * ännu inte finns. En tolkning som krävde att namnen redan fanns hade gjort
+ * uttaget omöjligt att uttrycka med samma syntax som mallen.
+ */
+export function delaMall(text: string): Malldel[] {
+  const delar: Malldel[] = []
+  let sist = 0
+
+  PLATSHALLARE.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = PLATSHALLARE.exec(text)) !== null) {
+    if (m.index > sist) delar.push({ typ: 'text', varde: text.slice(sist, m.index) })
+    delar.push({ typ: 'kolumn', namn: m[1]!.trim() })
+    sist = m.index + m[0].length
+  }
+  if (sist < text.length) delar.push({ typ: 'text', varde: text.slice(sist) })
+
+  return delar
+}
+
+/**
  * Tolkar en mall som `{Förnamn} {Efternamn}`.
  *
  * Namn som inte finns i filen rapporteras i stället för att tyst bli tomma.
@@ -143,26 +179,18 @@ const PLATSHALLARE = /\{([^{}]*)\}/g
  * det är svårt att upptäcka när man bara ser resultatet.
  */
 export function tolkaMall(text: string, frame: Frame): Malltolkning {
-  const delar: Malldel[] = []
+  const delar = delaMall(text)
   const okanda: string[] = []
   const anvanda: string[] = []
-  let sist = 0
 
-  PLATSHALLARE.lastIndex = 0
-  let m: RegExpExecArray | null
-  while ((m = PLATSHALLARE.exec(text)) !== null) {
-    if (m.index > sist) delar.push({ typ: 'text', varde: text.slice(sist, m.index) })
-    const namn = m[1]!.trim()
-    delar.push({ typ: 'kolumn', namn })
-    const finns = frame.columns.some((c) => c.name === namn)
-    if (finns) {
-      if (!anvanda.includes(namn)) anvanda.push(namn)
-    } else if (!okanda.includes(namn)) {
-      okanda.push(namn)
+  for (const del of delar) {
+    if (del.typ !== 'kolumn') continue
+    if (frame.columns.some((c) => c.name === del.namn)) {
+      if (!anvanda.includes(del.namn)) anvanda.push(del.namn)
+    } else if (!okanda.includes(del.namn)) {
+      okanda.push(del.namn)
     }
-    sist = m.index + m[0].length
   }
-  if (sist < text.length) delar.push({ typ: 'text', varde: text.slice(sist) })
 
   return { delar, okanda, anvanda }
 }
@@ -195,4 +223,325 @@ export function korMall(
     }
   }
   return val.stadaLuckor ? ut.replace(/\s{2,}/g, ' ').trim() : ut
+}
+
+/**
+ * Huvudmallen och undantagen för första och sista raden.
+ *
+ * `null` betyder att raden följer huvudmallen. Undantagen finns för listor som
+ * bär en struktur runt sig: `('anna'),` på varje rad utom den sista, som ska
+ * sakna kommatecknet för att SQL-frågan ska gå att köra. Att sätta ihop den
+ * listan för hand är precis det slit ett verktyg ska ta bort.
+ */
+export interface Mallar {
+  delar: Malldel[]
+  forsta: Malldel[] | null
+  sista: Malldel[] | null
+}
+
+/**
+ * Mallen som gäller för en rad.
+ *
+ * Första och sista raden räknas i **vyns** ordning, inte filens. Skälet är att
+ * det är vyns sista rad som hamnar sist när markeringen kopieras med Ctrl+C —
+ * en fysisk tolkning hade satt kommatecknet på den sista kopierade raden och
+ * lämnat en kommalös rad mitt i listan, alltså precis det fel undantaget finns
+ * för att undvika. Priset är att en omsortering gör kolumnen inaktuell, och
+ * det är just vad regeln i statusraden säger till om.
+ *
+ * Är vyn en enda rad är den både första och sista. Då vinner `sista`: en lista
+ * med ett element behöver ingen inledning, men den behöver sitt slut.
+ *
+ * En rad som filtrerats bort ligger inte i vyn alls och följer huvudmallen.
+ */
+export function valjMall(frame: Frame, row: number, mallar: Mallar): Malldel[] {
+  const view = frame.view
+  if (view.length > 0) {
+    if (mallar.sista && view[view.length - 1] === row) return mallar.sista
+    if (mallar.forsta && view[0] === row) return mallar.forsta
+  }
+  return mallar.delar
+}
+
+/** Kör den mall som gäller för raden. */
+export function korMallar(
+  frame: Frame,
+  row: number,
+  mallar: Mallar,
+  val: Mallval = { stadaLuckor: true },
+): string {
+  return korMall(frame, row, valjMall(frame, row, mallar), val)
+}
+
+/* ---------- Plocka ut med mönster ---------- */
+
+/**
+ * Uttag är delning uttryckt med mallens syntax, och det är med flit.
+ *
+ * `{Namn} <{E-post}>` bygger en text i mallverktyget och plockar isär samma
+ * text här. En egen syntax för uttaget hade varit ett andra språk att lära
+ * sig för samma tanke — och ett reguljärt uttryck hade varit ett tredje.
+ *
+ * Texten mellan klamrarna är avgränsarna. Att den avslutande texten måste
+ * sitta i slutet är det som gör att `<>` städas bort på köpet: `>` i
+ * mönstret betyder *värdet slutar här*, inte *dela vid första bästa `>`*.
+ */
+
+/** Namnen på de kolumner ett mönster ger, i ordning. */
+export function monsterkolumner(delar: readonly Malldel[]): string[] {
+  return delar.filter((d): d is { typ: 'kolumn'; namn: string } => d.typ === 'kolumn').map((d) => d.namn)
+}
+
+/**
+ * Varför mönstret inte går att köra, eller null när det gör det.
+ *
+ * Meningarna är konstanta och går därför att slå upp i ordboken, till
+ * skillnad från formelmotorns fel som byggs kring ett tecken.
+ */
+export function monsterfel(delar: readonly Malldel[]): string | null {
+  const kolumner = delar.filter((d) => d.typ === 'kolumn')
+  if (kolumner.length === 0) {
+    return 'Mönstret har ingen klammer att plocka ut. Skriv {Namn} där ett värde står.'
+  }
+  if (kolumner.some((d) => d.typ === 'kolumn' && d.namn === '')) {
+    return 'En klammer saknar namn. Kolumnen skulle bli namnlös.'
+  }
+  for (let i = 0; i + 1 < delar.length; i++) {
+    if (delar[i]!.typ === 'kolumn' && delar[i + 1]!.typ === 'kolumn') {
+      return 'Två klamrar i rad går inte att skilja åt. Sätt tecknet som står emellan i mönstret.'
+    }
+  }
+  return null
+}
+
+/**
+ * Plockar ut ett värde per klammer, eller null när värdet inte matchar.
+ *
+ * Aldrig ett halvt uttag: matchar inte mönstret får raden tomma celler och
+ * räknas som ett problem, medan källkolumnen står kvar orörd. Att skriva
+ * `last1 first1` i en kolumn som heter *E-post* vore ett påstående som inte
+ * stämmer, och det är värre än en tom cell.
+ *
+ * Avgränsaren söks från vänster, precis som *Vid första* redan gör. Ett
+ * mönster som `{Förnamn} {Efternamn} <{E-post}>` delar därför `Anna Maria
+ * Karlsson` som *Anna* + *Maria Karlsson*, inte tvärtom.
+ */
+export function plockaUr(
+  rawValue: string,
+  delar: readonly Malldel[],
+  trimma: boolean,
+): string[] | null {
+  const value = normalizeAlways(rawValue)
+  const ut: string[] = []
+  let pos = 0
+
+  for (let i = 0; i < delar.length; i++) {
+    const del = delar[i]!
+    if (del.typ === 'text') {
+      // En textdel efter en klammer konsumeras av klammerns egen gren, så den
+      // här kan bara vara den inledande. Den måste sitta först.
+      if (!value.startsWith(del.varde, pos)) return null
+      pos += del.varde.length
+      continue
+    }
+
+    const nasta = delar[i + 1]
+    if (nasta === undefined) {
+      // Sista klammern utan text efter sig tar resten.
+      ut.push(value.slice(pos))
+      pos = value.length
+      continue
+    }
+    if (nasta.typ === 'kolumn') return null
+
+    if (i + 2 === delar.length) {
+      // Den avslutande texten måste sitta i slutet. Annars hade `>` mitt i en
+      // adress kapat värdet på fel ställe.
+      const slut = value.length - nasta.varde.length
+      if (slut < pos || !value.endsWith(nasta.varde)) return null
+      ut.push(value.slice(pos, slut))
+      pos = value.length
+      i += 1
+      continue
+    }
+
+    const traff = value.indexOf(nasta.varde, pos)
+    if (traff === -1) return null
+    ut.push(value.slice(pos, traff))
+    pos = traff + nasta.varde.length
+    i += 1
+  }
+
+  if (pos !== value.length) return null
+  return trimma ? ut.map((d) => d.trim()) : ut
+}
+
+/**
+ * Delaren för en inställning, byggd en gång.
+ *
+ * Mönstret tolkas här och inte per värde: en kolumn med hundratusen unika
+ * adresser hade annars kostat hundratusen tolkningar av samma sträng. Samma
+ * grepp som `byggErsattare` i `replace.ts`, och av samma skäl.
+ *
+ * Null ur delaren betyder *matchade inte*; de tre gamla lägena kan inte
+ * misslyckas och returnerar aldrig null.
+ */
+export function byggDelare(inst: Delning): (varde: string) => string[] | null {
+  if (inst.satt === 'monster') {
+    const delar = delaMall(inst.monster ?? '')
+    return (varde) => plockaUr(varde, delar, inst.trimma)
+  }
+  return (varde) => delaVarde(varde, inst)
+}
+
+/**
+ * Hur många värden mönstret träffar, så panelen kan säga det före körningen.
+ *
+ * Egen funktion i stället för `inventeraDelning`, eftersom `flest` och
+ * `utanAvgransare` inte betyder någonting för ett mönster. En panel som
+ * återanvänt dem hade sagt något som inte stämde.
+ */
+export function inventeraMonster(
+  varden: readonly string[],
+  inst: Delning,
+  vikter?: ArrayLike<number>,
+): { traffar: number; omatchade: number; exempel: { fore: string; efter: string[] } | null } {
+  const plocka = byggDelare(inst)
+  let traffar = 0
+  let omatchade = 0
+  let exempel: { fore: string; efter: string[] } | null = null
+
+  for (let i = 0; i < varden.length; i++) {
+    const value = varden[i]!
+    if (value.trim() === '') continue
+    const vikt = vikter ? (vikter[i] ?? 0) : 1
+    if (vikt === 0) continue
+
+    const delar = plocka(value)
+    if (delar === null) {
+      omatchade += vikt
+    } else {
+      traffar += vikt
+      exempel ??= { fore: value, efter: delar }
+    }
+  }
+  return { traffar, omatchade, exempel }
+}
+
+/* ---------- Levande mall ---------- */
+
+/**
+ * Fingeravtryck över det en mall läser.
+ *
+ * FNV-1a, formad efter `nyckelsignatur` i `ordning.ts` — vi behöver inte
+ * kryptografisk styrka, bara att en ändring syns. Men den här slår upp
+ * kolumnerna på **namn**, eftersom en mall är skriven i namn: byter en kolumn
+ * namn läser mallen något annat, och det ska räknas som en ändring.
+ *
+ * **Ordboken hashas, inte bara koderna.** `mapColumnValues` bygger om ordboken
+ * genom att gå igenom den gamla i ordning, så en transform som inte slår ihop
+ * två värden ger samma längd och samma index — och därmed *identiska koder*.
+ * Att trimma blanksteg i en källkolumn hade då sett ut som ingen ändring alls,
+ * fast varje värde mallen läser blivit ett annat.
+ */
+export function mallavtryck(frame: Frame, kallor: readonly string[]): number {
+  let h = 0x811c9dc5
+  const blanda = (n: number) => {
+    h = Math.imul(h ^ (n & 0xff), 0x01000193)
+    h = Math.imul(h ^ ((n >>> 8) & 0xff), 0x01000193)
+    h = Math.imul(h ^ ((n >>> 16) & 0xff), 0x01000193)
+    h = Math.imul(h ^ ((n >>> 24) & 0xff), 0x01000193)
+  }
+  const text = (s: string) => {
+    for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193)
+    h = Math.imul(h ^ 0x1f, 0x01000193)
+  }
+
+  blanda(frame.rowCount)
+  for (const namn of kallor) {
+    text(namn)
+    const col = frame.columns.find((c) => c.name === namn)
+    if (!col) {
+      // En källa som inte finns hashas som sin egen markör, så att en
+      // borttagen kolumn läses som en ändring och inte som ingenting.
+      blanda(0xffffffff)
+      continue
+    }
+    blanda(col.dict.length)
+    for (const varde of col.dict) text(varde)
+    for (let r = 0; r < col.codes.length; r++) blanda(col.codes[r]!)
+  }
+  return h >>> 0
+}
+
+/**
+ * Vyns ändpunkter, som ingår i avtrycket när regeln har rad-undantag.
+ *
+ * Bara två rader kan byta värde när ordningen ändras, så bara två tal behöver
+ * med. Att rader flyttar om sig i mitten ändrar ingenting i resultatet och ska
+ * därför inte heller flagga något — en varning som kommer när ingenting blivit
+ * fel lär en att strunta i varningarna.
+ */
+export function ordningsavtryck(frame: Frame): number {
+  const view = frame.view
+  if (view.length === 0) return 0
+  return (Math.imul(view[0]! + 1, 0x01000193) ^ (view[view.length - 1]! + 1)) >>> 0
+}
+
+/** Avtrycket en regel ska jämföras mot i den här ramen. */
+export function regelavtryck(frame: Frame, regel: Kolumnregel): number {
+  const bas = mallavtryck(frame, regel.kallor)
+  const harUndantag = regel.forsta !== undefined || regel.sista !== undefined
+  return harUndantag ? (bas ^ ordningsavtryck(frame)) >>> 0 : bas
+}
+
+/** Mallarna en regel beskriver, tolkade mot filen. */
+export function regelnsMallar(frame: Frame, regel: Kolumnregel): {
+  mallar: Mallar
+  okanda: string[]
+} {
+  const huvud = tolkaMall(regel.mall, frame)
+  const f = regel.forsta === undefined ? null : tolkaMall(regel.forsta, frame)
+  const s = regel.sista === undefined ? null : tolkaMall(regel.sista, frame)
+  return {
+    mallar: { delar: huvud.delar, forsta: f?.delar ?? null, sista: s?.delar ?? null },
+    okanda: [...new Set([...huvud.okanda, ...(f?.okanda ?? []), ...(s?.okanda ?? [])])],
+  }
+}
+
+/** Kolumnnamnen en uppsättning mallar läser, för regelns `kallor`. */
+export function mallensKallor(frame: Frame, ...texter: (string | undefined)[]): string[] {
+  const namn: string[] = []
+  for (const text of texter) {
+    if (text === undefined) continue
+    for (const n of tolkaMall(text, frame).anvanda) {
+      if (!namn.includes(n)) namn.push(n)
+    }
+  }
+  return namn
+}
+
+/**
+ * Skriver om ett kolumnnamn i en regels mallar.
+ *
+ * En omdöpning byter vad mallen läser, och en regel som inte följde med hade
+ * gått sönder av ett handgrepp som inte har med den att göra. Filtren följer
+ * redan med, eftersom de bär kolumn-id; mallen bär namn — det är namnet den
+ * är skriven i — så den måste skrivas om i stället.
+ *
+ * Returnerar null när regeln inte nämner det gamla namnet.
+ */
+export function dopOmIRegel(regel: Kolumnregel, fran: string, till: string): Kolumnregel | null {
+  if (!regel.kallor.includes(fran)) return null
+  const byt = (text: string) =>
+    delaMall(text)
+      .map((d) => (d.typ === 'text' ? d.varde : `{${d.namn === fran ? till : d.namn}}`))
+      .join('')
+  return {
+    ...regel,
+    mall: byt(regel.mall),
+    forsta: regel.forsta === undefined ? undefined : byt(regel.forsta),
+    sista: regel.sista === undefined ? undefined : byt(regel.sista),
+    kallor: regel.kallor.map((k) => (k === fran ? till : k)),
+  }
 }

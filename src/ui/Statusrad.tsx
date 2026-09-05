@@ -6,6 +6,7 @@ import { beskrivSortering } from '../core/ops/sort.js'
 import { aggregera } from '../state/selection.js'
 import { selectableColumns } from '../state/edits.js'
 import type { Tab } from '../state/store.js'
+import { inaktuellaRegler } from '../state/regel.js'
 import { rader, t, tf } from './sprak.js'
 
 /**
@@ -36,6 +37,7 @@ export function Statusrad(props: {
   onSorteraOm: () => void
   onRensaSortering: () => void
   onFortsattVerkstad: () => void
+  onUppdateraRegler: () => void
   onBorjaOm: () => void
   onRadmeny: (x: number, y: number) => void
 }) {
@@ -53,6 +55,8 @@ export function Statusrad(props: {
   const frame: Frame = tab.frame
   const parse = frame.meta.parse
   const kolumner = selectableColumns(tab)
+  const regler = inaktuellaRegler(tab)
+  const trasiga = regler.filter((r) => r.saknade.length > 0)
   const agg = tab.markering ? aggregera(frame, kolumner, tab.markering) : null
 
   return (
@@ -93,6 +97,36 @@ export function Statusrad(props: {
           >
             ✕
           </button>
+        </span>
+      )}
+
+      {/*
+        Mallkolumner som blivit äldre än sina källor.
+
+        Samma spår och samma ton som den inaktuella sorteringen, eftersom det
+        är samma sorts besked: det du ser på skärmen räknades före de senaste
+        ändringarna, och ingenting har gått sönder. Skillnaden mot ett
+        kalkylark är att kolumnen står kvar tills du säger till.
+      */}
+      {regler.length > 0 && (
+        <span
+          class="sortchip sortchip--inaktuell"
+          title={
+            trasiga.length > 0
+              ? t('Mallen pekar på en kolumn som inte finns längre. Kolumnen står kvar som den är.')
+              : t('Kolumnen byggdes ur en mall, och källorna har ändrats sedan dess.')
+          }
+        >
+          <span class="sortchip__text">
+            {regler.length === 1
+              ? tf('{0} är inaktuell', regler[0]!.col.name)
+              : tf('{0} mallkolumner är inaktuella', formatCount(regler.length))}
+          </span>
+          {trasiga.length < regler.length && (
+            <button class="sortchip__knapp" onClick={props.onUppdateraRegler}>
+              {t('Uppdatera')}
+            </button>
+          )}
         </span>
       )}
 

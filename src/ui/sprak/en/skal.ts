@@ -68,6 +68,34 @@ export const SKAL: Record<string, string> = {
   'Verktyget kan inte skicka data någonstans. Filerna sparas i din egen webbläsare så att de finns kvar nästa gång. Klicka för att se vad som ligger där och rensa alltihop.':
     'The tool cannot send data anywhere. Files are saved in your own browser so they are still here next time. Click to see what is stored and clear all of it.',
   'Sorterat: {0}': 'Sorted: {0}',
+
+  /* ---------- Mallkolumner ---------- */
+  Uppdatera: 'Update',
+  'Uppdatera ur mallen': 'Update from the template',
+  'Ändra mallen…': 'Change the template…',
+  'Släpp mallen': 'Drop the template',
+  '{0} är inaktuell': '{0} is out of date',
+  '{0} mallkolumner är inaktuella': '{0} template columns are out of date',
+  'Byggd ur en mall.': 'Built from a template.',
+  'Byggd ur en mall. Källorna har ändrats sedan kolumnen fylldes.':
+    'Built from a template. The sources have changed since the column was filled.',
+  'Kolumnen byggdes ur en mall, och källorna har ändrats sedan dess.':
+    'The column was built from a template, and the sources have changed since.',
+  'Mallen pekar på en kolumn som inte finns längre. Kolumnen står kvar som den är.':
+    'The template points at a column that no longer exists. The column stays as it is.',
+  'Mallen går inte att köra.': 'The template cannot be run.',
+  'kolumnen blir vanlig data': 'the column becomes ordinary data',
+  'källorna har ändrats sedan kolumnen fylldes':
+    'the sources have changed since the column was filled',
+  'källorna är oförändrade': 'the sources are unchanged',
+  'mallen pekar på {0}, som inte finns': 'the template points at {0}, which does not exist',
+  'Släppte mallen för {0}': 'Dropped the template for {0}',
+  'Uppdaterade {0} ur mallen': 'Updated {0} from the template',
+  'Uppdaterade {0} ur sina mallar': 'Updated {0} from their templates',
+  'Uppdaterade {0} — {1} ändrades.': 'Updated {0} — {1} changed.',
+  '{0} var redan aktuell.': '{0} was already up to date.',
+  '{0} kunde inte uppdateras: mallen pekar på {1}, som inte finns.':
+    '{0} could not be updated: the template points at {1}, which does not exist.',
   '{0} markerade': '{0} selected',
   '{0} unika': '{0} unique',
   '{0} av {1} rader': '{0} of {1} rows',

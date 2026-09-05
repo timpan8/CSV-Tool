@@ -1,4 +1,4 @@
-import type { Column, ColumnId, ColumnType, Frame } from '../core/types.js'
+import type { Column, ColumnId, ColumnType, Frame, Kolumnregel } from '../core/types.js'
 import type { Profilsteg } from '../core/ops/profil.js'
 import { getCell } from '../core/frame/column.js'
 
@@ -66,6 +66,14 @@ export interface Forhandsvisning {
    * datumceller. Ångra tar tillbaka typen med resten av kolumnen.
    */
   nyTyp?: ColumnType
+  /**
+   * Regeln den skapade kolumnen ska bära, när den byggs ur en mall.
+   *
+   * Se `Kolumnregel`: ett minne av hur kolumnen gjordes, inte en levande
+   * länk. Sätts bara när **en** kolumn skapas — flera kolumner ur ett steg
+   * har ingen gemensam mall att minnas.
+   */
+  regel?: Kolumnregel
   /** Sant när `nya` och `status` är indexerade per rad i stället för per kod. */
   perRad: boolean
   /** Antal värden per uppslag. Ett per ny kolumn, eller 1 vid omskrivning. */
@@ -95,6 +103,8 @@ export interface Forhandsspec {
   profil?: Profilsteg
   /** Namn på de kolumner som ska skapas i stället för omskrivning på plats. */
   nyaKolumner?: string[]
+  /** Regeln den skapade kolumnen ska bära. Se `Forhandsvisning.regel`. */
+  regel?: Kolumnregel
 }
 
 /**
@@ -166,6 +176,7 @@ export function beraknaForhandsvisning(
     etikett: spec.etikett,
     kind: spec.kind,
     profil: spec.profil,
+    regel: spec.regel,
     fn: nyaKolumner.length > 0 ? null : (spec.fn ?? null),
     nyTyp: spec.nyTyp,
     perRad,
