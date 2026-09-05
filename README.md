@@ -4,6 +4,10 @@ Ett webbaserat verktyg för att läsa in, städa, matcha och exportera CSV- och 
 
 ![Skärmbild av CSV-verkstan med en öppnad exempelfil](docs/skarmbild.png)
 
+📖 **[Användarguide](docs/ANVANDARGUIDE.md)** — hur varje verktyg används, med bilder och ett klick till rätt avsnitt. ([User guide in English](docs/USER-GUIDE.md))
+
+Guiden svarar på *hur gör jag*. Resten av den här filen svarar på *varför är det byggt så*.
+
 ## Två principer
 
 **Originaltexten är sanningen.** Kolumntypen (`Text` / `Tal` / `Datum` / `E-post`) är en *tolkning* som styr sortering, filter och vilka verktyg som erbjuds. Den skriver aldrig om ett värde. Postnumret `01234` förblir `01234`, telefonnumret `0730-123456` förblir som det är, och `007` blir aldrig `7`.
@@ -110,7 +114,10 @@ npm test           # enhetstester
 npm run typecheck  # typkontroll
 npm run build      # produktionsbygge till dist/
 npx playwright test # röktest i riktig webbläsare
+npm run bilder     # skärmbilderna till användarguiden, på båda språken
 ```
+
+`npm run bilder` kör `tests/bilder/` med en egen Playwright-konfiguration och skriver om `docs/bilder/`. Sviten ligger utanför den vanliga konfigurationens `testDir` och kostar därför ingenting i CI. Kör den när gränssnittet ändrats — en etikett som skrivits om får bildtagningen att falla på just den bild det gäller.
 
 Koden är delad i två halvor med en hård gräns emellan:
 
