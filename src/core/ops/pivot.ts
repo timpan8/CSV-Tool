@@ -5,6 +5,7 @@ import { inferAllTypes } from '../infer.js'
 import { kolumnrang, talnycklar, TOM_RANG } from '../frame/rank.js'
 import { byggNormaliserare, gruppIder, type Normalisering } from './duplicates.js'
 import { sorteraNiva } from './sort.js'
+import { TOMT_FILTER, tillampaFilter, type Filter } from './filter.js'
 import { skrivTal, type Talformat } from './numbers.js'
 import {
   BERAKNINGAR,
@@ -100,6 +101,16 @@ export const KOLUMNTAK_VAL = [10, 25, 50] as const
 export const MAXRADER = 2000
 
 /**
+ * Hur många kolumnkombinationer som får egna spalter.
+ *
+ * `kolumntak` gäller per dimension och håller varje enskild dimension kort.
+ * Två korta dimensioner kan ändå ge en bred tabell — tio gånger tio är hundra
+ * spalter — så det här är taket på produkten. Resten viks in i ett Övriga-löv
+ * så att Totalt fortfarande stämmer.
+ */
+export const KOLUMNLOVTAK = 40
+
+/**
  * Id för ett mätvärde.
  *
  * En löpande räknare, inte en tidsstämpel: id:t är bara en nyckel för listan
@@ -117,10 +128,18 @@ export type Underlag = 'hela' | 'vyn'
 export interface Pivotplan {
   /** Raddimensionerna, utifrån och in. Tom lista ger bara Totalt-raden. */
   rader: ColumnId[]
-  /** Kolumndimensionen. `null` ger en lista med bara Totalt-kolumnen. */
-  kolumn: ColumnId | null
+  /** Kolumndimensionerna, utifrån och in. Tom lista ger bara Totalt-kolumnen. */
+  kolumner: ColumnId[]
   /** Ett eller flera mätvärden, sida vid sida under varje kolumnvärde. */
   matvarden: readonly Berakning[]
+  /**
+   * Vad som räknas med.
+   *
+   * Samma typ som rutnätets snabbfilter, och samma motor: ett filterfält i
+   * panelen är en regel med operatorn *är något av*. Två filter i verktyget
+   * som betydde olika saker vore ett verktyg för mycket att lära sig.
+   */
+  filter: Filter
   strunta: Normalisering
   /** Ge tomma värden en egen rubrik i stället för att lämna raderna utanför. */
   tommaMed: boolean
@@ -144,6 +163,28 @@ export interface Pivotrubrik {
   varden: number
 }
 
+/**
+ * En kolumn i matrisen: en kombination av värden, ett per kolumndimension.
+ *
+ * Med en enda kolumndimension är det bara ett värde, som förr. Med flera är
+ * det vägen genom dem — `Aktiv › Sverige` — och rubrikraderna ritas genom att
+ * leta löpor av lika `stig` per nivå.
+ *
+ * Bara kombinationer som **finns i datat** blir kolumner. Den kartesiska
+ * produkten vore mest tomma spalter: tjugofem värden i två dimensioner ger
+ * sexhundratjugofem kombinationer, och en fil har sällan ens hundra av dem.
+ */
+export interface Kolumnlov {
+  /** Ett rubrikindex per kolumndimension, utifrån och in. */
+  stig: number[]
+  /** Rubriken per nivå, med `tom` och `ovriga` intakta så vyn kan skilja dem. */
+  nivaer: Pivotrubrik[]
+  /** Källrader bakom lövet. */
+  rader: number
+  /** Samlingslövet som bär kombinationerna som inte fick plats under taket. */
+  ovriga: boolean
+}
+
 export interface Pivotrad {
   /** Ett värde per raddimension, tomma strängar under den nivå raden gäller. */
   etiketter: string[]
@@ -158,8 +199,10 @@ export interface Pivotrad {
 }
 
 export interface Pivotresultat {
-  /** Kolumndimensionens värden. Totalt-kolumnen ligger sist i matrisen. */
-  kolumner: Pivotrubrik[]
+  /** Kolumnernas kombinationer. Totalt-kolumnen ligger sist i matrisen. */
+  kolumner: Kolumnlov[]
+  /** Hur många nivåer kolumnrubriken har. Noll när ingen kolumndimension finns. */
+  kolumnnivaer: number
   /** Raderna med delsummor. Totalt-raden ligger sist i matrisen. */
   rader: Pivotrad[]
   /** `kolumner.length + 1` — den sista är Totalt. */
@@ -180,6 +223,8 @@ export interface Pivotresultat {
   utanNyckel: number
   doldaRadvarden: number
   doldaKolumnvarden: number
+  /** Kombinationer som inte fick plats under lövtaket och vikts in i Övriga. */
+  doldaKolumnlov: number
   /** Sant när taket slog i och utskriften avbröts. */
   kapat: boolean
   lasbarhet: Lasbarhet[]
@@ -304,21 +349,147 @@ function byggDimension(
   return { col, hink, rubriker, dolda }
 }
 
+interface Kolumnaxel {
+  /** Lövindex per fysisk rad, eller `UTANFOR`. */
+  hink: Uint32Array
+  lov: Kolumnlov[]
+  /** Värden som föll bort per dimension, summerade. */
+  dolda: number
+  /** Kombinationer som inte fick plats under lövtaket. */
+  doldaLov: number
+}
+
+/**
+ * Kolumndimensionerna vikta till **en** hink per rad.
+ *
+ * Det är den enda anledningen till att flera kolumnfält blev en liten ändring:
+ * `raknaBand` läser ett heltal per rad och bryr sig inte om att heltalet numera
+ * står för en kombination i stället för ett värde. Hela Totalt-logiken —
+ * regeln som är värd att kunna utantill — rörs inte alls.
+ *
+ * **En dimension i taget, tätt numrerad efter varje steg.** Den uppenbara
+ * vägen vore en blandad radix över alla dimensioner på en gång, men ett sådant
+ * tal växer med produkten av rubrikantalen och spränger heltalen vid en
+ * handfull fält. Att numrera om efter varje dimension håller talen under
+ * radantalet, och ordningen bevaras ändå: nyckeln `plats · n + hink` är
+ * växande i den ordning man läser stigen, så en stigande sortering av
+ * nycklarna *är* den nästlade visningsordningen. Ingen extra sortering behövs.
+ *
+ * **Bara kombinationer som finns i datat.** Den kartesiska produkten vore mest
+ * tomma spalter — tjugofem värden i två dimensioner ger sexhundratjugofem — och
+ * en tom spalt är bläck utan innehåll.
+ */
+function byggKolumnaxel(
+  dimensioner: Dimension[],
+  radkalla: Uint32Array,
+  radantal: number,
+  tak: number,
+): Kolumnaxel {
+  const hink = new Uint32Array(radantal).fill(UTANFOR)
+  const dolda = dimensioner.reduce((s, d) => s + d.dolda, 0)
+  if (dimensioner.length === 0) return { hink, lov: [], dolda, doldaLov: 0 }
+
+  // En rad utan värde i någon av dimensionerna har ingen spalt att stå i.
+  const med: number[] = []
+  for (let i = 0; i < radkalla.length; i++) {
+    const r = radkalla[i]!
+    let inne = true
+    for (const d of dimensioner) {
+      if (d.hink[r]! === UTANFOR) {
+        inne = false
+        break
+      }
+    }
+    if (inne) med.push(r)
+  }
+
+  let stigar: number[][] = [[]]
+  const plats = new Uint32Array(radantal)
+  for (const d of dimensioner) {
+    const n = Math.max(1, d.rubriker.length)
+    const antalPerNyckel = new Map<number, number>()
+    for (const r of med) {
+      const nyckel = plats[r]! * n + d.hink[r]!
+      antalPerNyckel.set(nyckel, (antalPerNyckel.get(nyckel) ?? 0) + 1)
+    }
+    const nycklar = [...antalPerNyckel.keys()].sort((a, b) => a - b)
+    const tillIndex = new Map<number, number>()
+    const nya: number[][] = []
+    for (const nyckel of nycklar) {
+      tillIndex.set(nyckel, nya.length)
+      nya.push([...stigar[Math.floor(nyckel / n)]!, nyckel % n])
+    }
+    for (const r of med) plats[r] = tillIndex.get(plats[r]! * n + d.hink[r]!)!
+    stigar = nya
+  }
+
+  const antal = new Uint32Array(stigar.length)
+  for (const r of med) antal[plats[r]!]! += 1
+
+  /*
+   * Lövtaket, valt på storlek och visat i ordning.
+   *
+   * Samma regel som `byggDimension` följer, och av samma skäl: det sällsynta är
+   * det man kan avvara, men ordningen ska vara den man läser i. Här är
+   * läsordningen index­ordningen, eftersom stigarna redan numrerats i den.
+   */
+  const behallna = stigar.map((_, i) => i).sort((a, b) => antal[b]! - antal[a]! || a - b)
+  const doldaLov = Math.max(0, behallna.length - Math.max(1, tak))
+  behallna.length = Math.min(behallna.length, Math.max(1, tak))
+  behallna.sort((a, b) => a - b)
+
+  const tillLov = new Int32Array(stigar.length).fill(-1)
+  const lov: Kolumnlov[] = []
+  for (const i of behallna) {
+    tillLov[i] = lov.length
+    const stig = stigar[i]!
+    lov.push({
+      stig,
+      nivaer: stig.map((h, n) => dimensioner[n]!.rubriker[h]!),
+      rader: antal[i]!,
+      ovriga: false,
+    })
+  }
+
+  let ovrigaIndex = -1
+  if (doldaLov > 0) {
+    let rader = 0
+    for (let i = 0; i < stigar.length; i++) if (tillLov[i] === -1) rader += antal[i]!
+    ovrigaIndex = lov.length
+    // Övriga-lövet har ingen stig — det är många stigar. Vyn ritar det som en
+    // enda rubrik över alla våningar, och `nivaer: []` är det som säger det.
+    lov.push({ stig: [], nivaer: [], rader, ovriga: true })
+  }
+
+  for (const r of med) {
+    const i = tillLov[plats[r]!]!
+    hink[r] = i >= 0 ? i : ovrigaIndex >= 0 ? ovrigaIndex : UTANFOR
+  }
+
+  return { hink, lov, dolda, doldaLov }
+}
+
 export function pivotera(frame: Frame, plan: Pivotplan): Pivotresultat {
   const normalisera = byggNormaliserare(plan.strunta)
-  const radkalla = plan.underlag === 'vyn' ? frame.view : identityView(frame.rowCount)
+  const utgangslage = plan.underlag === 'vyn' ? frame.view : identityView(frame.rowCount)
+  // Filterrutans fält är vanliga filterregler, och det här är hela kostnaden
+  // för dem: `tillampaFilter` lämnar tillbaka utgångsläget orört när inga
+  // aktiva regler finns.
+  const radkalla = tillampaFilter(frame, plan.filter, utgangslage).rader
 
   const raddim = plan.rader
     .map((id) => findColumn(frame, id))
     .filter((c): c is Column => c !== undefined)
     .map((col) => byggDimension(col, radkalla, normalisera, plan.radtak, plan.tommaMed))
 
-  const kolCol = plan.kolumn === null ? undefined : findColumn(frame, plan.kolumn)
-  const koldim = kolCol
-    ? byggDimension(kolCol, radkalla, normalisera, plan.kolumntak, plan.tommaMed)
-    : null
+  const koldim = plan.kolumner
+    .map((id) => findColumn(frame, id))
+    .filter((c): c is Column => c !== undefined)
+    .map((col) => byggDimension(col, radkalla, normalisera, plan.kolumntak, plan.tommaMed))
 
-  const kolumner = koldim ? koldim.rubriker : []
+  const axel = byggKolumnaxel(koldim, radkalla, frame.rowCount, KOLUMNLOVTAK)
+  const kolumner = axel.lov
+  const kolhink = kolumner.length > 0 ? axel.hink : null
   const bredd = kolumner.length + 1
   const totalKol = bredd - 1
   const steg = Math.max(1, plan.matvarden.length)
@@ -337,7 +508,7 @@ export function pivotera(frame: Frame, plan: Pivotplan): Pivotresultat {
   let utanNyckel = 0
   for (let i = 0; i < radkalla.length; i++) {
     const r = radkalla[i]!
-    let inne = koldim === null || koldim.hink[r]! !== UTANFOR
+    let inne = kolhink === null || kolhink[r]! !== UTANFOR
     if (inne) {
       for (const d of raddim) {
         if (d.hink[r]! === UTANFOR) {
@@ -359,7 +530,7 @@ export function pivotera(frame: Frame, plan: Pivotplan): Pivotresultat {
    * som gör varje (radband × kolumn) till ett sammanhängande intervall.
    */
   let rader: Uint32Array = Uint32Array.from(kvar)
-  if (koldim) rader = sorteraNiva(rader, koldim.hink, koldim.rubriker.length)
+  if (kolhink) rader = sorteraNiva(rader, kolhink, kolumner.length)
   for (let i = raddim.length - 1; i >= 0; i--) {
     rader = sorteraNiva(rader, raddim[i]!.hink, raddim[i]!.rubriker.length)
   }
@@ -423,7 +594,7 @@ export function pivotera(frame: Frame, plan: Pivotplan): Pivotresultat {
 
     if (m.typ === 'antal') {
       for (let k = start; k < slut; k++) {
-        const kol = koldim ? koldim.hink[rader[k]!]! : totalKol
+        const kol = kolhink ? kolhink[rader[k]!]! : totalKol
         raknade[kol]! += 1
         if (kol !== totalKol) raknade[totalKol]! += 1
       }
@@ -449,7 +620,7 @@ export function pivotera(frame: Frame, plan: Pivotplan): Pivotresultat {
           const rad = rader[k]!
           const kod = kall.codes[rad]!
           if (kod === 0) continue
-          const kol = koldim ? koldim.hink[rad]! : totalKol
+          const kol = kolhink ? kolhink[rad]! : totalKol
           ifylldaPerKol[kol]! += 1
           if (kol !== totalKol) ifylldaPerKol[totalKol]! += 1
           const v = tal[kod]!
@@ -493,7 +664,7 @@ export function pivotera(frame: Frame, plan: Pivotplan): Pivotresultat {
           const rad = rader[k]!
           const kod = kall.codes[rad]!
           if (kod === 0) continue
-          const kol = koldim ? koldim.hink[rad]! : totalKol
+          const kol = kolhink ? kolhink[rad]! : totalKol
           ifylldaPerKol[kol]! += 1
           if (kol !== totalKol) ifylldaPerKol[totalKol]! += 1
           const rg = rang[kod]!
@@ -529,7 +700,7 @@ export function pivotera(frame: Frame, plan: Pivotplan): Pivotresultat {
           const rad = rader[k]!
           const kod = kall.codes[rad]!
           if (kod === 0) continue
-          const kol = koldim ? koldim.hink[rad]! : totalKol
+          const kol = kolhink ? kolhink[rad]! : totalKol
           ifylldaPerKol[kol]! += 1
           if (kol !== totalKol) ifylldaPerKol[totalKol]! += 1
           if (kolfalt === null || totfalt === null) {
@@ -629,6 +800,7 @@ export function pivotera(frame: Frame, plan: Pivotplan): Pivotresultat {
 
   return {
     kolumner,
+    kolumnnivaer: koldim.length,
     rader: radlista,
     bredd,
     hojd: radlista.length + 1,
@@ -637,7 +809,8 @@ export function pivotera(frame: Frame, plan: Pivotplan): Pivotresultat {
     antalKallrader: rader.length,
     utanNyckel,
     doldaRadvarden: raddim.reduce((s, d) => s + d.dolda, 0),
-    doldaKolumnvarden: koldim?.dolda ?? 0,
+    doldaKolumnvarden: axel.dolda,
+    doldaKolumnlov: axel.doldaLov,
     kapat,
     lasbarhet,
   }
@@ -710,8 +883,9 @@ export function foreslagenPlan(frame: Frame, startkolumn: ColumnId | null = null
 
   return {
     rader: rad ? [rad.id] : [],
-    kolumn: kolumn?.id ?? null,
+    kolumner: kolumn ? [kolumn.id] : [],
     matvarden: [{ id: nyttMatvardeId(), typ: 'antal', colId: null, namn: '' }],
+    filter: TOMT_FILTER,
     strunta: { skiftlage: false, blanksteg: true, diakriter: false },
     tommaMed: false,
     underlag: 'hela',
@@ -722,11 +896,23 @@ export function foreslagenPlan(frame: Frame, startkolumn: ColumnId | null = null
   }
 }
 
-/** Rubriken en pivotkolumn får i en flik. */
-export function kolumnrubrik(rubrik: Pivotrubrik, tomtext: string, ovrigatext: string): string {
+/** En rubriks text på en nivå: värdet, eller det som står i stället för det. */
+export function rubriktext(rubrik: Pivotrubrik, tomtext: string, ovrigatext: string): string {
   if (rubrik.ovriga) return ovrigatext
   if (rubrik.tom) return tomtext
   return rubrik.etikett
+}
+
+/**
+ * Rubriken en pivotkolumn får där den bara får en rad text.
+ *
+ * Hela vägen genom kolumndimensionerna, inte det innersta värdet: `Aktiv ·
+ * Sverige` säger vad spalten är, `Sverige` ensamt säger det inte när samma
+ * land står under både Aktiv och Vilande.
+ */
+export function kolumnrubrik(lov: Kolumnlov, tomtext: string, ovrigatext: string): string {
+  if (lov.ovriga) return ovrigatext
+  return lov.nivaer.map((n) => rubriktext(n, tomtext, ovrigatext)).join(' · ')
 }
 
 /**
@@ -810,9 +996,11 @@ export function pivotnamn(frame: Frame, plan: Pivotplan): string {
   const rad = plan.rader
     .map((id) => findColumn(frame, id)?.name)
     .filter((n): n is string => n !== undefined)
-  const kol = plan.kolumn === null ? undefined : findColumn(frame, plan.kolumn)?.name
-  if (rad.length === 0 && !kol) return `${frame.name} – pivot`
-  if (!kol) return `${frame.name} per ${rad.join(', ')}`
-  if (rad.length === 0) return `${frame.name} per ${kol}`
-  return `${frame.name} per ${rad.join(', ')} × ${kol}`
+  const kol = plan.kolumner
+    .map((id) => findColumn(frame, id)?.name)
+    .filter((n): n is string => n !== undefined)
+  if (rad.length === 0 && kol.length === 0) return `${frame.name} – pivot`
+  if (kol.length === 0) return `${frame.name} per ${rad.join(', ')}`
+  if (rad.length === 0) return `${frame.name} per ${kol.join(', ')}`
+  return `${frame.name} per ${rad.join(', ')} × ${kol.join(', ')}`
 }

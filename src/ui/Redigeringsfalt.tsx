@@ -123,7 +123,7 @@ export function Redigeringsfalt(props: RedigeringsfaltProps) {
           ikon={<IkonPivot />}
           etikett="Pivot"
           title={t(
-            'Korstabell eller nivålista i en egen vy: gruppera åt två håll och se summorna direkt. Datat rörs inte.',
+            'Dra fält mellan Filter, Kolumner, Rader och Värden i en egen vy, och se summorna direkt. Datat rörs inte.',
           )}
           onClick={props.pivot}
         />

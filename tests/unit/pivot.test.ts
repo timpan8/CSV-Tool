@@ -5,6 +5,7 @@ import {
   ADDITIVA,
   arAdditiv,
   foreslagenPlan,
+  KOLUMNLOVTAK,
   PIVOTBERAKNINGAR,
   pivotberakningar,
   pivotera,
@@ -13,6 +14,7 @@ import {
   type Pivotplan,
   type Pivotresultat,
 } from '../../src/core/ops/pivot.js'
+import { TOMT_FILTER } from '../../src/core/ops/filter.js'
 import type { Berakning } from '../../src/core/ops/gruppera.js'
 import type { Frame } from '../../src/core/types.js'
 
@@ -39,8 +41,9 @@ function matvarde(over: Partial<Berakning> = {}): Berakning {
 function plan(frame: Frame, over: Partial<Pivotplan> = {}): Pivotplan {
   return {
     rader: [frame.columns[0]!.id],
-    kolumn: frame.columns[1]?.id ?? null,
+    kolumner: frame.columns[1] ? [frame.columns[1].id] : [],
     matvarden: [matvarde()],
+    filter: TOMT_FILTER,
     strunta: STRUNTA,
     tommaMed: false,
     underlag: 'hela',
@@ -51,6 +54,10 @@ function plan(frame: Frame, over: Partial<Pivotplan> = {}): Pivotplan {
     ...over,
   }
 }
+
+/** Kolumnlövens vägar som text: `Aktiv/Sverige`. Övriga-lövet blir tomt. */
+const vagar = (res: Pivotresultat) =>
+  res.kolumner.map((l) => l.nivaer.map((n) => n.etikett).join('/'))
 
 /** Cellen som text, med Totalt-raden på index `res.rader.length`. */
 function cell(res: Pivotresultat, rad: number, kolumn: number, matvarde = 0, antalMat = 1): string {
@@ -85,7 +92,7 @@ const ORTER = frameOf(
 describe('pivotera', () => {
   it('lägger grupperna i en matris med rubriker åt båda håll', () => {
     const res = pivotera(ORTER, plan(ORTER))
-    expect(res.kolumner.map((k) => k.etikett)).toEqual(['Aktiv', 'Avslutad'])
+    expect(vagar(res)).toEqual(['Aktiv', 'Avslutad'])
     expect(res.rader.map((r) => r.etiketter[0])).toEqual(['Kiruna', 'Lund', 'Malmö'])
     // Rubrikordningen är kolumnens egen — svensk bokstavsordning för text.
     expect(matris(res)).toEqual([
@@ -102,7 +109,7 @@ describe('pivotera', () => {
     const res = pivotera(
       ORTER,
       plan(ORTER, {
-        kolumn: null,
+        kolumner: [],
         matvarden: [matvarde({ typ: 'snitt', colId: kol(ORTER, 'Belopp') })],
       }),
     )
@@ -120,7 +127,7 @@ describe('pivotera', () => {
     const res = pivotera(
       ORTER,
       plan(ORTER, {
-        kolumn: kol(ORTER, 'Status'),
+        kolumner: [kol(ORTER, 'Status')],
         matvarden: [matvarde({ typ: 'unika', colId: kol(ORTER, 'Kund') })],
       }),
     )
@@ -177,10 +184,12 @@ describe('pivotera', () => {
       ['D', 'x'],
     ]
     const f = frameOf(['Kod', 'Allt'], rader)
-    const res = pivotera(f, plan(f, { rader: [kol(f, 'Allt')], kolumn: kol(f, 'Kod'), kolumntak: 2 }))
-    expect(res.kolumner.map((k) => k.etikett)).toEqual(['A', 'B', ''])
-    expect(res.kolumner[2]!.ovriga).toBe(true)
-    expect(res.kolumner[2]!.varden).toBe(2) // C och D
+    const res = pivotera(f, plan(f, { rader: [kol(f, 'Allt')], kolumner: [kol(f, 'Kod')], kolumntak: 2 }))
+    expect(vagar(res)).toEqual(['A', 'B', ''])
+    // Värdet föll bort i sin dimension, inte som kombination: det är
+    // rubriken som är Övriga, inte lövet.
+    expect(res.kolumner[2]!.nivaer[0]!.ovriga).toBe(true)
+    expect(res.kolumner[2]!.nivaer[0]!.varden).toBe(2) // C och D
     expect(res.doldaKolumnvarden).toBe(2)
     // Övriga bär två rader, så radsumman är fortfarande sju.
     expect(matris(res)).toEqual([
@@ -191,8 +200,8 @@ describe('pivotera', () => {
 
   it('räknar på hela filen som förval och på vyn när man ber om det', () => {
     const filtrerad: Frame = { ...ORTER, view: Uint32Array.from([0, 1]) }
-    const hela = pivotera(filtrerad, plan(filtrerad, { kolumn: null }))
-    const vyn = pivotera(filtrerad, plan(filtrerad, { kolumn: null, underlag: 'vyn' }))
+    const hela = pivotera(filtrerad, plan(filtrerad, { kolumner: [] }))
+    const vyn = pivotera(filtrerad, plan(filtrerad, { kolumner: [], underlag: 'vyn' }))
     expect(hela.antalKallrader).toBe(6)
     expect(vyn.antalKallrader).toBe(2)
     expect(vyn.rader.map((r) => r.etiketter[0])).toEqual(['Malmö'])
@@ -236,7 +245,7 @@ describe('pivotera', () => {
       ORTER,
       plan(ORTER, {
         rader: [kol(ORTER, 'Status'), kol(ORTER, 'Ort')],
-        kolumn: null,
+        kolumner: [],
         matvarden: [matvarde({ typ: 'summa', colId: kol(ORTER, 'Belopp') })],
       }),
     )
@@ -277,7 +286,7 @@ describe('pivotera', () => {
     const res = pivotera(
       ORTER,
       plan(ORTER, {
-        kolumn: null,
+        kolumner: [],
         matvarden: [
           matvarde({ id: 'a', typ: 'minsta', colId: kol(ORTER, 'Belopp') }),
           matvarde({ id: 'b', typ: 'storsta', colId: kol(ORTER, 'Belopp') }),
@@ -292,7 +301,7 @@ describe('pivotera', () => {
   })
 
   it('en pivot utan dimensioner är ett enda tal', () => {
-    const res = pivotera(ORTER, plan(ORTER, { rader: [], kolumn: null }))
+    const res = pivotera(ORTER, plan(ORTER, { rader: [], kolumner: [] }))
     expect(res.rader).toHaveLength(0)
     expect(res.bredd).toBe(1)
     expect(cell(res, 0, 0)).toBe('6')
@@ -304,6 +313,144 @@ describe('pivotera', () => {
       plan(ORTER, { matvarden: [matvarde({ typ: 'summa', colId: 'borta' })] }),
     )
     expect(res.text.every((t) => t === null)).toBe(true)
+  })
+})
+
+describe('flera kolumnfält', () => {
+  it('ger ett löv per kombination som finns i datat, i nästlad ordning', () => {
+    const res = pivotera(
+      ORTER,
+      plan(ORTER, { rader: [kol(ORTER, 'Kund')], kolumner: [kol(ORTER, 'Status'), kol(ORTER, 'Ort')] }),
+    )
+    // Sex kombinationer finns, inte de tolv den kartesiska produkten ger:
+    // Kiruna har ingen avslutad rad, Lund ingen … och så vidare.
+    expect(vagar(res)).toEqual([
+      'Aktiv/Kiruna',
+      'Aktiv/Lund',
+      'Aktiv/Malmö',
+      'Avslutad/Lund',
+      'Avslutad/Malmö',
+    ])
+    // Yttersta fältet först: alla Aktiv står före alla Avslutad. Det är
+    // ordningen rubrikvåningarna behöver för att kunna slås ihop till löpor.
+    expect(res.kolumner.map((l) => l.stig[0])).toEqual([0, 0, 0, 1, 1])
+    expect(res.kolumnnivaer).toBe(2)
+  })
+
+  it('räknar Totalt över alla löv, aldrig som en summa av dem', () => {
+    const res = pivotera(
+      ORTER,
+      plan(ORTER, {
+        rader: [kol(ORTER, 'Kund')],
+        kolumner: [kol(ORTER, 'Status'), kol(ORTER, 'Ort')],
+        matvarden: [matvarde({ typ: 'unika', colId: kol(ORTER, 'Kund') })],
+      }),
+    )
+    // Kund A står i tre löv men är en kund. Summan av lövens ettor vore tre.
+    const a = res.rader.findIndex((r) => r.etiketter[0] === 'A')
+    expect(cell(res, a, res.bredd - 1)).toBe('1')
+    expect(cell(res, res.rader.length, res.bredd - 1)).toBe('3') // A, B, C
+  })
+
+  it('lövens radantal summerar till källraderna', () => {
+    const res = pivotera(
+      ORTER,
+      plan(ORTER, { rader: [kol(ORTER, 'Kund')], kolumner: [kol(ORTER, 'Status'), kol(ORTER, 'Ort')] }),
+    )
+    expect(res.kolumner.reduce((s, l) => s + l.rader, 0)).toBe(res.antalKallrader)
+  })
+
+  it('viker in kombinationerna som inte fick plats i ett enda Övriga-löv', () => {
+    // Sju gånger sju värden ger fyrtionio kombinationer där båda
+    // dimensionerna ryms var för sig. Taket sitter alltså på produkten, och
+    // det är det som gör en kapad korstabell möjlig att läsa.
+    const rader: string[][] = []
+    for (let a = 0; a < 7; a++) {
+      for (let b = 0; b < 7; b++) rader.push([`A${a}`, `B${b}`, 'x'])
+    }
+    const f = frameOf(['A', 'B', 'Allt'], rader)
+    const res = pivotera(
+      f,
+      plan(f, { rader: [kol(f, 'Allt')], kolumner: [kol(f, 'A'), kol(f, 'B')] }),
+    )
+
+    expect(res.kolumner.length).toBe(KOLUMNLOVTAK + 1)
+    expect(res.doldaKolumnlov).toBe(49 - KOLUMNLOVTAK)
+    const sista = res.kolumner.at(-1)!
+    expect(sista.ovriga).toBe(true)
+    // Övriga-lövet är många stigar, inte en. Vyn ritar det över alla våningar.
+    expect(sista.nivaer).toEqual([])
+    expect(sista.rader).toBe(49 - KOLUMNLOVTAK)
+    // Totalt står kvar: Övriga bär raderna som inte fick egen spalt.
+    expect(cell(res, res.rader.length, res.bredd - 1)).toBe('49')
+    expect(res.kolumner.reduce((s, l) => s + l.rader, 0)).toBe(49)
+  })
+})
+
+describe('pivotens filter', () => {
+  it('en regel minskar underlaget utan att röra vyn', () => {
+    const res = pivotera(
+      ORTER,
+      plan(ORTER, {
+        kolumner: [],
+        filter: {
+          ...TOMT_FILTER,
+          regler: [
+            {
+              id: 'r1',
+              colId: kol(ORTER, 'Status'),
+              operator: 'iLista',
+              varde: '',
+              varden: ['Aktiv'],
+              av: false,
+            },
+          ],
+        },
+      }),
+    )
+    expect(res.antalKallrader).toBe(4)
+    expect(res.rader.map((r) => r.etiketter[0])).toEqual(['Kiruna', 'Lund', 'Malmö'])
+    expect(cell(res, res.rader.length, 0)).toBe('4')
+    // Filen är orörd — pivoten har en egen radkälla och skriver aldrig i vyn.
+    expect(ORTER.view.length).toBe(6)
+  })
+
+  it('två regler gallrar tillsammans', () => {
+    const tva = pivotera(
+      ORTER,
+      plan(ORTER, {
+        kolumner: [],
+        filter: {
+          ...TOMT_FILTER,
+          regler: [
+            {
+              id: 'r1',
+              colId: kol(ORTER, 'Status'),
+              operator: 'iLista',
+              varde: '',
+              varden: ['Aktiv'],
+              av: false,
+            },
+            {
+              id: 'r2',
+              colId: kol(ORTER, 'Ort'),
+              operator: 'iLista',
+              varde: '',
+              varden: ['Malmö', 'Lund'],
+              av: false,
+            },
+          ],
+        },
+      }),
+    )
+    expect(tva.antalKallrader).toBe(3)
+    expect(tva.rader.map((r) => r.etiketter[0])).toEqual(['Lund', 'Malmö'])
+  })
+
+  it('ett tomt filter kostar ingenting och ändrar ingenting', () => {
+    const utan = pivotera(ORTER, plan(ORTER))
+    const med = pivotera(ORTER, plan(ORTER, { filter: { ...TOMT_FILTER, regler: [] } }))
+    expect(matris(med)).toEqual(matris(utan))
   })
 })
 
@@ -328,21 +475,21 @@ describe('foreslagenPlan', () => {
     const p = foreslagenPlan(ORTER)
     // Status har två värden, Ort tre — den kortare blir rader.
     expect(p.rader).toEqual([kol(ORTER, 'Status')])
-    expect(p.kolumn).toBe(kol(ORTER, 'Ort'))
+    expect(p.kolumner).toEqual([kol(ORTER, 'Ort')])
     expect(p.matvarden[0]!.typ).toBe('antal')
   })
 
   it('börjar på kolumnen man kom från', () => {
     const p = foreslagenPlan(ORTER, kol(ORTER, 'Ort'))
     expect(p.rader).toEqual([kol(ORTER, 'Ort')])
-    expect(p.kolumn).not.toBe(kol(ORTER, 'Ort'))
+    expect(p.kolumner).not.toContain(kol(ORTER, 'Ort'))
   })
 
   it('klarar en fil där ingen kolumn är en kategori', () => {
     const f = frameOf(['Nr'], [['1'], ['2']])
     const p = foreslagenPlan(f)
     expect(p.rader).toEqual([kol(f, 'Nr')])
-    expect(p.kolumn).toBeNull()
+    expect(p.kolumner).toEqual([])
   })
 
   it('föreslår aldrig en talkolumn som dimension', () => {
@@ -359,7 +506,7 @@ describe('foreslagenPlan', () => {
     )
     const p = foreslagenPlan(f)
     expect(p.rader).toEqual([kol(f, 'Status')])
-    expect(p.kolumn).toBeNull()
+    expect(p.kolumner).toEqual([])
   })
 
   it('väljer inte en kolumn där nästan varje rad har sitt eget värde', () => {
@@ -374,7 +521,7 @@ describe('foreslagenPlan', () => {
     )
     const p = foreslagenPlan(f)
     expect(p.rader).toEqual([kol(f, 'Status')])
-    expect(p.kolumn).toBeNull()
+    expect(p.kolumner).toEqual([])
   })
 })
 
@@ -409,6 +556,25 @@ describe('pivotTillFrame', () => {
     ])
   })
 
+  it('namnger en nästlad kolumn med hela vägen', () => {
+    const p = plan(ORTER, {
+      rader: [kol(ORTER, 'Kund')],
+      kolumner: [kol(ORTER, 'Status'), kol(ORTER, 'Ort')],
+    })
+    const ut = pivotTillFrame(pivotera(ORTER, p), p, ORTER, 'x', TEXTER)
+    // `Lund` ensamt vore tvetydigt: samma ort står under både Aktiv och
+    // Avslutad, och två spalter med samma namn är ingen tabell.
+    expect(ut.columns.map((c) => c.name)).toEqual([
+      'Kund',
+      'Aktiv · Kiruna',
+      'Aktiv · Lund',
+      'Aktiv · Malmö',
+      'Avslutad · Lund',
+      'Avslutad · Malmö',
+      'Totalt',
+    ])
+  })
+
   it('tål ett kolumnvärde som heter samma sak som totalkolumnen', () => {
     const f = frameOf(
       ['Ort', 'Status'],
@@ -425,7 +591,7 @@ describe('pivotTillFrame', () => {
   it('tar bara med lövraderna när nivåerna är flera', () => {
     const p = plan(ORTER, {
       rader: [kol(ORTER, 'Status'), kol(ORTER, 'Ort')],
-      kolumn: null,
+      kolumner: [],
     })
     const res = pivotera(ORTER, p)
     const ut = pivotTillFrame(res, p, ORTER, 'x', TEXTER)
@@ -438,7 +604,7 @@ describe('pivotTillFrame', () => {
 describe('pivotnamn', () => {
   it('säger vad pivoten delar upp på', () => {
     expect(pivotnamn(ORTER, plan(ORTER))).toBe('fil.csv per Ort × Status')
-    expect(pivotnamn(ORTER, plan(ORTER, { kolumn: null }))).toBe('fil.csv per Ort')
-    expect(pivotnamn(ORTER, plan(ORTER, { rader: [], kolumn: null }))).toBe('fil.csv – pivot')
+    expect(pivotnamn(ORTER, plan(ORTER, { kolumner: [] }))).toBe('fil.csv per Ort')
+    expect(pivotnamn(ORTER, plan(ORTER, { rader: [], kolumner: [] }))).toBe('fil.csv – pivot')
   })
 })

@@ -119,6 +119,20 @@
   grid-template-rows: 1fr;
   min-height: 0;
   overflow: hidden;
+}
+
+/* Panelen till höger, som i Excel. Samma recept som `.kombinera__kropp`
+   redan använder — bara åt andra hållet. */
+.pivot__kropp--panel {
+  grid-template-columns: 1fr var(--panel-bredd);
+}
+
+.pivot__yta {
+  display: grid;
+  grid-template-rows: 1fr;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
   padding: 10px 14px;
 }
 
@@ -388,16 +402,24 @@
   text-align: left;
 }
 
+/*
+ * Rubrikvåningarnas höjd är fast, och det är avsiktligt.
+ *
+ * `position: sticky` behöver ett `top` i pixlar, och med nästlade kolumnfält
+ * kan våningarna bli tre eller fyra — offseten räknas därför ut i `RUBRIKHOJD`
+ * och sätts per cell. `line-height` plus lodrät utfyllnad plus linjen ger
+ * exakt det talet, oavsett vilken teckenstorlek en enskild våning har.
+ */
 .pivottab thead th {
   position: sticky;
   top: 0;
   z-index: 2;
   background: var(--yta-2);
   font-weight: 650;
+  line-height: 19px;
 }
 
-.pivottab thead tr:nth-child(2) th {
-  top: 30px;
+.pivottab__matvarde {
   font-weight: 500;
   font-size: 11.5px;
   color: var(--text-svag);
@@ -442,10 +464,6 @@
   font-size: 11px;
   font-weight: 500;
   color: var(--text-svag);
-}
-
-.pivottab__matvarde {
-  text-align: right;
 }
 
 .pivottab__tal {
@@ -504,4 +522,195 @@
 
 .pivottab tfoot th {
   z-index: 3;
+}
+
+/* ---------- Spaltlayouten ---------- */
+
+/* Delsummeraderna är fetare än sina löv. I den indragna listan gjorde indraget
+   det jobbet; här står allt i samma vänsterkant och behöver en annan skillnad. */
+.pivottab__rad--delsumma .pivottab__radrubrik {
+  font-weight: 650;
+  background: var(--yta-2);
+}
+
+/* ---------- Blocklayouten ---------- */
+
+/*
+ * Blocken bredvid varandra, och de rullar i sidled tillsammans.
+ *
+ * Varje block är en egen tabell med egna kolumnrubriker och egen delsumma.
+ * Det är dyrare i bläck än en indragen lista — men det är hela poängen: allt
+ * under `False` i en lista, allt under `True` i nästa, och jämförelsen sker
+ * med ögat i stället för med fingret på skärmen.
+ */
+.pivottab__omslag--block {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  border: 0;
+  background: transparent;
+}
+
+.pivottab__block {
+  flex: none;
+  border: 1px solid var(--linje);
+  border-radius: var(--radie);
+  background: var(--yta);
+  overflow: hidden;
+}
+
+.pivottab__blockrubrik {
+  display: flex;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  margin: 0;
+  padding: 5px 9px;
+  line-height: 19px;
+  border-bottom: 1px solid var(--linje-stark);
+  background: var(--yta-3);
+  font-size: 12.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+/* ---------- Fältpanelen ---------- */
+
+.pivotpanel {
+  border-right: 0;
+  border-left: 1px solid var(--linje);
+}
+
+/*
+ * Fältlistan har ett eget tak på höjden.
+ *
+ * En fil med sextio kolumner skulle annars trycka ned de fyra rutorna under
+ * fönsterkanten, och rutorna är det man ska se — listan är bara förrådet man
+ * hämtar ur.
+ */
+.pivotpanel__falt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 148px;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+  border-bottom: 1px solid var(--linje);
+}
+
+.pivotpanel__rutor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 8px;
+  overflow-y: auto;
+}
+
+.pivotruta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pivotruta__rubrik {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-svag);
+}
+
+.pivotruta__chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 2px;
+  border: 1px solid var(--linje);
+  border-top: 2px solid transparent;
+  border-radius: var(--radie);
+  background: var(--yta);
+  cursor: grab;
+  font-size: 12px;
+}
+
+/* Fältlistans chips är förrådets, inte planens: de bär ingen ordning och
+   ligger därför bredvid varandra i stället för under. */
+.pivotruta__chip--kalla {
+  background: var(--yta-3);
+  max-width: 100%;
+}
+
+/* Samma accentlinje som kolumnpanelens `--slappmal`. Släppet sker ovanför
+   raden man pekar på, och linjen är det som säger var. */
+.pivotruta__chip--slappmal {
+  border-top-color: var(--accent);
+}
+
+.pivotruta__namn {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+}
+
+button.pivotruta__namn {
+  cursor: pointer;
+}
+
+.pivotruta__bikst {
+  margin-left: 6px;
+  color: var(--text-svag);
+  font-size: 11px;
+}
+
+.pivotruta__meny {
+  flex: none;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-svag);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pivotruta__meny:hover {
+  background: var(--yta-hover);
+  color: var(--text);
+}
+
+/* En tom ruta säger vad den vill ha. En tom ruta utan text ser ut som en bugg. */
+.pivotruta__botten {
+  min-height: 26px;
+  border: 1px dashed var(--linje);
+  border-top-width: 2px;
+  border-top-style: solid;
+  border-top-color: transparent;
+  border-radius: var(--radie);
+  padding: 4px 6px;
+}
+
+.pivotruta__botten--slappmal {
+  border-top-color: var(--accent);
+}
+
+.pivotruta__tom {
+  color: var(--text-svag);
+  font-size: 11.5px;
+}
+
+.pivotruta__inst {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0 6px 18px;
 }
