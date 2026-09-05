@@ -311,20 +311,6 @@ export function MergeTool(props: {
       <label class="kryss">
         <input
           type="checkbox"
-          checked={komIhag}
-          onChange={(e) => setKomIhag((e.currentTarget as HTMLInputElement).checked)}
-        />
-        {t('Kom ihåg mallen för kolumnen')}
-      </label>
-      <p class="verktyg__sammanfattning">
-        {t(
-          'Kolumnen märks som byggd ur mallen. Den räknas aldrig om av sig själv — men när källorna ändrats får du en Uppdatera i statusraden.',
-        )}
-      </p>
-
-      <label class="kryss">
-        <input
-          type="checkbox"
           checked={stadaLuckor}
           onChange={(e) => setStadaLuckor((e.currentTarget as HTMLInputElement).checked)}
         />
@@ -338,6 +324,20 @@ export function MergeTool(props: {
           onInput={(e) => setNamn((e.currentTarget as HTMLInputElement).value)}
         />
       </div>
+
+      <label class="kryss">
+        <input
+          type="checkbox"
+          checked={komIhag}
+          onChange={(e) => setKomIhag((e.currentTarget as HTMLInputElement).checked)}
+        />
+        {t('Kom ihåg mallen för kolumnen')}
+      </label>
+      <p class="verktyg__sammanfattning">
+        {t(
+          'Kolumnen märks som byggd ur mallen. Den räknas aldrig om av sig själv — men när källorna ändrats får du en Uppdatera i statusraden.',
+        )}
+      </p>
 
       <Resultat
         visaBara={props.visaBara}
