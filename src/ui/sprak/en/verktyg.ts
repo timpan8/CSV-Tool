@@ -249,6 +249,7 @@ export const VERKTYG: Record<string, string> = {
   'Första raden': 'First row',
   'Sista raden': 'Last row',
   'Så blir det': 'How it comes out',
+  'Senast använda': 'Recently used',
   'Kom ihåg mallen för kolumnen': 'Remember the template for the column',
   'Kolumnen märks som byggd ur mallen. Den räknas aldrig om av sig själv — men när källorna ändrats får du en Uppdatera i statusraden.':
     'The column is marked as built from the template. It never recalculates on its own — but when the sources change you get an Update in the status bar.',

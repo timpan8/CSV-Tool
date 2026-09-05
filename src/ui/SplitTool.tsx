@@ -16,6 +16,7 @@ import {
   type Delningssatt,
 } from '../core/ops/columns.js'
 import { beraknaForhandsvisning, type Forhandsvisning } from '../state/preview.js'
+import { anvandeMall, mallarAvSort } from '../state/mallar.js'
 import { formatCount } from '../core/locale/sv.js'
 import { celler, sprak, t, tf, tj } from './sprak.js'
 
@@ -50,7 +51,9 @@ export function SplitTool(props: {
   const [position, setPosition] = useState(3)
   const [antal, setAntal] = useState(2)
   const [namn, setNamn] = useState<(string | undefined)[]>([])
-  const [monster, setMonster] = useState('{Namn} <{E-post}>')
+  // Ett mönster nämner kolumner som *ska skapas*, inte som måste finnas, så
+  // det går alltid att fylla i — till skillnad från mallen i MergeTool.
+  const [monster, setMonster] = useState(mallarAvSort('monster')[0]?.text ?? '{Namn} <{E-post}>')
 
   const armonster = satt === 'monster'
   const avgransare = avgransarval === 'eget' ? egen : avgransarval
@@ -65,6 +68,9 @@ export function SplitTool(props: {
   const monsterdelar = useMemo(() => delaMall(monster), [monster])
   const monsternamn = useMemo(() => monsterkolumner(monsterdelar), [monsterdelar])
   const fel = armonster ? monsterfel(monsterdelar) : null
+  const monsterforslag = armonster
+    ? mallarAvSort('monster').filter((m) => m.text !== monster)
+    : []
 
   const faktisktAntal = armonster ? Math.max(1, monsternamn.length) : antal
   const inst: Delning = {
@@ -165,7 +171,10 @@ export function SplitTool(props: {
                   ? t('Delningen ger inga värden.')
                   : undefined
             }
-            onClick={() => props.onTillampa([forh])}
+            onClick={() => {
+              if (armonster) anvandeMall({ sort: 'monster', text: monster })
+              props.onTillampa([forh])
+            }}
           >
             {tf('Skapa {0} kolumner', formatCount(faktisktAntal))}
           </button>
@@ -182,20 +191,42 @@ export function SplitTool(props: {
       </div>
 
       {armonster ? (
-        <div class="falt">
-          <span class="falt__etikett">{t('Mönster')}</span>
-          <input
-            value={monster}
-            onInput={(e) => setMonster((e.currentTarget as HTMLInputElement).value)}
-          />
-          <p class="verktyg__sammanfattning">
-            {tj(
-              'Skriv värdet som det ser ut och sätt {0} runt det du vill plocka ut. Texten emellan är avgränsarna, och varje klammer blir en kolumn.',
-              <code>{'{Namn}'}</code>,
-            )}
-          </p>
-          {fel !== null && <Notis ton="fara">{t(fel)}</Notis>}
-        </div>
+        <>
+          <div class="falt">
+            <span class="falt__etikett">{t('Mönster')}</span>
+            <input
+              value={monster}
+              onInput={(e) => setMonster((e.currentTarget as HTMLInputElement).value)}
+            />
+            <p class="verktyg__sammanfattning">
+              {tj(
+                'Skriv värdet som det ser ut och sätt {0} runt det du vill plocka ut. Texten emellan är avgränsarna, och varje klammer blir en kolumn.',
+                <code>{'{Namn}'}</code>,
+              )}
+            </p>
+            {fel !== null && <Notis ton="fara">{t(fel)}</Notis>}
+          </div>
+
+          {/* Samma rad och samma etikett som i mallverktyget — det är samma
+              sorts text, och två paneler som gör samma sak ska se likadana ut. */}
+          {monsterforslag.length > 0 && (
+            <div class="falt">
+              <span class="falt__etikett">{t('Senast använda')}</span>
+              <div class="val" role="group">
+                {monsterforslag.map((m, i) => (
+                  <button
+                    key={i}
+                    class="val__knapp"
+                    title={m.text}
+                    onClick={() => setMonster(m.text)}
+                  >
+                    {kort(m.text)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       ) : satt === 'position' ? (
         <div class="falt">
           <span class="falt__etikett">{t('Efter hur många tecken')}</span>
@@ -312,4 +343,9 @@ export function SplitTool(props: {
       )}
     </Verktygspanel>
   )
+}
+
+/** Kortar ett mönster så att chipset inte blir bredare än panelen. */
+function kort(text: string): string {
+  return text.length > 28 ? `${text.slice(0, 27)}…` : text
 }

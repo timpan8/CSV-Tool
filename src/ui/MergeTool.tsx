@@ -9,6 +9,7 @@ import {
   type Mallar,
 } from '../core/ops/columns.js'
 import { beraknaForhandsvisning, type Forhandsvisning } from '../state/preview.js'
+import { anvandeMall, mallarAvSort, type Sparadmall } from '../state/mallar.js'
 import { formatCount } from '../core/locale/sv.js'
 import { celler, sprak, t, tf, tj } from './sprak.js'
 
@@ -41,14 +42,67 @@ export function MergeTool(props: {
    * panelen kan läsa den själv när den monteras.
    */
   const regel = col.regel
-  const [mall, setMall] = useState(regel?.mall ?? `{${col.name}} `)
+
+  /*
+   * Den senast använda mallen, om den går att köra här.
+   *
+   * En mall som nämner en kolumn den här filen saknar hade öppnat panelen med
+   * ett rött fel man inte bett om. Ett chip man *klickat* på ska ge felet — då
+   * är felet svaret på klicket — men en förifyllning ska inte göra det.
+   */
+  const senaste = useMemo(() => {
+    const kandidat = mallarAvSort('mall')[0]
+    if (!kandidat) return null
+    const okanda = [kandidat.text, kandidat.forsta, kandidat.sista].some(
+      (text) => text !== undefined && tolkaMall(text, frame).okanda.length > 0,
+    )
+    return okanda ? null : kandidat
+  }, [])
+
+  const start = regel ?? senaste ?? null
+  const startmall = regel?.mall ?? senaste?.text
+  const [mall, setMall] = useState(startmall ?? `{${col.name}} `)
   const [namn, setNamn] = useState(regel ? col.name : 'Sammanslagen')
-  const [stadaLuckor, setStadaLuckor] = useState(regel?.stadaLuckor ?? true)
-  const [egenForsta, setEgenForsta] = useState(regel?.forsta !== undefined)
-  const [forsta, setForsta] = useState(regel?.forsta ?? '')
-  const [egenSista, setEgenSista] = useState(regel?.sista !== undefined)
-  const [sista, setSista] = useState(regel?.sista ?? '')
+  const [stadaLuckor, setStadaLuckor] = useState(start?.stadaLuckor ?? true)
+  const [egenForsta, setEgenForsta] = useState(start?.forsta !== undefined)
+  const [forsta, setForsta] = useState(start?.forsta ?? '')
+  const [egenSista, setEgenSista] = useState(start?.sista !== undefined)
+  const [sista, setSista] = useState(start?.sista ?? '')
   const [komIhag, setKomIhag] = useState(true)
+
+  /** Den nuvarande inställningen som en sparbar post. */
+  const somSparad = (): Sparadmall => ({
+    sort: 'mall',
+    text: mall,
+    ...(egenForsta ? { forsta } : {}),
+    ...(egenSista ? { sista } : {}),
+    stadaLuckor,
+  })
+
+  /*
+   * Listan utan den mall som redan står i fälten.
+   *
+   * Att erbjuda det man redan har är brus, och ett chip som inte gör någonting
+   * när man klickar på det lär en att inte klicka på chipsen.
+   */
+  const forslag = mallarAvSort('mall').filter((m) => {
+    const nu = somSparad()
+    return !(
+      m.text === nu.text &&
+      m.forsta === nu.forsta &&
+      m.sista === nu.sista &&
+      m.stadaLuckor === nu.stadaLuckor
+    )
+  })
+
+  const valjMall = (m: Sparadmall) => {
+    setMall(m.text)
+    setEgenForsta(m.forsta !== undefined)
+    setForsta(m.forsta ?? '')
+    setEgenSista(m.sista !== undefined)
+    setSista(m.sista ?? '')
+    setStadaLuckor(m.stadaLuckor ?? true)
+  }
 
   /*
    * Ett undantag börjar som en kopia av huvudmallen.
@@ -191,7 +245,11 @@ export function MergeTool(props: {
                   ? t('Kolumnen skulle bli tom.')
                   : undefined
             }
-            onClick={() => props.onTillampa([forh])}
+            onClick={() => {
+              // Mallen räknas som använd när den körs, inte medan den skrivs.
+              anvandeMall(somSparad())
+              props.onTillampa([forh])
+            }}
           >
             {t('Skapa kolumnen')}
           </button>
@@ -211,6 +269,24 @@ export function MergeTool(props: {
           )}
         </p>
       </div>
+
+      {forslag.length > 0 && (
+        <div class="falt">
+          <span class="falt__etikett">{t('Senast använda')}</span>
+          <div class="val" role="group">
+            {forslag.map((m, i) => (
+              <button
+                key={i}
+                class="val__knapp"
+                title={m.text + (m.sista !== undefined ? `\n${t('Sista raden')}: ${m.sista}` : '')}
+                onClick={() => valjMall(m)}
+              >
+                {kort(m.text)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div class="falt">
         <span class="falt__etikett">{t('Lägg till kolumn')}</span>
@@ -360,4 +436,14 @@ export function MergeTool(props: {
       </Notis>
     </Verktygspanel>
   )
+}
+
+/**
+ * Kortar en mall så att chipset inte blir bredare än panelen.
+ *
+ * Hela texten står i `title`, så inget går förlorat — och en mall är oftast
+ * kortare än taket ändå.
+ */
+function kort(text: string): string {
+  return text.length > 28 ? `${text.slice(0, 27)}…` : text
 }

@@ -606,7 +606,8 @@ export function uppdateraRegler(
   const jobb: { col: Column; mallar: Mallar; regel: Kolumnregel }[] = []
 
   for (const col of valda) {
-    if (!col.regel) continue
+    // En avstängd mall ska inte väckas av *Uppdatera* i statusraden.
+    if (!col.regel || col.regel.avstangd) continue
     const { mallar, okanda } = regelnsMallar(tab.frame, col.regel)
     if (okanda.length > 0) {
       saknade.push({ namn: col.name, kolumner: okanda })
@@ -663,15 +664,26 @@ export function uppdateraRegler(
   return { andrade, korda: jobb.map((j) => j.col), saknade }
 }
 
-/** Tar bort regeln men lämnar värdena. Ett eget, ångringsbart steg. */
-export function slappRegel(tab: Tab, col: Column): void {
+/**
+ * Stänger av eller slår på mallen. Värdena rörs aldrig.
+ *
+ * En avstängd mall **kastas inte** — den ligger kvar på kolumnen med
+ * `avstangd: true`. Skälet är att den vanligaste anledningen till att en mall
+ * är av är att någon råkat stänga av den, och `Ctrl+Z` hjälper bara den som
+ * märker det direkt: har man gjort tio saker sedan dess pekar ångra på något
+ * annat, och historiken överlever inte heller en omladdning. Med regeln kvar
+ * är vägen tillbaka ett klick i kolumnmenyn, när som helst.
+ *
+ * Varje växling är ändå ett eget ångra-steg, som förut.
+ */
+export function vaxlaRegel(tab: Tab, col: Column, av: boolean): void {
   const regel = col.regel
-  if (!regel) return
+  if (!regel || (regel.avstangd ?? false) === av) return
   runStep(tab, {
-    label: tf('Släppte mallen för {0}', col.name),
+    label: av ? tf('Stängde av mallen för {0}', col.name) : tf('Slog på mallen för {0}', col.name),
     kind: 'regel',
     apply: () => {
-      col.regel = undefined
+      col.regel = { ...regel, avstangd: av }
     },
     revert: () => {
       col.regel = { ...regel }

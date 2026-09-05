@@ -4,6 +4,7 @@ import { computeView, harBegransning, TOM_VY, utanBegransning, type ViewSpec } f
 import type { Forhandsvisning } from './preview.js'
 import { synkaOrdning, type Ordning } from './ordning.js'
 import { glomPlan } from './pivot.js'
+import { glomMallar } from './mallar.js'
 import type { Sorteringsniva } from '../core/ops/sort.js'
 import { aktivaRegler, TOMT_FILTER, type Filter } from '../core/ops/filter.js'
 import type { Dubblettnyckel } from '../core/ops/duplicates.js'
@@ -343,6 +344,16 @@ export async function borjaOm(): Promise<void> {
   activeTabId.value = null
   toasts.value = []
   kastaVerkstad()
+  /*
+   * Mallhistoriken går med, profilerna inte.
+   *
+   * Skillnaden är vad de är: en profil är något du medvetet skapat och döpt,
+   * och att kasta den vore att kasta ditt arbete. Historiken över senast
+   * använda mallar har du aldrig bett om — den är ett spår av ditt data,
+   * kolumnnamnen du skrivit och allt, och hör därför till det som *Börja om*
+   * lovar att städa bort.
+   */
+  glomMallar()
   await glomSparat()
   window.location.reload()
 }
