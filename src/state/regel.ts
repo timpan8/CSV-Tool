@@ -48,7 +48,10 @@ export function regellagen(tab: Tab): Regellage[] {
 
   const lage: Regellage[] = []
   for (const col of tab.frame.columns) {
-    if (!col.regel) continue
+    // En avstängd mall räknas inte som inaktuell: den har inget löfte att
+    // svika. Därmed faller den ur statusradens chip och ur `inaktuellaRegler`
+    // utan att något av dem behöver veta om av-läget.
+    if (!col.regel || col.regel.avstangd) continue
     const { okanda } = regelnsMallar(tab.frame, col.regel)
     lage.push({
       col,

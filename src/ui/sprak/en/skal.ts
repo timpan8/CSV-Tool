@@ -73,7 +73,12 @@ export const SKAL: Record<string, string> = {
   Uppdatera: 'Update',
   'Uppdatera ur mallen': 'Update from the template',
   'Ändra mallen…': 'Change the template…',
-  'Släpp mallen': 'Drop the template',
+  'Stäng av mallen': 'Turn the template off',
+  'Slå på mallen igen': 'Turn the template back on',
+  'kolumnen slutar följa sina källor, men mallen finns kvar':
+    'the column stops following its sources, but the template stays',
+  'Mallen är avstängd. Slå på den i kolumnmenyn.':
+    'The template is turned off. Turn it back on from the column menu.',
   '{0} är inaktuell': '{0} is out of date',
   '{0} mallkolumner är inaktuella': '{0} template columns are out of date',
   'Byggd ur en mall.': 'Built from a template.',
@@ -84,12 +89,12 @@ export const SKAL: Record<string, string> = {
   'Mallen pekar på en kolumn som inte finns längre. Kolumnen står kvar som den är.':
     'The template points at a column that no longer exists. The column stays as it is.',
   'Mallen går inte att köra.': 'The template cannot be run.',
-  'kolumnen blir vanlig data': 'the column becomes ordinary data',
   'källorna har ändrats sedan kolumnen fylldes':
     'the sources have changed since the column was filled',
   'källorna är oförändrade': 'the sources are unchanged',
   'mallen pekar på {0}, som inte finns': 'the template points at {0}, which does not exist',
-  'Släppte mallen för {0}': 'Dropped the template for {0}',
+  'Stängde av mallen för {0}': 'Turned off the template for {0}',
+  'Slog på mallen för {0}': 'Turned the template for {0} back on',
   'Uppdaterade {0} ur mallen': 'Updated {0} from the template',
   'Uppdaterade {0} ur sina mallar': 'Updated {0} from their templates',
   'Uppdaterade {0} — {1} ändrades.': 'Updated {0} — {1} changed.',

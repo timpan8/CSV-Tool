@@ -110,6 +110,18 @@ export type Kolumnregel = {
   kallor: string[]
   /** Fingeravtryck över källorna vid den senaste beräkningen. */
   avtryck: number
+  /**
+   * Sant när mallen är avstängd.
+   *
+   * En avstängd mall räknas inte om, flaggas inte som inaktuell och räknas
+   * inte med när statusraden erbjuder *Uppdatera* — men den finns kvar, och
+   * det är hela skillnaden mot att kasta den. Att slå av något av misstag ska
+   * gå att ta tillbaka i morgon, inte bara med nästa `Ctrl+Z`.
+   *
+   * Valfritt, så varje regel som redan ligger i någons webbläsare läses som
+   * påslagen.
+   */
+  avstangd?: boolean
 }
 
 /**

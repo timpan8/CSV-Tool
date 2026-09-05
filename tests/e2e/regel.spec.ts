@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { vantaPaSparat } from './lagringshjalp.js'
 
 /**
  * Den levande mallen.
@@ -123,13 +124,48 @@ test('en omdöpt källkolumn tar mallen med sig', async ({ page }) => {
   await expect(page.getByRole('menuitem', { name: /Ändra mallen/ })).toContainText('{Kund}')
 })
 
-test('släpp mallen lämnar värdena kvar', async ({ page }) => {
+test('en avstängd mall står kvar, dämpad, och går att slå på igen', async ({ page }) => {
+  await oppnaExempel(page)
+  await byggMallkolumn(page)
+
+  // Gör den inaktuell först, så att det syns att avstängningen tystar chippet.
+  await cell(page, 'Anna Karlsson').first().dblclick()
+  await page.keyboard.press('Control+a')
+  await page.keyboard.type('Anna Ny')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.statusrad')).toContainText('SQL är inaktuell')
+
+  await page.getByRole('button', { name: 'Meny för kolumnen SQL' }).click()
+  await page.getByRole('menuitem', { name: /Stäng av mallen/ }).click()
+
+  // Märket bleknar i stället för att försvinna — annars blir olyckan tyst.
+  await expect(page.locator('.mallbricka--av')).toHaveCount(1)
+  await expect(page.locator('.statusrad')).not.toContainText('inaktuell')
+  await expect(cell(page, "('Anna Karlsson'),").first()).toBeVisible()
+
+  // Vägen tillbaka är ett klick, inte ett Ctrl+Z.
+  await page.getByRole('button', { name: 'Meny för kolumnen SQL' }).click()
+  await expect(page.getByRole('menuitem', { name: /Uppdatera ur mallen/ })).toHaveCount(0)
+  await page.getByRole('menuitem', { name: /Slå på mallen igen/ }).click()
+
+  await expect(page.locator('.mallbricka--av')).toHaveCount(0)
+  await expect(page.locator('.statusrad')).toContainText('SQL är inaktuell')
+})
+
+test('en avstängd mall överlever en omladdning', async ({ page }) => {
   await oppnaExempel(page)
   await byggMallkolumn(page)
 
   await page.getByRole('button', { name: 'Meny för kolumnen SQL' }).click()
-  await page.getByRole('menuitem', { name: /Släpp mallen/ }).click()
+  await page.getByRole('menuitem', { name: /Stäng av mallen/ }).click()
+  await expect(page.locator('.mallbricka--av')).toHaveCount(1)
 
-  await expect(page.locator('.mallbricka')).toHaveCount(0)
-  await expect(cell(page, "('Anna Karlsson'),").first()).toBeVisible()
+  // Skrivningen till lagringen är fördröjd med flit — se `schemalaggSpar`.
+  await vantaPaSparat(page, '"avstangd":true')
+  await page.reload()
+  await expect(page.locator('.statusrad')).toContainText('16 rader')
+  // Poängen med av-läget: vägen tillbaka finns kvar när ångra-historiken inte gör det.
+  await expect(page.locator('.mallbricka--av')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Meny för kolumnen SQL' }).click()
+  await expect(page.getByRole('menuitem', { name: /Slå på mallen igen/ })).toBeVisible()
 })

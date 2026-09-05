@@ -717,12 +717,28 @@ function Header(props: HeaderProps) {
           {TYPE_BADGES[col.type]}
         </button>
         {col.regel && (
+          /*
+           * Märket försvinner inte när mallen stängs av — det bleknar.
+           *
+           * Den vanligaste anledningen till att en mall är av är att någon
+           * råkat stänga av den. Ett märke som försvann hade gjort olyckan
+           * tyst: kolumnen slutar följa sina källor utan att något syns. Den
+           * dämpade tonen är hela skillnaden mellan en olycka och ett beslut.
+           */
           <span
-            class={`mallbricka${props.regelInaktuell ? ' mallbricka--inaktuell' : ''}`}
+            class={`mallbricka${
+              col.regel.avstangd
+                ? ' mallbricka--av'
+                : props.regelInaktuell
+                  ? ' mallbricka--inaktuell'
+                  : ''
+            }`}
             title={
-              (props.regelInaktuell
-                ? t('Byggd ur en mall. Källorna har ändrats sedan kolumnen fylldes.')
-                : t('Byggd ur en mall.')) + `\n${col.regel.mall}`
+              (col.regel.avstangd
+                ? t('Mallen är avstängd. Slå på den i kolumnmenyn.')
+                : props.regelInaktuell
+                  ? t('Byggd ur en mall. Källorna har ändrats sedan kolumnen fylldes.')
+                  : t('Byggd ur en mall.')) + `\n${col.regel.mall}`
             }
           >
             {t('mall')}

@@ -632,3 +632,15 @@
   background: var(--varning-svag);
   color: var(--varning);
 }
+
+/*
+ * Avstängd: dämpad, inte borta.
+ *
+ * Den streckade ramen är samma språk som spökkolumnerna talar — något som
+ * finns men inte gäller just nu.
+ */
+.mallbricka--av {
+  border-style: dashed;
+  color: color-mix(in srgb, var(--text-svag) 70%, transparent);
+  border-color: color-mix(in srgb, var(--linje-stark) 70%, transparent);
+}

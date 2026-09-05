@@ -66,7 +66,7 @@ import {
   sattMarkering,
   selectableColumns,
   selectedRows,
-  slappRegel,
+  vaxlaRegel,
   stadaKolumner,
   uppdateraRegler,
   taBortRader,
@@ -1027,10 +1027,26 @@ export function App() {
     )
   }
 
-  /** Posterna för en kolumn som är byggd ur en mall. Tom lista annars. */
+  /**
+   * Posterna för en kolumn som är byggd ur en mall. Tom lista annars.
+   *
+   * En avstängd mall får en enda post — vägen tillbaka. Att visa *Uppdatera*
+   * och *Ändra* på något som är av vore att erbjuda handlingar som inte har
+   * någon verkan.
+   */
   const regelposter = (col: Column): (MenyPost | 'avdelare')[] => {
     const nu = nuLage()
     if (!nu || !col.regel) return []
+    if (col.regel.avstangd) {
+      return [
+        'avdelare',
+        {
+          etikett: t('Slå på mallen igen'),
+          skal: col.regel.mall,
+          kor: () => vaxlaRegel(nu.tab, col, false),
+        },
+      ]
+    }
     const lage = regellageFor(nu.tab, col)
     const trasig = (lage?.saknade.length ?? 0) > 0
     return [
@@ -1051,9 +1067,9 @@ export function App() {
         kor: () => oppnaVerktyg('slaihop', [col.id]),
       },
       {
-        etikett: t('Släpp mallen'),
-        skal: t('kolumnen blir vanlig data'),
-        kor: () => slappRegel(nu.tab, col),
+        etikett: t('Stäng av mallen'),
+        skal: t('kolumnen slutar följa sina källor, men mallen finns kvar'),
+        kor: () => vaxlaRegel(nu.tab, col, true),
       },
     ]
   }

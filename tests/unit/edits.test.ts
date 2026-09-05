@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { createColumn, getCell, intern } from '../../src/core/frame/column.js'
 import { createFrame } from '../../src/core/frame/frame.js'
-import { Flag, type Frame, type Kolumnregel } from '../../src/core/types.js'
+import { Flag, type Column, type Frame, type Kolumnregel } from '../../src/core/types.js'
 import { cell, type Selection } from '../../src/state/selection.js'
 import { aggregera } from '../../src/state/selection.js'
 import { nyTab, redo, undo, type Tab } from '../../src/state/store.js'
+import { inaktuellaRegler } from '../../src/state/regel.js'
 import {
   dupliceraRader,
   fyllNedat,
@@ -19,7 +20,7 @@ import {
   taBortRader,
   taBortTommaKolumner,
   taBortTommaRader,
-  slappRegel,
+  vaxlaRegel,
   uppdateraRegler,
 } from '../../src/state/edits.js'
 
@@ -373,8 +374,8 @@ describe('uppdateraRegler', () => {
   })
 })
 
-describe('slappRegel', () => {
-  it('tar bort regeln men lämnar värdena, och går att ångra', () => {
+describe('vaxlaRegel', () => {
+  function medRegel(): { tab: Tab; col: Column } {
     const frame = frameOf(['Namn', 'SQL'], [['Anna', "('Anna'),"]])
     frame.columns[1]!.regel = {
       typ: 'mall',
@@ -383,12 +384,60 @@ describe('slappRegel', () => {
       kallor: ['Namn'],
       avtryck: 0,
     }
-    const tab = nyTab(frame)
-    slappRegel(tab, frame.columns[1]!)
-    expect(frame.columns[1]!.regel).toBeUndefined()
-    expect(getCell(frame.columns[1]!, 0)).toBe("('Anna'),")
+    return { tab: nyTab(frame), col: frame.columns[1]! }
+  }
 
+  it('stänger av mallen utan att kasta den, och lämnar värdena', () => {
+    const { tab, col } = medRegel()
+    vaxlaRegel(tab, col, true)
+    // Regeln finns kvar — det är hela skillnaden mot att kasta den. Vägen
+    // tillbaka ska vara ett klick i morgon, inte bara nästa Ctrl+Z.
+    expect(col.regel?.avstangd).toBe(true)
+    expect(col.regel?.mall).toBe("('{Namn}'),")
+    expect(getCell(col, 0)).toBe("('Anna'),")
+  })
+
+  it('slår på den igen', () => {
+    const { tab, col } = medRegel()
+    vaxlaRegel(tab, col, true)
+    vaxlaRegel(tab, col, false)
+    expect(col.regel?.avstangd).toBe(false)
+  })
+
+  it('är ett ångra-steg per växling', () => {
+    const { tab, col } = medRegel()
+    const fore = tab.history.length
+    vaxlaRegel(tab, col, true)
+    expect(tab.history.length).toBe(fore + 1)
     undo(tab)
-    expect(frame.columns[1]!.regel?.mall).toBe("('{Namn}'),")
+    expect(col.regel?.avstangd).toBeUndefined()
+  })
+
+  it('gör ingenting när läget redan stämmer', () => {
+    const { tab, col } = medRegel()
+    const fore = tab.history.length
+    vaxlaRegel(tab, col, false)
+    expect(tab.history.length).toBe(fore)
+  })
+
+  it('låter Uppdatera stå över en avstängd kolumn', () => {
+    const { tab, col } = medRegel()
+    vaxlaRegel(tab, col, true)
+    tab.frame.columns[0]!.codes[0] = intern(tab.frame.columns[0]!, 'Annika')
+
+    const { andrade, korda } = uppdateraRegler(tab, [col])
+    expect(andrade).toBe(0)
+    expect(korda).toEqual([])
+    expect(getCell(col, 0)).toBe("('Anna'),")
+  })
+
+  it('räknas inte som inaktuell', () => {
+    const { tab, col } = medRegel()
+    tab.frame.columns[0]!.codes[0] = intern(tab.frame.columns[0]!, 'Annika')
+    expect(inaktuellaRegler(tab)).toHaveLength(1)
+
+    vaxlaRegel(tab, col, true)
+    // En avstängd mall har inget löfte att svika, så statusraden ska tiga.
+    expect(inaktuellaRegler(tab)).toEqual([])
   })
 })
