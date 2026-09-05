@@ -105,6 +105,29 @@ describe('diagramdata', () => {
     ])
   })
 
+  it('bara kolumnfält: löven blir kategorier och Totalt-raden serien', () => {
+    const p = plan(ORTER, { rader: [], kolumner: [kol(ORTER, 'Status')] })
+    const d = rita(ORTER, p, dplan(), 'tal', { tomt: '(tomt)', ovriga: 'Övriga' })
+    expect(d.kategorier).toEqual(['Aktiv', 'Avslutad'])
+    expect(d.serier).toHaveLength(1)
+    expect(d.serier[0]!.varden).toEqual([4, 2])
+  })
+
+  it('andelen räknas med samma formel som tabellen, även utan radfält', () => {
+    const p = plan(ORTER, { rader: [], kolumner: [kol(ORTER, 'Status')] })
+    // Andel av rad: spaltens del av radens Totalt — fyra av sex, två av sex.
+    const rad = rita(ORTER, p, dplan(), 'andelRad')
+    expect(rad.serier[0]!.varden).toEqual([4 / 6, 2 / 6])
+    /*
+     * Andel av kolumn: cellens del av sin *egen* spalts Totalt. Den enda raden
+     * *är* Totalt-raden, så svaret är hundra procent i varje spalt — samma tal
+     * som tabellen skriver. Vyn stänger av valet just därför, men kärnan ska
+     * svara likadant oavsett vem som frågar.
+     */
+    const kolumn = rita(ORTER, p, dplan(), 'andelKolumn')
+    expect(kolumn.serier[0]!.varden).toEqual([1, 1])
+  })
+
   it('utan kolumndimension finns en enda serie', () => {
     const d = rita(ORTER, plan(ORTER, { kolumner: [] }), dplan())
     expect(d.serier).toHaveLength(1)

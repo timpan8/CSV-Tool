@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'preact/hooks'
 import { Verktygspanel } from './Verktygspanel.js'
 import { Vardelista } from './Vardelista.js'
+import { utanEgenRegel } from './filterrader.js'
 import { Notis, Val } from './parts.js'
 import type { Frame } from '../core/types.js'
 import { findColumn, identityView, visibleColumns } from '../core/frame/frame.js'
@@ -28,17 +29,6 @@ import { rader as raderText, t, tf } from './sprak.js'
  * Varje regel kan slås av utan att tas bort. Det är skillnaden mellan att
  * pröva sig fram och att börja om.
  */
-/**
- * Raderna en regels värdelista ska räkna på: alla utom den egna regeln.
- *
- * Det är den enda regeln värd att komma ihåg om värdelistan — kryssar man i
- * *Malmö* får inte *Lund* försvinna ur listan i samma ögonblick.
- */
-function utanEgenRegel(frame: Frame, filter: Filter, id: string): Uint32Array {
-  const utan: Filter = { ...filter, regler: filter.regler.filter((r) => r.id !== id) }
-  return tillampaFilter(frame, utan, identityView(frame.rowCount)).rader
-}
-
 export function FilterTool(props: {
   frame: Frame
   revision: number

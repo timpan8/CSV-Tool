@@ -101,12 +101,6 @@ export function diagramdata(
    * varje källrad två gånger — i tabellen syns skillnaden som indrag, i ett
    * stapeldiagram som en stapel dubbelt så hög bredvid sina egna delar.
    */
-  // Lövnivån läses ur resultatet, inte ur planen: ett radfält vars kolumn
-  // tagits bort finns i planen men inte i tabellen, och då är sista nivån en
-  // mindre än planen säger.
-  const sistaNiva = resultat.rader.reduce((m, r) => Math.max(m, r.niva), 0)
-  const lov = ordning.filter((i) => resultat.rader[i]?.niva === sistaNiva)
-
   /*
    * Bara kolumnfält, inga radfält: tabellen visar en Totalt-rad med tal, och
    * det är de talen som ska ritas. Kolumnlöven blir kategorier och Totalt-raden
@@ -114,8 +108,14 @@ export function diagramdata(
    * vad man menar när man lägger dem i Kolumner och ändå vill se staplar.
    */
   if (resultat.rader.length === 0 && resultat.kolumner.length > 0) {
-    return liggandeAxel(resultat, plan, m, visning, texter)
+    return kolumnlovSomKategorier(resultat, plan, m, visning, texter)
   }
+
+  // Lövnivån läses ur resultatet, inte ur planen: ett radfält vars kolumn
+  // tagits bort finns i planen men inte i tabellen, och då är sista nivån en
+  // mindre än planen säger.
+  const sistaNiva = resultat.rader.reduce((hogst, r) => Math.max(hogst, r.niva), 0)
+  const lov = ordning.filter((i) => resultat.rader[i]?.niva === sistaNiva)
 
   /*
    * Kategorierna tas i tabellens ordning, inte i storleksordning.
@@ -132,17 +132,7 @@ export function diagramdata(
     return rad.etiketter[rad.niva] ?? ''
   })
 
-  const cell = (rad: number, kol: number): number => {
-    const tal = resultat.tal[(rad * resultat.bredd + kol) * steg + m]
-    if (tal === undefined || Number.isNaN(tal)) return Number.NaN
-    if (visning === 'tal') return tal
-    const helhet =
-      visning === 'andelRad'
-        ? resultat.tal[(rad * resultat.bredd + totalkol) * steg + m]
-        : resultat.tal[(totalrad * resultat.bredd + kol) * steg + m]
-    if (helhet === undefined || Number.isNaN(helhet) || helhet === 0) return Number.NaN
-    return tal / helhet
-  }
+  const cell = cellavlasare(resultat, steg, m, visning)
 
   /*
    * Serierna är kolumndimensionens värden. Utan kolumndimension finns en
@@ -225,8 +215,44 @@ export function diagramdata(
   }
 }
 
-/** Diagrammet när kolumnlöven är kategorierna och Totalt-raden är serien. */
-function liggandeAxel(
+/**
+ * En cells tal, med andelen räknad mot rätt helhet.
+ *
+ * En enda formel för hela filen, och samma som `Pivottabell.cell` skriver i
+ * tabellen. Två uträkningar av samma andel var det som en gång fick
+ * diagrammet och tabellen att svara olika på *% av kolumn* — och den här
+ * filens hela poäng är att de aldrig kan göra det.
+ */
+function cellavlasare(
+  resultat: Pivotresultat,
+  steg: number,
+  m: number,
+  visning: Diagramvisning,
+): (rad: number, kol: number) => number {
+  const totalkol = resultat.bredd - 1
+  const totalrad = resultat.rader.length
+  return (rad, kol) => {
+    const tal = resultat.tal[(rad * resultat.bredd + kol) * steg + m]
+    if (tal === undefined || Number.isNaN(tal)) return Number.NaN
+    if (visning === 'tal') return tal
+    const helhet =
+      visning === 'andelRad'
+        ? resultat.tal[(rad * resultat.bredd + totalkol) * steg + m]
+        : resultat.tal[(totalrad * resultat.bredd + kol) * steg + m]
+    if (helhet === undefined || Number.isNaN(helhet) || helhet === 0) return Number.NaN
+    return tal / helhet
+  }
+}
+
+/**
+ * Diagrammet när kolumnlöven är kategorierna och Totalt-raden är serien.
+ *
+ * Utan radfält finns bara Totalt-raden, och det är den som ritas — en stapel
+ * per kolumnlöv. Vyn stänger av *% av kolumn* i det här läget, eftersom varje
+ * kolumn då är sin egen helhet, men formeln är ändå den gemensamma: kärnan
+ * ska svara rätt oavsett vem som frågar.
+ */
+function kolumnlovSomKategorier(
   resultat: Pivotresultat,
   plan: Pivotplan,
   m: number,
@@ -234,27 +260,23 @@ function liggandeAxel(
   texter: { tomt: string; ovriga: string },
 ): Diagramdata {
   const steg = Math.max(1, plan.matvarden.length)
-  const totalkol = resultat.bredd - 1
+  const cell = cellavlasare(resultat, steg, m, visning)
   const totalrad = resultat.rader.length
   const valda = resultat.kolumner.slice(0, KATEGORITAK)
   const kategorier = valda.map((lov) => kolumnrubrik(lov, texter.tomt, texter.ovriga))
-  const helhet = resultat.tal[(totalrad * resultat.bredd + totalkol) * steg + m]
   const varden = valda.map((_, kol) => {
-    const tal = resultat.tal[(totalrad * resultat.bredd + kol) * steg + m]
-    if (tal === undefined || Number.isNaN(tal)) return null
-    if (visning === 'tal') return tal
-    // Andel av rad och andel av kolumn är samma sak när raden är Totalt.
-    if (helhet === undefined || Number.isNaN(helhet) || helhet === 0) return null
-    return tal / helhet
+    const v = cell(totalrad, kol)
+    return Number.isNaN(v) ? null : v
   })
   const serie: Diagramserie = { etikett: '', slot: 0, varden }
   const tal = varden.filter((v): v is number => v !== null)
   return {
     kategorier,
     serier: [serie],
-    max: tal.length === 0 ? 0 : Math.max(0, ...tal),
-    min: tal.length === 0 ? 0 : Math.min(0, ...tal),
+    max: tal.reduce((hogst, v) => Math.max(hogst, v), 0),
+    min: tal.reduce((minsta, v) => Math.min(minsta, v), 0),
     utelamnadeSerier: 0,
+    /** Här är kategorierna spalter, inte rader. Vyn väljer text på det. */
     utelamnadeKategorier: resultat.kolumner.length - valda.length,
     hinder: byggHinder(plan, m, [serie], kategorier.length),
   }

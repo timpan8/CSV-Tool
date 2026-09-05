@@ -304,7 +304,7 @@ export const DIALOGER: Record<string, string> = {
   /* ---------- Pivotvyn ---------- */
   'Pivot…': 'Pivot table…',
   'Dra fält till Filter, Kolumner, Rader och Värden i en egen vy, och se summorna växa fram. Datat rörs inte.':
-    'Drag fields to Filters, Columns, Rows and Values in a view of its own, and watch the totals take shape. The data is left alone.',
+    'Drag fields to Filter, Columns, Rows and Values in a view of its own, and watch the totals take shape. The data is left alone.',
   'Gruppera åt två håll i en egen vy. Datat rörs inte.':
     'Group in two directions in a view of its own. The data is left alone.',
   'Byt plats på rader och kolumner': 'Swap rows and columns',
@@ -313,6 +313,12 @@ export const DIALOGER: Record<string, string> = {
   'Andel går bara att räkna på mätvärden som kan läggas ihop.':
     'A share can only be worked out for measures that add up.',
   'Lägg ett fält i Värden först.': 'Put a field in Values first.',
+  'Andel av raden behöver ett fält i Kolumner.': 'A share of the row needs a field in Columns.',
+  'Andel av kolumnen behöver ett fält i Rader.': 'A share of the column needs a field in Rows.',
+  'Diagrammet visar de {0} första spalterna. Tabellen har allihop.':
+    'The chart shows the first {0} columns. The table has all of them.',
+  'Lägg till {0}, ligger redan i {1}': 'Add {0}, already in {1}',
+  Pivot: 'Pivot table',
   'Lägg ett fält i Rader eller Värden först.': 'Put a field in Rows or Values first.',
   'Dra ett fält till Rader, Kolumner eller Värden, så räknar pivoten resten.':
     'Drag a field to Rows, Columns or Values, and the pivot works out the rest.',
@@ -328,7 +334,9 @@ export const DIALOGER: Record<string, string> = {
   'Fältet ligger redan i {0}.': 'The field is already in {0}.',
   'Ligger redan här.': 'Already here.',
   'Inställningar för {0}': 'Settings for {0}',
-  '{0}, {1} av {2}': '{0}, {1} of {2}',
+  // Beräkningens ord plus kolumnnamnet. Engelskan säger *Sum of Belopp* där
+  // svenskan säger *Summa Belopp*, och det är därför fogen är översättbar.
+  '{0} {1}': '{0} of {1}',
   'Visar de {0} vanligaste av {1} värden. Sök för att hitta fler.':
     'Showing the {0} most common of {1} values. Search to find more.',
 

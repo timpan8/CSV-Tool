@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { antalRader, laggI, oppnaPivot, ruta, satt } from './pivothjalp.js'
+import { antalRader, laggI, listchip, oppnaPivot, ruta, satt } from './pivothjalp.js'
 
 /*
  * Pivotens fältpanel.
@@ -8,12 +8,6 @@ import { antalRader, laggI, oppnaPivot, ruta, satt } from './pivothjalp.js'
  * rutor, inom en ruta och tillbaka till listan — och resten går via chipmenyn,
  * som är samma väg utan mus.
  */
-
-const listchip = (page: Parameters<typeof ruta>[0], namn: string) =>
-  page
-    .locator('.pivotpanel__falt .pivotruta__chip')
-    .filter({ has: page.locator('.pivotruta__namn', { hasText: new RegExp(`^${namn}$`) }) })
-    .first()
 
 test('pivoten öppnas med fyra tomma rutor och säger vad man ska göra', async ({ page }) => {
   await oppnaPivot(page)
@@ -108,7 +102,7 @@ test('samma fält kan inte ligga i både Rader och Kolumner — det flyttar', as
   await expect(ruta(page, 'Kolumner').locator('.pivotruta__chip')).toHaveCount(1)
 
   // Lägg i Kolumner igen: menyposten säger att det redan ligger där.
-  await listchip(page, 'Status').getByRole('button', { name: 'Lägg till Status' }).click()
+  await listchip(page, 'Status').getByRole('button', { name: /^Lägg till Status/ }).click()
   const post = page.locator('.meny__post', { hasText: 'Lägg i Kolumner' })
   await expect(post).toHaveAttribute('aria-disabled', 'true')
   await expect(post).toHaveAttribute('title', 'Fältet ligger redan i Kolumner.')
@@ -209,6 +203,65 @@ test('planen finns kvar när vyn stängts och öppnats igen', async ({ page }) =
   await page.getByRole('button', { name: 'Pivot', exact: true }).click()
   await expect(ruta(page, 'Rader').locator('.pivotruta__chip')).toHaveCount(1)
   await expect(page.locator('.pivottab tfoot')).toContainText('16')
+})
+
+test('fokus stannar i rutan när ett chip tas bort med menyn', async ({ page }) => {
+  await oppnaPivot(page)
+  await antalRader(page)
+  await satt(page, 'Rader', 'Status', 'Ort')
+
+  const chips = ruta(page, 'Rader').locator('.pivotruta__chip')
+  await chips.nth(0).getByRole('button', { name: /Åtgärder för/ }).click()
+  await page.locator('.meny__post', { hasText: 'Ta bort ur pivoten' }).click()
+
+  await expect(chips).toHaveCount(1)
+  // Chipet som tog dess plats har fokus — inte sidans början.
+  await expect(chips.first().getByRole('button', { name: /Åtgärder för/ })).toBeFocused()
+})
+
+test('andelarna stängs av med skäl när det inte finns något att vara en del av', async ({ page }) => {
+  await oppnaPivot(page)
+  await antalRader(page)
+  await satt(page, 'Rader', 'Status')
+
+  // Utan fält i Kolumner är radens enda spalt dess egen Totalt.
+  const avRad = page.getByRole('radio', { name: /% av rad/ })
+  await expect(avRad).toHaveAttribute('aria-disabled', 'true')
+  await expect(avRad).toHaveAttribute('title', /fält i Kolumner/)
+  await expect(page.getByRole('radio', { name: /% av kolumn/ })).not.toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+
+  await satt(page, 'Kolumner', 'Ort')
+  await expect(page.getByRole('radio', { name: '% av rad', exact: true })).not.toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+
+  // Och tvärtom: utan radfält går andel av kolumnen inte att välja.
+  await satt(page, 'Rader')
+  const avKolumn = page.getByRole('radio', { name: /% av kolumn/ })
+  await expect(avKolumn).toHaveAttribute('aria-disabled', 'true')
+  await expect(avKolumn).toHaveAttribute('title', /fält i Rader/)
+})
+
+test('ett filterchip på en borttagen kolumn är inte en knapp som lovar något', async ({ page }) => {
+  await oppnaPivot(page)
+  await antalRader(page)
+  await laggI(page, 'Filter', 'Status')
+  const chip = ruta(page, 'Filter').locator('.pivotruta__chip').first()
+  await expect(chip.locator('button.pivotruta__namn')).toHaveCount(1)
+
+  // Stäng vyn, ta bort kolumnen, kom tillbaka: planen finns kvar men kolumnen inte.
+  await page.keyboard.press('Escape')
+  await page.locator('.rubrik[title="Status"]').click({ button: 'right' })
+  await page.locator('.meny__post', { hasText: 'Ta bort kolumnen' }).click()
+  await page.getByRole('button', { name: 'Pivot', exact: true }).click()
+
+  const kvar = ruta(page, 'Filter').locator('.pivotruta__chip').first()
+  await expect(kvar).toContainText('borttagen kolumn')
+  await expect(kvar.locator('button.pivotruta__namn')).toHaveCount(0)
 })
 
 test('panelen ändrar aldrig filen', async ({ page }) => {

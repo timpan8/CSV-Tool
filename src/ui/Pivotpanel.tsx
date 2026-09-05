@@ -2,11 +2,12 @@ import { useMemo, useRef, useState } from 'preact/hooks'
 import { Meny, type MenyPost } from './parts.js'
 import { Vardelista } from './Vardelista.js'
 import { arFildrag, startaDrag } from './drag.js'
+import { utanEgenRegel } from './filterrader.js'
 import { matvardenamn } from './matvarde.js'
 import type { Column, ColumnId, Frame } from '../core/types.js'
 import { findColumn, identityView, visibleColumns } from '../core/frame/frame.js'
 import { TYPE_LABELS } from '../core/infer.js'
-import { nyRegelId, tillampaFilter, type Filterregel } from '../core/ops/filter.js'
+import { nyRegelId, type Filterregel } from '../core/ops/filter.js'
 import { berakningspost, type Berakning, type Berakningstyp } from '../core/ops/gruppera.js'
 import { nyttMatvardeId, pivotberakningar, type Pivotplan } from '../core/ops/pivot.js'
 import { formatCount } from '../core/locale/sv.js'
@@ -61,9 +62,10 @@ type Mal = { ruta: Ruta; index: number } | { ruta: 'bort' }
  * Tre skäl, och alla tre ska stå i klartext på menyposten. En post som ser
  * klickbar ut och gör ingenting lär ingen något.
  */
-export type Flyttfel = 'saknarKolumn' | 'finnsRedan' | 'borttagen'
-
-export type Flyttsvar = { plan: Partial<Pivotplan> } | { fel: Flyttfel; ruta?: Ruta }
+export type Flyttsvar =
+  | { plan: Partial<Pivotplan> }
+  | { fel: 'finnsRedan'; ruta: Ruta }
+  | { fel: 'saknarKolumn' | 'borttagen' }
 
 function utan<T>(lista: readonly T[], i: number): T[] {
   return lista.filter((_, j) => j !== i)
@@ -230,7 +232,7 @@ function felText(svar: Flyttsvar): string | undefined {
     case 'saknarKolumn':
       return t('Fältet har ingen kolumn att gruppera på.')
     case 'finnsRedan':
-      return tf('Fältet ligger redan i {0}.', svar.ruta ? rutnamn(svar.ruta) : '')
+      return tf('Fältet ligger redan i {0}.', rutnamn(svar.ruta))
     case 'borttagen':
       return t('Kolumnen finns inte längre.')
   }
@@ -276,9 +278,7 @@ function anvandsI(plan: Pivotplan, colId: ColumnId): Ruta[] {
  * det sista chipet, och inte heller att flytta ett chip ett steg nedåt.
  */
 function Chip(props: {
-  ruta: Ruta
   index: number
-  antal: number
   etikett: string
   bikst?: string
   /** `undefined` när chipet inte har något att fälla ut. */
@@ -294,15 +294,14 @@ function Chip(props: {
 }) {
   const klasser = ['pivotruta__chip']
   if (props.slappmal) klasser.push('pivotruta__chip--slappmal')
-  const namn = tf('{0}, {1} av {2}', props.etikett, props.index + 1, props.antal)
   return (
     <div
       class={klasser.join(' ')}
       draggable
       onDragStart={props.onDragStart}
       onDragOver={(e) => {
-        const ruta = (e.currentTarget as HTMLElement).getBoundingClientRect()
-        props.onDragOver(e, e.clientY > ruta.top + ruta.height / 2)
+        const matt = (e.currentTarget as HTMLElement).getBoundingClientRect()
+        props.onDragOver(e, e.clientY > matt.top + matt.height / 2)
       }}
       onDrop={props.onDrop}
       onDragEnd={props.onDragEnd}
@@ -328,7 +327,8 @@ function Chip(props: {
       )}
       <button
         class="pivotruta__meny"
-        aria-label={tf('Åtgärder för {0}', namn)}
+        aria-haspopup="menu"
+        aria-label={tf('Åtgärder för {0}', props.etikett)}
         title={tf('Åtgärder för {0}', props.etikett)}
         onClick={props.onMeny}
       >
@@ -357,6 +357,72 @@ function Botten(props: {
   return (
     <div class={klasser.join(' ')} onDragOver={props.onDragOver} onDrop={props.onDrop}>
       {props.tom && <span class="pivotruta__tom">{t('Dra hit ett fält')}</span>}
+    </div>
+  )
+}
+
+/**
+ * Ett mätvärdes två val: vad som räknas, och på vilken kolumn.
+ *
+ * *Antal rader* har ingen kolumn att räkna på och säger det i stället för att
+ * visa en rullgardin som inte betyder något.
+ */
+function Matvardeinstallningar(props: {
+  id: string
+  etikett: string
+  matvarde: Berakning
+  synliga: readonly Column[]
+  onAndra: (delta: Partial<Berakning>) => void
+}) {
+  const post = berakningspost(props.matvarde.typ)
+  return (
+    <div
+      id={props.id}
+      class="pivotruta__inst"
+      role="group"
+      aria-label={tf('Inställningar för {0}', props.etikett)}
+    >
+      <label class="falt">
+        <span class="falt__etikett">{t('Beräkning')}</span>
+        <select
+          value={props.matvarde.typ}
+          title={t(post.hjalp)}
+          onChange={(e) =>
+            props.onAndra(
+              bytBerakning(
+                props.matvarde,
+                (e.currentTarget as HTMLSelectElement).value as Berakningstyp,
+                props.synliga,
+              ),
+            )
+          }
+        >
+          {pivotberakningar().map((b) => (
+            <option key={b.typ} value={b.typ}>
+              {t(b.etikett)}
+            </option>
+          ))}
+        </select>
+      </label>
+      {post.behoverKolumn ? (
+        <label class="falt">
+          <span class="falt__etikett">{t('Kolumn att räkna på')}</span>
+          <select
+            value={props.matvarde.colId ?? ''}
+            onChange={(e) =>
+              props.onAndra({ colId: (e.currentTarget as HTMLSelectElement).value })
+            }
+          >
+            {props.synliga.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <span class="pivot__allarader">{t('alla rader')}</span>
+      )}
     </div>
   )
 }
@@ -395,6 +461,19 @@ export function Pivotpanel(props: {
   }
 
   const namn = (id: ColumnId): string => findColumn(frame, id)?.name ?? t('(borttagen kolumn)')
+
+  const andraMatvarde = (id: string, delta: Partial<Berakning>) =>
+    props.onPlan({
+      matvarden: plan.matvarden.map((m) => (m.id === id ? { ...m, ...delta } : m)),
+    })
+
+  const andraRegel = (id: string, delta: Partial<Filterregel>) =>
+    props.onPlan({
+      filter: {
+        ...plan.filter,
+        regler: plan.filter.regler.map((r) => (r.id === id ? { ...r, ...delta } : r)),
+      },
+    })
 
   /*
    * Målet sätts bara när det ändras. `dragover` eldar många gånger i
@@ -457,8 +536,17 @@ export function Pivotpanel(props: {
     oppnare.current = null
   }
 
-  const kor = (svar: Flyttsvar) => {
-    if ('plan' in svar) props.onPlan(svar.plan)
+  /**
+   * Kör flytten och lämna fokus på chipet där det hamnade.
+   *
+   * Utan `plats` är det sist i målrutan, dit menyn alltid flyttar. En omordning
+   * inom rutan skickar in sin egen plats, eftersom chipet då hamnar mitt i
+   * listan och inte i slutet av den.
+   */
+  const korOchFokusera = (svar: Flyttsvar, till: Ruta, plats?: number) => {
+    if (!('plan' in svar)) return
+    props.onPlan(svar.plan)
+    fokuseraChip(till, plats ?? langd({ ...plan, ...svar.plan }, till) - 1)
   }
 
   /** Menyn på ett chip i en ruta. */
@@ -470,10 +558,7 @@ export function Pivotpanel(props: {
         etikett: tf('Flytta till {0}', t(r.namn)),
         aktiv: r.ruta === ruta,
         inaktiv: r.ruta === ruta ? t('Ligger redan här.') : felText(svar),
-        kor: () => {
-          kor(svar)
-          if ('plan' in svar) fokuseraChip(r.ruta, langd(svar.plan.rader !== undefined ? { ...plan, ...svar.plan } : plan, r.ruta) - 1)
-        },
+        kor: () => korOchFokusera(svar, r.ruta),
       }
     })
     const upp = flytta(plan, frame, grepp, ruta, index - 1)
@@ -482,18 +567,25 @@ export function Pivotpanel(props: {
     poster.push({
       etikett: t('Flytta upp'),
       inaktiv: index === 0 ? t('Ligger redan först.') : felText(upp),
-      kor: () => kor(upp),
+      // Fokus följer chipet till dess nya plats, inte till rutans slut.
+      kor: () => korOchFokusera(upp, ruta, index - 1),
     })
     poster.push({
       etikett: t('Flytta ned'),
       inaktiv: index >= langd(plan, ruta) - 1 ? t('Ligger redan sist.') : felText(ned),
-      kor: () => kor(ned),
+      kor: () => korOchFokusera(ned, ruta, index + 1),
     })
     poster.push('avdelare')
     poster.push({
       etikett: t('Ta bort ur pivoten'),
       fara: true,
-      kor: () => props.onPlan(taBort(plan, ruta, index)),
+      kor: () => {
+        props.onPlan(taBort(plan, ruta, index))
+        // Chipet man stod på finns inte längre. Fokus går till det som tog
+        // dess plats, eller till det sista som blev kvar — aldrig till
+        // sidans början, dit `stangMeny` annars hade lämnat det.
+        fokuseraChip(ruta, Math.min(index, langd(plan, ruta) - 2))
+      },
     })
     oppnaMeny(e, poster)
   }
@@ -508,10 +600,7 @@ export function Pivotpanel(props: {
         return {
           etikett: tf('Lägg i {0}', t(r.namn)),
           inaktiv: felText(svar),
-          kor: () => {
-            kor(svar)
-            if ('plan' in svar) fokuseraChip(r.ruta, langd({ ...plan, ...svar.plan }, r.ruta) - 1)
-          },
+          kor: () => korOchFokusera(svar, r.ruta),
         }
       }),
     )
@@ -528,20 +617,25 @@ export function Pivotpanel(props: {
 
   /*
    * Underlaget en öppen filterrutas värdelista räknar på: pivotens rader utan
-   * den egna regeln. Samma regel som filterbyggaren följer, och av samma skäl —
-   * kryssar man i *Malmö* får inte *Lund* försvinna i samma ögonblick.
-   * Ett svep per öppnad lista, inte ett per dragover i panelen.
+   * den egna regeln — samma funktion som filterbyggaren använder, så att de två
+   * listorna aldrig kan visa olika antal. Ett svep per öppnad lista, inte ett
+   * per dragover i panelen.
    */
   const oppenRegel = oppen?.startsWith('filter:') ? oppen.slice('filter:'.length) : null
   const filternyckel = JSON.stringify(plan.filter)
-  const listrader = useMemo(() => {
-    if (oppenRegel === null) return null
-    const utgangslage = plan.underlag === 'vyn' ? frame.view : identityView(frame.rowCount)
-    const utanEgen = { ...plan.filter, regler: plan.filter.regler.filter((r) => r.id !== oppenRegel) }
-    return tillampaFilter(frame, utanEgen, utgangslage).rader
+  const listrader = useMemo(
+    () =>
+      oppenRegel === null
+        ? null
+        : utanEgenRegel(
+            frame,
+            plan.filter,
+            oppenRegel,
+            plan.underlag === 'vyn' ? frame.view : identityView(frame.rowCount),
+          ),
     // `filternyckel` står för `plan.filter` — ett nytt objekt varje ändring.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frame, filternyckel, plan.underlag, oppenRegel])
+    [frame, filternyckel, plan.underlag, oppenRegel],
+  )
 
   const filtrerade = synliga.filter((c) => c.name.toLowerCase().includes(sok.toLowerCase()))
 
@@ -556,12 +650,12 @@ export function Pivotpanel(props: {
           return (
             <div role="listitem" key={nyckel}>
               <Chip
-                ruta="filter"
                 index={i}
-                antal={plan.filter.regler.length}
                 etikett={namn(regel.colId)}
                 bikst={valda.length === 0 ? t('alla') : tf('{0} valda', formatCount(valda.length))}
-                oppen={oppen === nyckel}
+                // Utan kolumn finns ingen värdelista att fälla ut, och då ska
+                // chipet inte se ut som en knapp som gör något.
+                oppen={col ? oppen === nyckel : undefined}
                 panelId={panelId}
                 onOppna={() => setOppen(oppen === nyckel ? null : nyckel)}
                 {...chiphandtag('filter', i)}
@@ -578,16 +672,7 @@ export function Pivotpanel(props: {
                     col={col}
                     rader={listrader}
                     valda={valda}
-                    onValda={(varden) =>
-                      props.onPlan({
-                        filter: {
-                          ...plan.filter,
-                          regler: plan.filter.regler.map((x) =>
-                            x.id === regel.id ? { ...x, varden } : x,
-                          ),
-                        },
-                      })
-                    }
+                    onValda={(varden) => andraRegel(regel.id, { varden })}
                   />
                 </div>
               )}
@@ -601,9 +686,7 @@ export function Pivotpanel(props: {
         return lista.map((id, i) => (
           <div role="listitem" key={`${r.ruta}:${id}`}>
             <Chip
-              ruta={r.ruta}
               index={i}
-              antal={lista.length}
               etikett={namn(id)}
               {...chiphandtag(r.ruta, i)}
             />
@@ -615,78 +698,25 @@ export function Pivotpanel(props: {
         return plan.matvarden.map((m, i) => {
           const nyckel = `mat:${m.id}`
           const panelId = `pivot-${nyckel}`
-          const post = berakningspost(m.typ)
+          const etikett = matvardenamn(m, frame)
           return (
             <div role="listitem" key={nyckel}>
               <Chip
-                ruta="varden"
                 index={i}
-                antal={plan.matvarden.length}
-                etikett={matvardenamn(m, frame)}
+                etikett={etikett}
                 oppen={oppen === nyckel}
                 panelId={panelId}
                 onOppna={() => setOppen(oppen === nyckel ? null : nyckel)}
                 {...chiphandtag('varden', i)}
               />
               {oppen === nyckel && (
-                <div
+                <Matvardeinstallningar
                   id={panelId}
-                  class="pivotruta__inst"
-                  role="group"
-                  aria-label={tf('Inställningar för {0}', matvardenamn(m, frame))}
-                >
-                  <label class="falt">
-                    <span class="falt__etikett">{t('Beräkning')}</span>
-                    <select
-                      value={m.typ}
-                      title={t(post.hjalp)}
-                      onChange={(e) =>
-                        props.onPlan({
-                          matvarden: plan.matvarden.map((x) =>
-                            x.id === m.id
-                              ? bytBerakning(
-                                  x,
-                                  (e.currentTarget as HTMLSelectElement).value as Berakningstyp,
-                                  synliga,
-                                )
-                              : x,
-                          ),
-                        })
-                      }
-                    >
-                      {pivotberakningar().map((b) => (
-                        <option key={b.typ} value={b.typ}>
-                          {t(b.etikett)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {post.behoverKolumn ? (
-                    <label class="falt">
-                      <span class="falt__etikett">{t('Kolumn att räkna på')}</span>
-                      <select
-                        value={m.colId ?? ''}
-                        onChange={(e) =>
-                          props.onPlan({
-                            matvarden: plan.matvarden.map((x) =>
-                              x.id === m.id
-                                ? { ...x, colId: (e.currentTarget as HTMLSelectElement).value }
-                                : x,
-                            ),
-                          })
-                        }
-                      >
-                        {synliga.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : (
-                    <span class="pivot__allarader">{t('alla rader')}</span>
-                  )}
-                </div>
+                  etikett={etikett}
+                  matvarde={m}
+                  synliga={synliga}
+                  onAndra={(delta) => andraMatvarde(m.id, delta)}
+                />
               )}
             </div>
           )
@@ -761,7 +791,12 @@ export function Pivotpanel(props: {
               <span class="pivotruta__namn">{col.name}</span>
               <button
                 class="pivotruta__meny"
-                aria-label={tf('Lägg till {0}', col.name)}
+                aria-haspopup="menu"
+                aria-label={
+                  i.length === 0
+                    ? tf('Lägg till {0}', col.name)
+                    : tf('Lägg till {0}, ligger redan i {1}', col.name, i.map(rutnamn).join(', '))
+                }
                 title={tf('Lägg till {0}', col.name)}
                 onClick={(e) => faltmeny(e, col)}
               >
