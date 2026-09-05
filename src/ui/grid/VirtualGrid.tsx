@@ -47,6 +47,12 @@ export interface GridProps {
   forhandsvisning: readonly Forhandsvisning[]
   /** Aktiva sorteringsnivåer, för pilen i rubriken. */
   sortering: readonly Sorteringsniva[]
+  /**
+   * Mallkolumner som blivit äldre än sina källor, för märket i rubriken.
+   *
+   * En mängd och inte en lista, eftersom den läses en gång per ritad rubrik.
+   */
+  inaktuellaRegler: ReadonlySet<ColumnId>
   /** Dubblettgrupperna, för linjen mellan dem och för valet av vilken rad som stannar. */
   grupper: Dubblettgrupper | null
   /** Fysiska rader som är utpekade att stanna, eller null när valet är av. */
@@ -339,6 +345,7 @@ export function VirtualGrid(props: GridProps) {
             sortniva={props.sortering.findIndex((n) => n.colId === col.id)}
             sortriktning={props.sortering.find((n) => n.colId === col.id)?.riktning ?? null}
             flerniva={props.sortering.length > 1}
+            regelInaktuell={props.inaktuellaRegler.has(col.id)}
             onSortera={(lagg) => props.onSortera(col.id, lagg)}
             drar={dragging === col.id}
             slappmal={dropIndex === index}
@@ -582,6 +589,8 @@ interface HeaderProps {
   sortniva: number
   sortriktning: Riktning | null
   flerniva: boolean
+  /** Sant när kolumnens mall inte körts sedan källorna ändrades. */
+  regelInaktuell: boolean
   onSortera: (lagg: boolean) => void
   drar: boolean
   slappmal: boolean
@@ -707,6 +716,18 @@ function Header(props: HeaderProps) {
         >
           {TYPE_BADGES[col.type]}
         </button>
+        {col.regel && (
+          <span
+            class={`mallbricka${props.regelInaktuell ? ' mallbricka--inaktuell' : ''}`}
+            title={
+              (props.regelInaktuell
+                ? t('Byggd ur en mall. Källorna har ändrats sedan kolumnen fylldes.')
+                : t('Byggd ur en mall.')) + `\n${col.regel.mall}`
+            }
+          >
+            {t('mall')}
+          </span>
+        )}
         <div
           class="kvalitet"
           title={

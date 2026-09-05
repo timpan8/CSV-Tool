@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createColumn, getCell, intern } from '../../src/core/frame/column.js'
 import { createFrame } from '../../src/core/frame/frame.js'
-import type { Frame } from '../../src/core/types.js'
+import { Flag, type Frame, type Kolumnregel } from '../../src/core/types.js'
 import { cell, type Selection } from '../../src/state/selection.js'
 import { aggregera } from '../../src/state/selection.js'
 import { nyTab, redo, undo, type Tab } from '../../src/state/store.js'
@@ -19,6 +19,8 @@ import {
   taBortRader,
   taBortTommaKolumner,
   taBortTommaRader,
+  slappRegel,
+  uppdateraRegler,
 } from '../../src/state/edits.js'
 
 function frameOf(headers: string[], rows: string[][]): Frame {
@@ -276,5 +278,117 @@ describe('löpnummer', () => {
     const col = laggTillLopnummer(tab)
     expect(col.codes).toHaveLength(0)
     expect(tab.frame.columns.map((c) => c.name)).toEqual(['Nr', 'Ort'])
+  })
+})
+
+describe('uppdateraRegler', () => {
+  const regel = (over: Partial<Kolumnregel> = {}): Kolumnregel => ({
+    typ: 'mall',
+    mall: "('{Namn}'),",
+    stadaLuckor: true,
+    kallor: ['Namn'],
+    avtryck: 0,
+    ...over,
+  })
+
+  function medRegel(): { tab: Tab; namn: () => string[] } {
+    const frame = frameOf(
+      ['Namn', 'SQL', 'Ort'],
+      [
+        ['Anna', "('Anna'),", 'Lund'],
+        ['Bo', "('Bo'),", 'Malmö'],
+      ],
+    )
+    frame.columns[1]!.regel = regel()
+    const tab = nyTab(frame)
+    return {
+      tab,
+      namn: () =>
+        Array.from({ length: tab.frame.rowCount }, (_, r) => getCell(tab.frame.columns[1]!, r)),
+    }
+  }
+
+  it('fyller kolumnen på nytt ur mallen', () => {
+    const { tab, namn } = medRegel()
+    tab.frame.columns[0]!.codes[1] = intern(tab.frame.columns[0]!, 'Bosse')
+    const { andrade } = uppdateraRegler(tab, [tab.frame.columns[1]!])
+    expect(andrade).toBe(1)
+    expect(namn()).toEqual(["('Anna'),", "('Bosse'),"])
+  })
+
+  it('är ett enda ångra-steg även över flera kolumner', () => {
+    const { tab } = medRegel()
+    const andra = createColumn('SQL2', tab.frame.rowCount)
+    andra.regel = regel({ mall: '{Namn};' })
+    tab.frame.columns.push(andra)
+    const fore = tab.history.length
+
+    uppdateraRegler(tab, [tab.frame.columns[1]!, andra])
+    expect(tab.history.length).toBe(fore + 1)
+
+    undo(tab)
+    expect(getCell(andra, 0)).toBe('')
+  })
+
+  it('tar tillbaka både värdena och avtrycket vid ångra', () => {
+    const { tab, namn } = medRegel()
+    const col = tab.frame.columns[1]!
+    tab.frame.columns[0]!.codes[0] = intern(tab.frame.columns[0]!, 'Annika')
+    uppdateraRegler(tab, [col])
+    const efterAvtryck = col.regel!.avtryck
+
+    undo(tab)
+    expect(namn()[0]).toBe("('Anna'),")
+    // Utan avtrycket i ögonblicksbilden hade kolumnen sett färsk ut fast den
+    // stod på de gamla värdena igen.
+    expect(col.regel!.avtryck).not.toBe(efterAvtryck)
+  })
+
+  it('vägrar köra när mallen pekar på en kolumn som inte finns', () => {
+    const { tab, namn } = medRegel()
+    tab.frame.columns[1]!.regel = regel({ mall: '{Saknas}', kallor: ['Saknas'] })
+    const { andrade, korda, saknade } = uppdateraRegler(tab, [tab.frame.columns[1]!])
+    expect(andrade).toBe(0)
+    expect(korda).toEqual([])
+    expect(saknade).toEqual([{ namn: 'SQL', kolumner: ['Saknas'] }])
+    // Kolumnen står kvar som den var i stället för att fyllas med tomt.
+    expect(namn()).toEqual(["('Anna'),", "('Bo'),"])
+  })
+
+  it('rensar märket för handredigerade celler', () => {
+    const { tab } = medRegel()
+    const col = tab.frame.columns[1]!
+    redigeraCell(tab, 0, 1, 'något annat')
+    expect(col.flags[0]! & Flag.UserEdited).not.toBe(0)
+
+    uppdateraRegler(tab, [col])
+    expect(col.flags[0]! & Flag.UserEdited).toBe(0)
+  })
+
+  it('följer undantaget för sista raden i vyn', () => {
+    const { tab, namn } = medRegel()
+    tab.frame.columns[1]!.regel = regel({ sista: "('{Namn}')" })
+    uppdateraRegler(tab, [tab.frame.columns[1]!])
+    expect(namn()).toEqual(["('Anna'),", "('Bo')"])
+  })
+})
+
+describe('slappRegel', () => {
+  it('tar bort regeln men lämnar värdena, och går att ångra', () => {
+    const frame = frameOf(['Namn', 'SQL'], [['Anna', "('Anna'),"]])
+    frame.columns[1]!.regel = {
+      typ: 'mall',
+      mall: "('{Namn}'),",
+      stadaLuckor: true,
+      kallor: ['Namn'],
+      avtryck: 0,
+    }
+    const tab = nyTab(frame)
+    slappRegel(tab, frame.columns[1]!)
+    expect(frame.columns[1]!.regel).toBeUndefined()
+    expect(getCell(frame.columns[1]!, 0)).toBe("('Anna'),")
+
+    undo(tab)
+    expect(frame.columns[1]!.regel?.mall).toBe("('{Namn}'),")
   })
 })

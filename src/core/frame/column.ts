@@ -1,4 +1,4 @@
-import { Flag, type Column, type ColumnId, type ColumnType } from '../types.js'
+import { Flag, type Column, type ColumnId, type ColumnType, type Kolumnregel } from '../types.js'
 
 let columnSeq = 0
 
@@ -134,6 +134,13 @@ export interface ColumnSnapshot {
   flags: Uint8Array
   type: ColumnType
   typeLocked: boolean
+  /**
+   * Mallregeln, som hör till bilden lika mycket som värdena.
+   *
+   * Utan den hade en ångrad uppdatering lämnat det nya avtrycket kvar på de
+   * gamla värdena, och kolumnen sett färsk ut fast den inte var det.
+   */
+  regel: Kolumnregel | undefined
 }
 
 export function snapshotColumn(col: Column): ColumnSnapshot {
@@ -143,6 +150,7 @@ export function snapshotColumn(col: Column): ColumnSnapshot {
     flags: col.flags.slice(),
     type: col.type,
     typeLocked: col.typeLocked,
+    regel: col.regel ? { ...col.regel } : undefined,
   }
 }
 
@@ -161,6 +169,7 @@ export function restoreColumn(col: Column, snap: ColumnSnapshot): void {
   col.flags = snap.flags.slice()
   col.type = snap.type
   col.typeLocked = snap.typeLocked
+  col.regel = snap.regel ? { ...snap.regel } : undefined
 }
 
 /**

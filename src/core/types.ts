@@ -71,6 +71,45 @@ export interface Column {
    * ordningen i stället för att hamna i en gissad.
    */
   sortordning?: readonly string[]
+  /**
+   * Hur kolumnen byggdes, när den byggdes ur en mall.
+   *
+   * Se `Kolumnregel`. Valfri: en vanlig kolumn har ingen.
+   */
+  regel?: Kolumnregel
+}
+
+/**
+ * Minnet av hur en kolumn byggdes — inte en levande länk.
+ *
+ * Skillnaden är hela poängen. Ett kalkylark betalar sin kraft med att ingen
+ * längre vet vad en cell innehåller, och det är därför `Räkna` med flit
+ * saknar celler som pekar på varandra. En regel bryter inte mot det: värdena
+ * är vanlig data i varje ögonblick, exporten och filtren ser ren text, och
+ * **ingenting räknas om utan ett klick**.
+ *
+ * Det enda regeln köper är att verktyget kan *säga till* när kolumnen blivit
+ * äldre än sina källor, och fylla den på nytt i ett steg. Exakt samma
+ * uppgörelse som den frusna sorteringen och dess *Sortera om*.
+ *
+ * Unionen har en medlem med flit: en beräknad kolumn kan bli `typ: 'formel'`
+ * senare utan att den här filen behöver röras igen.
+ */
+export type Kolumnregel = {
+  typ: 'mall'
+  mall: string
+  forsta?: string
+  sista?: string
+  stadaLuckor: boolean
+  /**
+   * Kolumnnamnen mallarna läser.
+   *
+   * Namn och inte id, av samma skäl som profilerna: mallen är skriven i namn,
+   * och det är namnen som avgör vad den ger.
+   */
+  kallor: string[]
+  /** Fingeravtryck över källorna vid den senaste beräkningen. */
+  avtryck: number
 }
 
 /**

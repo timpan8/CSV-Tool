@@ -606,3 +606,29 @@
 .rutnat__rad--gruppslut .rutnat__radnr {
   border-bottom: 2px solid var(--linje-stark);
 }
+
+/*
+ * Märket för en kolumn byggd ur en mall.
+ *
+ * Samma storlek och form som typbrickan, men utan dess färg och utan att vara
+ * en knapp: typen går att byta här, mallen gör det i kolumnmenyn. Den
+ * inaktuella tonen är samma varningston som sorteringschippet använder — det
+ * är samma sorts besked, att det som står på skärmen räknades före de senaste
+ * ändringarna.
+ */
+.mallbricka {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--linje-stark);
+  color: var(--text-svag);
+  white-space: nowrap;
+}
+
+.mallbricka--inaktuell {
+  border-color: var(--varning);
+  background: var(--varning-svag);
+  color: var(--varning);
+}

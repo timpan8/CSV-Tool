@@ -1,4 +1,4 @@
-import type { Column, ColumnId } from '../core/types.js'
+import { Flag, type Column, type ColumnId, type Kolumnregel } from '../core/types.js'
 import {
   createColumn,
   getCell,
@@ -26,6 +26,12 @@ import type { Forhandsvisning } from './preview.js'
 import { rect, type Selection } from './selection.js'
 import { runStep, type Tab } from './store.js'
 import type { Stadning } from '../core/ops/clean.js'
+import {
+  korMallar,
+  regelavtryck,
+  regelnsMallar,
+  type Mallar,
+} from '../core/ops/columns.js'
 import type { Profilsteg } from '../core/ops/profil.js'
 import { celler, kolumner, rader, t, tf } from '../ui/sprak.js'
 
@@ -520,7 +526,15 @@ function skapaKolumnerFran(tab: Tab, kall: Column, forh: Forhandsvisning): numbe
   for (let mal = 0; mal < forh.stride; mal++) {
     const namn = uniqueColumnName(tagna, forh.nyaKolumner[mal] ?? kall.name)
     tagna.push(namn)
-    nya.push(createColumn(namn, tab.frame.rowCount, forh.nyTyp ?? 'text'))
+    const col = createColumn(namn, tab.frame.rowCount, forh.nyTyp ?? 'text')
+    // Regeln hör till en enda kolumn: flera kolumner ur ett steg har ingen
+    // gemensam mall att minnas.
+    if (forh.regel && forh.stride === 1) {
+      // Avtrycket fästs här och inte i panelen: det är först nu kolumnen
+      // finns, och det är det här tillståndet den ska räknas som färsk mot.
+      col.regel = { ...forh.regel, avtryck: regelavtryck(tab.frame, forh.regel) }
+    }
+    nya.push(col)
   }
 
   let ifyllda = 0
@@ -568,4 +582,99 @@ function skapaKolumnerFran(tab: Tab, kall: Column, forh: Forhandsvisning): numbe
     },
   })
   return ifyllda
+}
+
+/**
+ * Fyller mallkolumner på nytt ur sina regler, som **ett** ångra-steg.
+ *
+ * `korOverKolumner` tar redan en lista kolumner och en enda ögonblicksbild
+ * över dem, så flera uppdaterade kolumner backas av ett enda Ctrl+Z.
+ *
+ * Skrivningen går rad för rad och inte via `mapColumnValues`: en mall läser
+ * flera kolumner, och det finns därför inget uppslag per unikt värde att göra.
+ * Det är samma oundvikliga kostnad som förhandsvisningens `perRad`.
+ *
+ * En regel vars mall pekar på en kolumn som inte finns körs **inte**. Att
+ * fylla kolumnen med halva värden vore precis det verktyget vägrar göra när
+ * mallen skrivs — samma regel måste gälla när den körs om.
+ */
+export function uppdateraRegler(
+  tab: Tab,
+  valda: readonly Column[],
+): { andrade: number; korda: Column[]; saknade: { namn: string; kolumner: string[] }[] } {
+  const saknade: { namn: string; kolumner: string[] }[] = []
+  const jobb: { col: Column; mallar: Mallar; regel: Kolumnregel }[] = []
+
+  for (const col of valda) {
+    if (!col.regel) continue
+    const { mallar, okanda } = regelnsMallar(tab.frame, col.regel)
+    if (okanda.length > 0) {
+      saknade.push({ namn: col.name, kolumner: okanda })
+      continue
+    }
+    jobb.push({ col, mallar, regel: col.regel })
+  }
+
+  if (jobb.length === 0) return { andrade: 0, korda: [], saknade }
+
+  let andrade = 0
+  korOverKolumner(
+    tab,
+    jobb.length === 1
+      ? tf('Uppdaterade {0} ur mallen', jobb[0]!.col.name)
+      : tf('Uppdaterade {0} ur sina mallar', kolumner(jobb.length)),
+    'regel',
+    jobb.map((j) => j.col),
+    () => {
+      andrade = 0
+      for (const { col, mallar, regel } of jobb) {
+        const avtryck = regelavtryck(tab.frame, regel)
+
+        /*
+         * Alla värden räknas ut först, innan kolumnen skrivs.
+         *
+         * En mall som råkar nämna sin egen kolumn — `{SQL}` i kolumnen *SQL* —
+         * hade annars läst en ordbok som redan var halvt ombyggd, och gett
+         * olika svar beroende på var i svepet den stod. Kostnaden är en
+         * strängarray, samma som förhandsvisningens `perRad` redan bär.
+         */
+        const nya = new Array<string>(tab.frame.rowCount)
+        for (let r = 0; r < tab.frame.rowCount; r++) {
+          nya[r] = korMallar(tab.frame, r, mallar, { stadaLuckor: regel.stadaLuckor })
+        }
+
+        for (let r = 0; r < tab.frame.rowCount; r++) {
+          if (getCell(col, r) !== nya[r]!) andrade += 1
+        }
+
+        col.dict = ['']
+        col.dictIndex = new Map([['', 0]])
+        for (let r = 0; r < tab.frame.rowCount; r++) {
+          col.codes[r] = intern(col, nya[r]!)
+          // Hela kolumnen är mallens utdata igen. En handredigering som stod
+          // här är överskriven, och flaggan skulle annars påstå att den finns
+          // kvar. Ögonblicksbilden tar tillbaka både värdet och flaggan.
+          col.flags[r] = col.flags[r]! & ~Flag.UserEdited
+        }
+        col.regel = { ...regel, avtryck }
+      }
+    },
+  )
+  return { andrade, korda: jobb.map((j) => j.col), saknade }
+}
+
+/** Tar bort regeln men lämnar värdena. Ett eget, ångringsbart steg. */
+export function slappRegel(tab: Tab, col: Column): void {
+  const regel = col.regel
+  if (!regel) return
+  runStep(tab, {
+    label: tf('Släppte mallen för {0}', col.name),
+    kind: 'regel',
+    apply: () => {
+      col.regel = undefined
+    },
+    revert: () => {
+      col.regel = { ...regel }
+    },
+  })
 }

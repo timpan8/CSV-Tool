@@ -72,6 +72,13 @@ export type Profilsteg =
       stadaLuckor: boolean
       forsta?: string
       sista?: string
+      /**
+       * Kolumnen ska minnas sin mall.
+       *
+       * Valfritt: en profil sparad innan fältet fanns läses som `false`,
+       * alltså en vanlig kolumn precis som förut.
+       */
+      komIhagMallen?: boolean
     }
   /**
    * Beräknad kolumn. Formeln nämner sina kolumner vid namn, precis som

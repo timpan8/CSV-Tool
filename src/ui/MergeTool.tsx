@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from 'preact/hooks'
 import { Resultat, Verktygspanel } from './Verktygspanel.js'
 import { Notis } from './parts.js'
 import type { Column, Frame } from '../core/types.js'
-import { korMallar, tolkaMall, type Mallar } from '../core/ops/columns.js'
+import {
+  korMallar,
+  mallensKallor,
+  tolkaMall,
+  type Mallar,
+} from '../core/ops/columns.js'
 import { beraknaForhandsvisning, type Forhandsvisning } from '../state/preview.js'
 import { formatCount } from '../core/locale/sv.js'
 import { celler, sprak, t, tf, tj } from './sprak.js'
@@ -29,13 +34,21 @@ export function MergeTool(props: {
   onStang: () => void
 }) {
   const { col, frame } = props
-  const [mall, setMall] = useState(`{${col.name}} `)
-  const [namn, setNamn] = useState('Sammanslagen')
-  const [stadaLuckor, setStadaLuckor] = useState(true)
-  const [egenForsta, setEgenForsta] = useState(false)
-  const [forsta, setForsta] = useState('')
-  const [egenSista, setEgenSista] = useState(false)
-  const [sista, setSista] = useState('')
+  /*
+   * En kolumn som redan är byggd ur en mall öppnar panelen med sin egen mall.
+   *
+   * Ingen ny inkoppling behövs för det: regeln ligger på kolumnen, och
+   * panelen kan läsa den själv när den monteras.
+   */
+  const regel = col.regel
+  const [mall, setMall] = useState(regel?.mall ?? `{${col.name}} `)
+  const [namn, setNamn] = useState(regel ? col.name : 'Sammanslagen')
+  const [stadaLuckor, setStadaLuckor] = useState(regel?.stadaLuckor ?? true)
+  const [egenForsta, setEgenForsta] = useState(regel?.forsta !== undefined)
+  const [forsta, setForsta] = useState(regel?.forsta ?? '')
+  const [egenSista, setEgenSista] = useState(regel?.sista !== undefined)
+  const [sista, setSista] = useState(regel?.sista ?? '')
+  const [komIhag, setKomIhag] = useState(true)
 
   /*
    * Ett undantag börjar som en kopia av huvudmallen.
@@ -92,13 +105,42 @@ export function MergeTool(props: {
             stadaLuckor,
             forsta: egenForsta ? forsta : undefined,
             sista: egenSista ? sista : undefined,
+            komIhagMallen: komIhag,
           },
+          regel: komIhag
+            ? {
+                typ: 'mall',
+                mall,
+                stadaLuckor,
+                forsta: egenForsta ? forsta : undefined,
+                sista: egenSista ? sista : undefined,
+                kallor: mallensKallor(
+                  frame,
+                  mall,
+                  egenForsta ? forsta : undefined,
+                  egenSista ? sista : undefined,
+                ),
+                // Avtrycket sätts när kolumnen faktiskt skapas — det är då
+                // det finns ett tillstånd att fästa det vid.
+                avtryck: 0,
+              }
+            : undefined,
           rad: (f, row) => [korMallar(f, row, tolkningar.mallar, { stadaLuckor })],
           nyaKolumner: [namn.trim() === '' ? t('Sammanslagen') : namn.trim()],
         },
         frame,
       ),
-    [col, frame, props.dataRevision, ordningsnyckel, tolkningar, namn, stadaLuckor, sprak.value],
+    [
+      col,
+      frame,
+      props.dataRevision,
+      ordningsnyckel,
+      tolkningar,
+      namn,
+      stadaLuckor,
+      komIhag,
+      sprak.value,
+    ],
   )
 
   /*
@@ -265,6 +307,20 @@ export function MergeTool(props: {
           </table>
         </div>
       )}
+
+      <label class="kryss">
+        <input
+          type="checkbox"
+          checked={komIhag}
+          onChange={(e) => setKomIhag((e.currentTarget as HTMLInputElement).checked)}
+        />
+        {t('Kom ihåg mallen för kolumnen')}
+      </label>
+      <p class="verktyg__sammanfattning">
+        {t(
+          'Kolumnen märks som byggd ur mallen. Den räknas aldrig om av sig själv — men när källorna ändrats får du en Uppdatera i statusraden.',
+        )}
+      </p>
 
       <label class="kryss">
         <input

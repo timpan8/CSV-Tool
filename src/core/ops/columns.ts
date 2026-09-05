@@ -1,4 +1,4 @@
-import type { Frame } from '../types.js'
+import type { Frame, Kolumnregel } from '../types.js'
 import { getCell } from '../frame/column.js'
 import { normalizeAlways } from '../locale/sv.js'
 
@@ -426,4 +426,122 @@ export function inventeraMonster(
     }
   }
   return { traffar, omatchade, exempel }
+}
+
+/* ---------- Levande mall ---------- */
+
+/**
+ * Fingeravtryck över det en mall läser.
+ *
+ * FNV-1a, formad efter `nyckelsignatur` i `ordning.ts` — vi behöver inte
+ * kryptografisk styrka, bara att en ändring syns. Men den här slår upp
+ * kolumnerna på **namn**, eftersom en mall är skriven i namn: byter en kolumn
+ * namn läser mallen något annat, och det ska räknas som en ändring.
+ *
+ * **Ordboken hashas, inte bara koderna.** `mapColumnValues` bygger om ordboken
+ * genom att gå igenom den gamla i ordning, så en transform som inte slår ihop
+ * två värden ger samma längd och samma index — och därmed *identiska koder*.
+ * Att trimma blanksteg i en källkolumn hade då sett ut som ingen ändring alls,
+ * fast varje värde mallen läser blivit ett annat.
+ */
+export function mallavtryck(frame: Frame, kallor: readonly string[]): number {
+  let h = 0x811c9dc5
+  const blanda = (n: number) => {
+    h = Math.imul(h ^ (n & 0xff), 0x01000193)
+    h = Math.imul(h ^ ((n >>> 8) & 0xff), 0x01000193)
+    h = Math.imul(h ^ ((n >>> 16) & 0xff), 0x01000193)
+    h = Math.imul(h ^ ((n >>> 24) & 0xff), 0x01000193)
+  }
+  const text = (s: string) => {
+    for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193)
+    h = Math.imul(h ^ 0x1f, 0x01000193)
+  }
+
+  blanda(frame.rowCount)
+  for (const namn of kallor) {
+    text(namn)
+    const col = frame.columns.find((c) => c.name === namn)
+    if (!col) {
+      // En källa som inte finns hashas som sin egen markör, så att en
+      // borttagen kolumn läses som en ändring och inte som ingenting.
+      blanda(0xffffffff)
+      continue
+    }
+    blanda(col.dict.length)
+    for (const varde of col.dict) text(varde)
+    for (let r = 0; r < col.codes.length; r++) blanda(col.codes[r]!)
+  }
+  return h >>> 0
+}
+
+/**
+ * Vyns ändpunkter, som ingår i avtrycket när regeln har rad-undantag.
+ *
+ * Bara två rader kan byta värde när ordningen ändras, så bara två tal behöver
+ * med. Att rader flyttar om sig i mitten ändrar ingenting i resultatet och ska
+ * därför inte heller flagga något — en varning som kommer när ingenting blivit
+ * fel lär en att strunta i varningarna.
+ */
+export function ordningsavtryck(frame: Frame): number {
+  const view = frame.view
+  if (view.length === 0) return 0
+  return (Math.imul(view[0]! + 1, 0x01000193) ^ (view[view.length - 1]! + 1)) >>> 0
+}
+
+/** Avtrycket en regel ska jämföras mot i den här ramen. */
+export function regelavtryck(frame: Frame, regel: Kolumnregel): number {
+  const bas = mallavtryck(frame, regel.kallor)
+  const harUndantag = regel.forsta !== undefined || regel.sista !== undefined
+  return harUndantag ? (bas ^ ordningsavtryck(frame)) >>> 0 : bas
+}
+
+/** Mallarna en regel beskriver, tolkade mot filen. */
+export function regelnsMallar(frame: Frame, regel: Kolumnregel): {
+  mallar: Mallar
+  okanda: string[]
+} {
+  const huvud = tolkaMall(regel.mall, frame)
+  const f = regel.forsta === undefined ? null : tolkaMall(regel.forsta, frame)
+  const s = regel.sista === undefined ? null : tolkaMall(regel.sista, frame)
+  return {
+    mallar: { delar: huvud.delar, forsta: f?.delar ?? null, sista: s?.delar ?? null },
+    okanda: [...new Set([...huvud.okanda, ...(f?.okanda ?? []), ...(s?.okanda ?? [])])],
+  }
+}
+
+/** Kolumnnamnen en uppsättning mallar läser, för regelns `kallor`. */
+export function mallensKallor(frame: Frame, ...texter: (string | undefined)[]): string[] {
+  const namn: string[] = []
+  for (const text of texter) {
+    if (text === undefined) continue
+    for (const n of tolkaMall(text, frame).anvanda) {
+      if (!namn.includes(n)) namn.push(n)
+    }
+  }
+  return namn
+}
+
+/**
+ * Skriver om ett kolumnnamn i en regels mallar.
+ *
+ * En omdöpning byter vad mallen läser, och en regel som inte följde med hade
+ * gått sönder av ett handgrepp som inte har med den att göra. Filtren följer
+ * redan med, eftersom de bär kolumn-id; mallen bär namn — det är namnet den
+ * är skriven i — så den måste skrivas om i stället.
+ *
+ * Returnerar null när regeln inte nämner det gamla namnet.
+ */
+export function dopOmIRegel(regel: Kolumnregel, fran: string, till: string): Kolumnregel | null {
+  if (!regel.kallor.includes(fran)) return null
+  const byt = (text: string) =>
+    delaMall(text)
+      .map((d) => (d.typ === 'text' ? d.varde : `{${d.namn === fran ? till : d.namn}}`))
+      .join('')
+  return {
+    ...regel,
+    mall: byt(regel.mall),
+    forsta: regel.forsta === undefined ? undefined : byt(regel.forsta),
+    sista: regel.sista === undefined ? undefined : byt(regel.sista),
+    kallor: regel.kallor.map((k) => (k === fran ? till : k)),
+  }
 }

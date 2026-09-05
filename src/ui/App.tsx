@@ -66,7 +66,9 @@ import {
   sattMarkering,
   selectableColumns,
   selectedRows,
+  slappRegel,
   stadaKolumner,
+  uppdateraRegler,
   taBortRader,
   taBortTommaKolumner,
   taBortTommaRader,
@@ -74,6 +76,7 @@ import {
   type PasteRequest,
 } from '../state/edits.js'
 import { antalCeller, cell, klamp, rect, type Selection } from '../state/selection.js'
+import { inaktuellaRegler, regellageFor } from '../state/regel.js'
 import { getCell } from '../core/frame/column.js'
 import { VirtualGrid, type Flytt } from './grid/VirtualGrid.jsx'
 import { anpassadBredd } from './grid/bredd.js'
@@ -91,6 +94,7 @@ import { PasteDialog } from './PasteDialog.jsx'
 import { BorjaOmDialog } from './BorjaOmDialog.jsx'
 import { celler, filer as filerText, kolumner as kolumnerText, rader as raderText, sattSprak, sprak, t, tf } from './sprak.js'
 import { Verktyg, ordnaVerktyg, type Verktygsnamn } from './verktyg.jsx'
+import { dopOmIRegel } from '../core/ops/columns.js'
 import { innehallsprofil } from '../core/frame/innehall.js'
 import { Statusrad } from './Statusrad.jsx'
 import { SortTool } from './SortTool.jsx'
@@ -449,14 +453,27 @@ export function App() {
     )
     const gammalt = col.name
     if (nytt === gammalt) return
+    /*
+     * Mallar som läser kolumnen skrivs om i samma steg.
+     *
+     * Utan det hade en omdöpning tyst brutit varje regel som nämner
+     * kolumnen — ett handgrepp som inte har med mallen att göra hade förstört
+     * den. Ångra tar tillbaka både namnet och mallarna, eftersom de ändras i
+     * samma steg.
+     */
+    const berorda = frame.columns
+      .map((c) => ({ col: c, fore: c.regel, efter: c.regel ? dopOmIRegel(c.regel, gammalt, nytt) : null }))
+      .filter((b) => b.efter !== null)
     kor(
       `Bytte namn: ${gammalt} → ${nytt}`,
       'rename',
       () => {
         col.name = nytt
+        for (const b of berorda) b.col.regel = b.efter!
       },
       () => {
         col.name = gammalt
+        for (const b of berorda) b.col.regel = b.fore
       },
       { typ: 'dopOm', kolumn: gammalt, till: nytt },
     )
@@ -966,6 +983,81 @@ export function App() {
     oppnaTabellverktyg('filter')
   }
 
+  /**
+   * Mallkolumnerna som släpat efter, som en mängd för rutnätet.
+   *
+   * Räknas en gång per omritning och inte en gång per ritad rubrik.
+   * `regellagen` har sin egen cache på `dataRevision`, så själva avtrycket
+   * räknas bara när datat faktiskt ändrats.
+   */
+  const inaktuellaRegelIder = useMemo(
+    () => new Set(tab ? inaktuellaRegler(tab).map((r) => r.col.id) : []),
+    [tab, rev],
+  )
+
+  /* ---------- Mallkolumner ---------- */
+
+  /**
+   * Fyller mallkolumner på nytt.
+   *
+   * Körs direkt i stället för att öppna panelen: det är ett klick på en knapp
+   * som säger vad den gör, körningen är ett enda ångra-steg, och notisen bär
+   * en Ångra. Att först visa en förhandsvisning av *samma mall som redan står
+   * på kolumnen* hade varit en fråga utan innehåll.
+   */
+  const uppdateraMallkolumner = (valda?: Column[]) => {
+    const nu = nuLage()
+    if (!nu) return
+    const lista = valda ?? inaktuellaRegler(nu.tab).map((r) => r.col)
+    if (lista.length === 0) return
+    const { andrade, korda, saknade } = uppdateraRegler(nu.tab, lista)
+
+    for (const s of saknade) {
+      notify(
+        tf('{0} kunde inte uppdateras: mallen pekar på {1}, som inte finns.', s.namn, s.kolumner.join(', ')),
+        { ton: 'varning' },
+      )
+    }
+    if (korda.length === 0) return
+    notify(
+      andrade === 0
+        ? tf('{0} var redan aktuell.', korda[0]!.name)
+        : tf('Uppdaterade {0} — {1} ändrades.', kolumnerText(korda.length), celler(andrade)),
+      andrade === 0 ? {} : { atgard: { etikett: t('Ångra'), kor: () => undo(nu.tab) } },
+    )
+  }
+
+  /** Posterna för en kolumn som är byggd ur en mall. Tom lista annars. */
+  const regelposter = (col: Column): (MenyPost | 'avdelare')[] => {
+    const nu = nuLage()
+    if (!nu || !col.regel) return []
+    const lage = regellageFor(nu.tab, col)
+    const trasig = (lage?.saknade.length ?? 0) > 0
+    return [
+      'avdelare',
+      {
+        etikett: t('Uppdatera ur mallen'),
+        skal: trasig
+          ? tf('mallen pekar på {0}, som inte finns', lage!.saknade.join(', '))
+          : lage?.inaktuell
+            ? t('källorna har ändrats sedan kolumnen fylldes')
+            : t('källorna är oförändrade'),
+        inaktiv: trasig ? t('Mallen går inte att köra.') : undefined,
+        kor: () => uppdateraMallkolumner([col]),
+      },
+      {
+        etikett: t('Ändra mallen…'),
+        skal: col.regel.mall,
+        kor: () => oppnaVerktyg('slaihop', [col.id]),
+      },
+      {
+        etikett: t('Släpp mallen'),
+        skal: t('kolumnen blir vanlig data'),
+        kor: () => slappRegel(nu.tab, col),
+      },
+    ]
+  }
+
   /* ---------- Menyer ---------- */
 
   /**
@@ -1039,6 +1131,7 @@ export function App() {
       anpassaBredd: (i) => anpassaKolumnbredd(i),
       visaOgiltiga,
       verktyg: verktygsposter([col]),
+      regel: regelposter(col),
       filtrera: (i) => filtreraKolumn(i),
       namn: col.name,
       sammanfatta: (i) => setSammanfatta({ startkolumn: i }),
@@ -1966,6 +2059,7 @@ export function App() {
             viewSpec={tab.viewSpec}
             forhandsvisning={tab.forhandsvisning}
             sortering={tab.viewSpec.sortering ?? []}
+            inaktuellaRegler={inaktuellaRegelIder}
             grupper={dubblettgrupper}
             behallnaRader={behallnaRader}
             onBehall={
@@ -2100,6 +2194,7 @@ export function App() {
         sorteringInaktuell={sorteringenArInaktuell(tab)}
         verkstad={tab ? verkstadForFlik(tab.id) : null}
         onFortsattVerkstad={aterta}
+        onUppdateraRegler={() => uppdateraMallkolumner()}
         onBorjaOm={() => setBorjaOmOppen(true)}
         onSorteraOm={() => tab && sorteraOm(tab)}
         onRensaSortering={() => tab && rensaSortering(tab)}
@@ -2427,6 +2522,13 @@ function kolumnMeny(
     sortriktning: Riktning | null
     taBort: (id: ColumnId) => void
     dold: boolean
+    /**
+     * Regelposterna, när kolumnen är byggd ur en mall. Tom lista annars.
+     *
+     * De ligger i kolumnmenyn och inte i cellmenyn: en mall hör till
+     * kolumnen, och cellmenyn är kortare med flit.
+     */
+    regel: (MenyPost | 'avdelare')[]
   },
 ): (MenyPost | 'avdelare')[] {
   return [
@@ -2470,6 +2572,7 @@ function kolumnMeny(
     { etikett: t('Visa rader som inte går att tolka'), kor: () => handlers.visaOgiltiga(id) },
     'avdelare',
     ...handlers.verktyg,
+    ...handlers.regel,
     'avdelare',
     { etikett: t('Ta bort kolumnen'), fara: true, kor: () => handlers.taBort(id) },
   ]

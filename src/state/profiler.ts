@@ -4,7 +4,7 @@ import { visibleColumns } from '../core/frame/frame.js'
 import { rubriknyckel } from '../core/ops/rubriker.js'
 import { stadningarEfterId } from '../core/ops/clean.js'
 import { byggDelare } from '../core/ops/columns.js'
-import { korMallar, tolkaMall, type Mallar } from '../core/ops/columns.js'
+import { korMallar, mallensKallor, tolkaMall, type Mallar } from '../core/ops/columns.js'
 import { datumTransform, tolkaDatum } from '../core/ops/dates.js'
 import { epostNamndelar, epostTransform } from '../core/ops/email.js'
 import { skrivTal, talTransform, tolkaTal } from '../core/ops/numbers.js'
@@ -349,6 +349,19 @@ export function korSteg(tab: Tab, steg: Profilsteg): Stegresultat {
         kind: 'merge',
         profil: steg,
         rad: (f, row) => [korMallar(f, row, mallar, { stadaLuckor: steg.stadaLuckor })],
+        // Avtrycket räknas mot den *nya* filen när kolumnen skapas, på samma
+        // sätt som löpnumret får nästa månads nummer och inte förra månadens.
+        regel: steg.komIhagMallen
+          ? {
+              typ: 'mall',
+              mall: steg.mall,
+              stadaLuckor: steg.stadaLuckor,
+              forsta: steg.forsta,
+              sista: steg.sista,
+              kallor: mallensKallor(frame, steg.mall, steg.forsta, steg.sista),
+              avtryck: 0,
+            }
+          : undefined,
         nyaKolumner: [steg.namn],
       },
       frame,
