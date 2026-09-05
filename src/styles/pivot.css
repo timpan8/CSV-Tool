@@ -102,16 +102,24 @@
 /* Panelen till höger, som i Excel. Samma recept som `.kombinera__kropp`
    redan använder — bara åt andra hållet. */
 .pivot__kropp--panel {
-  grid-template-columns: 1fr var(--panel-bredd);
+  grid-template-columns: 1fr var(--pivot-panel-bredd);
 }
 
+/* Tabellen tar vad som finns, underlagsrutan sin egen höjd. `auto` och inte
+   en andel: rutan finns bara ibland, och när den inte finns ska tabellen ha
+   allt. */
 .pivot__yta {
   display: grid;
   grid-template-rows: 1fr;
+  gap: 10px;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
   padding: 10px 14px;
+}
+
+.pivot__yta:has(.pivotunderlag) {
+  grid-template-rows: 1fr auto;
 }
 
 .pivot__tomt {
@@ -588,17 +596,27 @@
 }
 
 /*
- * Fältlistan har ett eget tak på höjden.
+ * Fältlistan delar panelens höjd med rutorna, och går att dra om.
  *
- * En fil med sextio kolumner skulle annars trycka ned de fyra rutorna under
- * fönsterkanten, och rutorna är det man ska se — listan är bara förrådet man
- * hämtar ur.
+ * Ett fast tak var fel: en fil med tjugo kolumner visade sex av dem bakom en
+ * rullning, och det är listan man arbetar ur. Nu tar den vad som finns kvar
+ * upp till halva panelen — och `resize` ger handtaget till den som vet bättre
+ * än vi hur många fält hen vill se åt gången. Webbläsarens eget, inget nytt
+ * beroende.
  */
 .pivotpanel__falt {
   display: flex;
   flex-wrap: wrap;
+  align-content: flex-start;
   gap: 4px;
-  max-height: 148px;
+  flex: 0 1 auto;
+  min-height: 60px;
+  /* Höjden följer innehållet upp till halva panelen: åtta fält ska inte lämna
+     ett tomrum efter sig, sextio ska inte tränga undan rutorna. Drar man i
+     handtaget vinner det talet i stället. */
+  height: auto;
+  max-height: 50%;
+  resize: vertical;
   overflow-y: auto;
   padding: 0 8px 8px;
   border-bottom: 1px solid var(--linje);
@@ -623,10 +641,14 @@
   vertical-align: middle;
 }
 
+/* Rutorna tar resten och rullar för sig, så att en lång Värden-lista aldrig
+   trycker fältlistan ur bild. */
 .pivotpanel__rutor {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex: 1 1 0;
+  min-height: 0;
   padding: 10px 8px;
   overflow-y: auto;
 }
@@ -783,4 +805,112 @@ button.pivotruta__namn {
   align-items: flex-start;
   gap: 12px;
   padding: 24px;
+}
+
+/* ---------- Raderna bakom en cell ---------- */
+
+/*
+ * Underlagsrutan.
+ *
+ * Höjden är omställbar med webbläsarens eget handtag: hur mycket av
+ * pivottabellen man vill se samtidigt är en avvägning bara den som tittar kan
+ * göra. `min-height` håller minst rubrikraden plus några rader synliga, så att
+ * rutan aldrig kan dras ihop till en linje man inte hittar tillbaka från.
+ */
+.pivotunderlag {
+  display: flex;
+  flex-direction: column;
+  min-height: 140px;
+  max-height: 60vh;
+  height: 260px;
+  resize: vertical;
+  overflow: hidden;
+  border: 1px solid var(--linje);
+  border-radius: var(--radie);
+  background: var(--yta);
+}
+
+.pivotunderlag__topp {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--linje);
+  background: var(--yta-2);
+}
+
+.pivotunderlag__rubrik {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pivotunderlag__antal {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-svag);
+}
+
+.pivotunderlag__knappar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.pivotunderlag .rutnat {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.pivotunderlag__tomt,
+.pivotunderlag__fot {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: var(--text-svag);
+}
+
+.pivotunderlag__fot {
+  border-top: 1px solid var(--linje);
+  background: var(--yta-2);
+}
+
+/* Cellen man borrat i. Accentkanten och inte en fylld färg: talet ska stå
+   kvar som talet, markeringen ska bara säga var man är. */
+.pivottab__tal--vald {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+/*
+ * Radrubriken som knapp.
+ *
+ * Den ska läsas som rubriken den var — ingen kant, ingen bakgrund — men bete
+ * sig som det den är: understruken vid hovring, med fokusring för den som
+ * kommer med tangentbordet.
+ */
+.pivottab__borra {
+  max-width: 180px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  vertical-align: bottom;
+}
+
+.pivottab__borra:hover .pivottab__rubriktext {
+  text-decoration: underline;
+}
+
+.pivottab__tal {
+  cursor: pointer;
 }

@@ -403,6 +403,18 @@ export const DIALOGER: Record<string, string> = {
     '{0} of {1} values could be read as numbers. The rest are left out.',
   Spalter: 'Columns shown',
   'Gör till ny flik': 'Make a new tab',
+
+  /* Raderna bakom en cell. */
+  'Raderna bakom': 'The rows behind',
+  'Visa de {0} bakom {1}': 'Show the {0} behind {1}',
+  'Visa raderna bakom {0}': 'Show the rows behind {0}',
+  'Dölj raderna bakom': 'Hide the rows behind',
+  'Inga rader bakom den cellen.': 'No rows behind that cell.',
+  'Gör flik av urvalet': 'Make a tab of the selection',
+  'Kopiera raderna som TSV — klistra in direkt i Excel.':
+    'Copy the rows as TSV — paste straight into Excel.',
+  'Rutan läser bara. Gör en flik av urvalet för att städa, sortera eller exportera.':
+    'The panel only reads. Make a tab of the selection to clean, sort or export.',
   'Stäng pivoten': 'Close the pivot',
 
   /* ---------- Diagrammet ---------- */

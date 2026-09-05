@@ -6,7 +6,7 @@ import { formatCount, formatSum } from '../core/locale/sv.js'
 import type { Kolumnlov, Pivotplan, Pivotresultat, Pivotrubrik } from '../core/ops/pivot.js'
 import { matvardenamn } from './matvarde.js'
 import { dold, ordnaRader, type Sortering } from './pivotordning.js'
-import { sprak, t, tf } from './sprak.js'
+import { rader as raderText, sprak, t, tf } from './sprak.js'
 
 /** Hur cellernas tal visas. Andelen är en avläsning, inte en annan beräkning. */
 export type Visning = 'tal' | 'andelRad' | 'andelKolumn'
@@ -58,6 +58,10 @@ export function Pivottabell(props: {
   onVaxlaNod: (stig: string) => void
   /** Vad tabellen visar, för skärmläsaren. Samma mening som diagrammets rubrik. */
   rubrik: string
+  /** Cellen vars rader visas i underlagsrutan, eller `null`. */
+  vald: { rad: number; kol: number } | null
+  /** Klick i tabellen: visa raderna bakom. `kol` är Totalt-kolumnen för en hel rad. */
+  onBorra: (rad: number, kol: number) => void
 }) {
   const { resultat, plan } = props
   const steg = Math.max(1, plan.matvarden.length)
@@ -301,24 +305,54 @@ export function Pivottabell(props: {
    * En tom cell per spalt håller tabellen i form tills något dragits till
    * Värden; en rad utan celler hade fått rubrikerna att stå över ingenting.
    */
+  /*
+   * Cellerna är klickbara men inga tabbstopp.
+   *
+   * Fyrtio spalter gånger tvåtusen rader vore åttiotusen tabbstopp — och
+   * tangentbordet når samma sak genom radrubrikens knapp plus spaltväljaren i
+   * underlagsrutan. Musen får den kortare vägen, ingen får en sämre.
+   */
+  const cellklass = (rad: number, kol: number, klass: string): string => {
+    let ut = 'pivottab__tal'
+    if (kol === totalkol) ut += ' pivottab__tal--total'
+    if (props.vald && props.vald.rad === rad && props.vald.kol === kol) {
+      ut += ' pivottab__tal--vald'
+    }
+    return ut + klass
+  }
+
   const cellrader = (rad: number, klass: string) =>
     Array.from({ length: resultat.bredd }, (_, kol) =>
       plan.matvarden.length === 0
-        ? [
-            <td
-              key={`${kol}-tom`}
-              class={`pivottab__tal${kol === totalkol ? ' pivottab__tal--total' : ''}${klass}`}
-            />,
-          ]
+        ? [<td key={`${kol}-tom`} class={cellklass(rad, kol, klass)} />]
         : plan.matvarden.map((m, mi) => (
             <td
               key={`${kol}-${m.id}`}
-              class={`pivottab__tal${kol === totalkol ? ' pivottab__tal--total' : ''}${klass}`}
+              class={cellklass(rad, kol, klass)}
+              title={tf('Visa raderna bakom {0}', kolumnnamn(kol))}
+              onClick={() => props.onBorra(rad, kol)}
             >
               {visaTal(cell(rad, kol, mi), props.visning)}
             </td>
           )),
     )
+
+  /**
+   * Radrubrikens text som en knapp: tangentbordets väg till raderna bakom.
+   *
+   * Klick på en cell borrar i korsningen; det här borrar i hela raden, som
+   * Totalt-kolumnen redan betyder överallt annars i matrisen.
+   */
+  const borrknapp = (rad: number, etikett: string, antal: number) => (
+    <button
+      class="pivottab__borra"
+      title={tf('Visa de {0} bakom {1}', raderText(antal), etikett)}
+      aria-label={tf('Visa de {0} bakom {1}', raderText(antal), etikett)}
+      onClick={() => props.onBorra(rad, totalkol)}
+    >
+      <span class="pivottab__rubriktext">{etikett}</span>
+    </button>
+  )
 
   /**
    * Har raden barn under sig?
@@ -358,9 +392,7 @@ export function Pivottabell(props: {
           style={{ paddingLeft: 9 + (rad.niva - indragFran) * 16 }}
         >
           {fallknapp(plats, rad.stig, etikett)}
-          <span class="pivottab__rubriktext" title={etikett}>
-            {etikett}
-          </span>
+          {borrknapp(i, etikett, rad.antal)}
           <span class="pivottab__radantal">{formatCount(rad.antal)}</span>
         </th>
         {cellrader(i, '')}
@@ -379,11 +411,13 @@ export function Pivottabell(props: {
         {raddim.map((_, n) => (
           <th key={n} class="pivottab__radrubrik" scope={n === rad.niva ? 'row' : undefined}>
             {n === rad.niva && fallknapp(plats, rad.stig, etikett)}
-            {n <= rad.niva && (
-              <span class="pivottab__rubriktext" title={vag[n] ?? ''}>
-                {vag[n] ?? ''}
-              </span>
-            )}
+            {n === rad.niva
+              ? borrknapp(i, etikett, rad.antal)
+              : n < rad.niva && (
+                  <span class="pivottab__rubriktext" title={vag[n] ?? ''}>
+                    {vag[n] ?? ''}
+                  </span>
+                )}
             {n === rad.niva && <span class="pivottab__radantal">{formatCount(rad.antal)}</span>}
           </th>
         ))}
@@ -396,7 +430,7 @@ export function Pivottabell(props: {
     <tfoot>
       <tr>
         <th class="pivottab__radrubrik" scope="row" colSpan={hornSpan}>
-          {t('Totalt')}
+          {borrknapp(totalrad, t('Totalt'), resultat.antalKallrader)}
           <span class="pivottab__radantal">{formatCount(resultat.antalKallrader)}</span>
         </th>
         {cellrader(totalrad, ' pivottab__tal--total')}
@@ -447,7 +481,7 @@ export function Pivottabell(props: {
                 <tfoot>
                   <tr>
                     <th class="pivottab__radrubrik" scope="row">
-                      {t('Totalt')}
+                      {borrknapp(ordnade[grupp.topp]!, t('Totalt'), rad.antal)}
                       <span class="pivottab__radantal">{formatCount(rad.antal)}</span>
                     </th>
                     {cellrader(ordnade[grupp.topp]!, ' pivottab__tal--total')}

@@ -15,6 +15,9 @@ function rad(stig: string, etikett: string): Pivotrad {
     antal: 1,
     ovriga: false,
     tom: false,
+    // Banden spelar ingen roll för ordningen; de prövas i pivot.test.ts.
+    start: 0,
+    slut: 1,
   }
 }
 
@@ -46,6 +49,8 @@ function resultatMed(rader: Pivotrad[], tal: (number | null)[]): Pivotresultat {
     hojd: rader.length + 1,
     text,
     tal: celler,
+    kallrader: Uint32Array.from(rader.map((_, i) => i)),
+    kolumnband: null,
     antalKallrader: rader.length,
     utanNyckel: 0,
     doldaRadvarden: 0,

@@ -196,6 +196,15 @@ export interface Pivotrad {
   antal: number
   ovriga: boolean
   tom: boolean
+  /**
+   * Radens band i `Pivotresultat.kallrader`, halvöppet: `[start, slut)`.
+   *
+   * Det är precis de rader `raknaBand` räknade när cellerna på den här raden
+   * skrevs, och därför det enda ärliga svaret på *vilka rader ligger bakom
+   * talet*. Se `radernaBakom`.
+   */
+  start: number
+  slut: number
 }
 
 export interface Pivotresultat {
@@ -217,6 +226,22 @@ export interface Pivotresultat {
   text: (string | null)[]
   /** Samma index som `text`. `NaN` när cellen saknar ett tal att räkna med. */
   tal: Float64Array
+  /**
+   * Källraderna i den ordning matrisen räknade dem.
+   *
+   * Fysiska radnummer, sorterade så att varje `Pivotrad` blir ett
+   * sammanhängande band. Det här är vad som gör *visa raderna bakom cellen*
+   * möjligt utan att gissa: talet i cellen och listan man får fram är
+   * räknade ur samma rader.
+   */
+  kallrader: Uint32Array
+  /**
+   * Kolumnhinken per plats i `kallrader`, eller `null` utan kolumnfält.
+   *
+   * Aligned med `kallrader`, inte med filens rader: en fil på en miljon rader
+   * betalar för de rader som kom med, inte för alla.
+   */
+  kolumnband: Uint32Array | null
   /** Källrader som kom med. */
   antalKallrader: number
   /** Rader som lämnades utanför för att någon dimension var tom. */
@@ -534,12 +559,32 @@ export function pivotera(frame: Frame, plan: Pivotplan): Pivotresultat {
    * Räknesorteringen är stabil, så den sist körda nivån blir den yttersta.
    * Efter svepen ligger raderna grupperade på första raddimensionen, inom den
    * på den andra, och innerst på kolumnvärdet — vilket är precis den ordning
-   * som gör varje (radband × kolumn) till ett sammanhängande intervall.
+   * som gör varje **radband** till ett sammanhängande intervall.
+   *
+   * Observera att det gäller radbandet, inte (radband × kolumn). För en
+   * lövrad är kolumnhinken den sista nyckeln och kolumnens rader ligger
+   * mycket riktigt i följd, men för en delsummerad rad är de djupare
+   * radfälten mer signifikanta — då ligger kolumnens rader utspridda i
+   * bandet, en klunga per barn. `raknaBand` bryr sig inte, eftersom den
+   * filtrerar per rad, och `radernaBakom` gör likadant.
    */
   let rader: Uint32Array = Uint32Array.from(kvar)
   if (kolhink) rader = sorteraNiva(rader, kolhink, kolumner.length)
   for (let i = raddim.length - 1; i >= 0; i--) {
     rader = sorteraNiva(rader, raddim[i]!.hink, raddim[i]!.rubriker.length)
+  }
+
+  /*
+   * Kolumnhinken flyttad till platsordning.
+   *
+   * `kolhink` är indexerad med fysiskt radnummer och lever bara under
+   * körningen. Den här är indexerad med plats i `rader`, alltså exakt så som
+   * ett band läses, och är den enda av de två som är värd att spara: den är
+   * så lång som antalet rader som kom med, inte som hela filen.
+   */
+  const kolumnband = kolhink === null ? null : new Uint32Array(rader.length)
+  if (kolumnband && kolhink) {
+    for (let k = 0; k < rader.length; k++) kolumnband[k] = kolhink[rader[k]!]!
   }
 
   const radlista: Pivotrad[] = []
@@ -774,6 +819,8 @@ export function pivotera(frame: Frame, plan: Pivotplan): Pivotresultat {
       antal: slut - start,
       ovriga: egen.ovriga,
       tom: egen.tom,
+      start,
+      slut,
     })
     raknaRad(start, slut, false)
 
@@ -813,6 +860,8 @@ export function pivotera(frame: Frame, plan: Pivotplan): Pivotresultat {
     hojd: radlista.length + 1,
     text: celltext,
     tal: Float64Array.from(celltal),
+    kallrader: rader,
+    kolumnband,
     antalKallrader: rader.length,
     utanNyckel,
     doldaRadvarden: raddim.reduce((s, d) => s + d.dolda, 0),
@@ -846,6 +895,45 @@ export function tomPlan(): Pivotplan {
     format: 'komma',
     decimaler: null,
   }
+}
+
+/**
+ * Källraderna bakom en cell i matrisen — pivotens svar på *vilka*.
+ *
+ * `rad` är radens index i `resultat.rader`, eller `resultat.rader.length` för
+ * Totalt-raden. `kol` är kolumnindexet, eller `resultat.bredd - 1` för
+ * Totalt-kolumnen. Båda faller ut ur samma uttryck: Totalt-raden är hela
+ * bandet, Totalt-kolumnen är ingen hinkfiltrering alls.
+ *
+ * **Raderna är de som räknades, inte de som ett filter skulle ha hittat.**
+ * Frestelsen är att bygga ett `Filter` av radens etiketter och kolumnens
+ * rubriker och köra det mot filen. Det svaret hade varit ett annat tal än det
+ * som står i cellen, tyst, i fyra fall: Övriga bär bara ett antal och aldrig
+ * vilka värden som vikts in; pivotens *(tomt)* rymmer värden som bara var
+ * blanksteg medan filtrets `tom` bara matchar den tomma strängen; `strunta`
+ * med skiftläge och diakriter har ingen motsvarighet i filtermotorn; och en
+ * delsummerad rad kan inte uttrycka *och har ett värde i alla andra
+ * dimensioner*. Bandet slipper alltihop genom att vara samma rader som talet
+ * räknades ur.
+ *
+ * Filtrerar, skivar inte: i en delsummerad rad ligger kolumnens rader
+ * utspridda i bandet, en klunga per barn.
+ */
+export function radernaBakom(resultat: Pivotresultat, rad: number, kol: number): Uint32Array {
+  const post = resultat.rader[rad]
+  const start = post ? post.start : 0
+  const slut = post ? post.slut : resultat.kallrader.length
+  const band = resultat.kolumnband
+  // Totalt-kolumnen är ingen hink utan hela bandet — den räknas på samma sätt
+  // i `raknaBand`, där varje rad skriver både i sin egen kolumn och i totalen.
+  if (band === null || kol >= resultat.bredd - 1) {
+    return resultat.kallrader.slice(start, slut)
+  }
+  const ut: number[] = []
+  for (let k = start; k < slut; k++) {
+    if (band[k] === kol) ut.push(resultat.kallrader[k]!)
+  }
+  return Uint32Array.from(ut)
 }
 
 /** En rubriks text på en nivå: värdet, eller det som står i stället för det. */

@@ -16,13 +16,16 @@ import { ordnaRader } from './pivotordning.js'
 import {
   arAdditiv,
   KOLUMNTAK_VAL,
+  kolumnrubrik,
   pivotera,
+  radernaBakom,
   pivotnamn,
   pivotTillFrame,
   type Pivotplan,
 } from '../core/ops/pivot.js'
 import { Notis, Val } from './parts.js'
 import { Pivotpanel } from './Pivotpanel.js'
+import { Pivotunderlag } from './Pivotunderlag.js'
 import { Pivottabell, type Radlayout, type Sortering, type Visning } from './Pivottabell.js'
 import { rader as raderText, t, tf } from './sprak.js'
 
@@ -90,6 +93,8 @@ export function Pivot(props: {
     matvarde: 0,
   })
   const [punkt, setPunkt] = useState<Punktinfo | null>(null)
+  /** Cellen vars rader visas i underlagsrutan. */
+  const [vald, setVald] = useState<{ rad: number; kol: number } | null>(null)
 
   /**
    * Fälten som faktiskt finns i filen.
@@ -113,9 +118,11 @@ export function Pivot(props: {
     setSortering(null)
     if (delta.rader !== undefined || delta.kolumner !== undefined) {
       // Hopfällningen är stigar av index — "0/2" — och pekar på andra rader
-      // så fort fälten byts. Samma sak med punkten under pekaren.
+      // så fort fälten byts. Samma sak med punkten under pekaren och med
+      // cellen man borrat i: radindex betyder något annat i en ny tabell.
       setHopfallda(new Set())
       setPunkt(null)
+      setVald(null)
     }
     // Block behöver två radfält. Faller de under två visar tabellen den
     // indragna listan, och då ska valet säga det också.
@@ -212,6 +219,27 @@ export function Pivot(props: {
     [resultat, plan, diagramplan, ordnade, additiv, visning],
   )
   const hindrad = diagram.hinder[diagramplan.typ]
+
+  /*
+   * Raderna bakom den valda cellen, och vad den heter i klartext.
+   *
+   * Uppslaget är en filtrering över ett band och kostar ingenting att göra om
+   * — men `useMemo` håller ändå arrayen stabil, så att underlagsrutans rutnät
+   * inte bygger om sin vy vid varje omritning av pivoten.
+   */
+  const underlag = useMemo(() => {
+    if (vald === null) return null
+    const post = resultat.rader[vald.rad]
+    const radnamn = post
+      ? (post.ovriga ? t('Övriga') : post.tom ? t('(tomt)') : (post.etiketter[post.niva] ?? ''))
+      : t('Totalt')
+    const lov = resultat.kolumner[vald.kol]
+    const kolnamn = lov === undefined ? null : kolumnrubrik(lov, t('(tomt)'), t('Övriga'))
+    return {
+      rader: radernaBakom(resultat, vald.rad, vald.kol),
+      rubrik: kolnamn === null ? radnamn : `${radnamn} × ${kolnamn}`,
+    }
+  }, [resultat, vald])
   /*
    * Utan kolumndimension har den enda serien inget eget namn — den *är* hela
    * svaret. Att kalla den "(tomt)" vore fel: det är inget tomt värde, det är
@@ -433,6 +461,10 @@ export function Pivot(props: {
             visning={visningNu}
             layout={layout}
             rubrik={diagramrubrik}
+            vald={vald}
+            onBorra={(rad, kol) =>
+              setVald((nu) => (nu && nu.rad === rad && nu.kol === kol ? null : { rad, kol }))
+            }
             sortering={sortering}
             onSortera={sortera}
             hopfallda={hopfallda}
@@ -486,6 +518,21 @@ export function Pivot(props: {
               </div>
             )}
           </div>
+        )}
+        {/*
+          Raderna bakom cellen man klickat på. Bara i tabelläget — diagrammet
+          har inga celler att klicka på, och ett stapelklick som borrar är en
+          egen sak att tänka igenom.
+        */}
+        {yta === 'tabell' && underlag && (
+          <Pivotunderlag
+            frame={frame}
+            revision={props.revision}
+            rubrik={underlag.rubrik}
+            rader={underlag.rader}
+            onNyFlik={props.onNyFlik}
+            onStang={() => setVald(null)}
+          />
         )}
         </div>
         {panel && (
