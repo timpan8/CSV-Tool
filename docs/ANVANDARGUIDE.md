@@ -264,6 +264,8 @@ Klistrar du in listan som en egen fil gissar importen på semikolon — rätt gi
 
 Bygger en ny kolumn ur en mall. Två saker i ett: mallen slår ihop kolumner, och den lägger en struktur runt varje värde.
 
+- **Mallen du sist körde ligger kvar.** Fältet är förifyllt med den, och under det ligger **Senast använda** — de åtta senaste som klickbara knappar. Listan sparas i webbläsaren och överlever en omladdning; *Börja om* tömmer den. Nämner den senaste en kolumn den här filen saknar fylls den inte i, men den finns kvar som knapp.
+
 1. Kolumnmenyn → **Bygg kolumn ur mall…**
 2. Skriv mallen, t.ex. `{Förnamn} {Efternamn}` eller `('{Användarnamn}'),`. **Lägg till kolumn** sätter in ett namn åt dig.
 3. **Skapa kolumnen**.
@@ -279,7 +281,8 @@ Första och sista raden räknas i **den ordning du ser nu**. Det är samma ordni
 
 **Kolumnen minns sin mall.** Med **Kom ihåg mallen för kolumnen** ikryssat får rubriken märket `mall`. Kolumnen räknas **aldrig** om av sig själv — men när källorna ändrats blir märket gult och statusraden erbjuder **Uppdatera**, precis som *Sortera om* gör för en sorterad lista. Uppdateringen är ett enda `Ctrl+Z`.
 
-- Kolumnmenyn har **Uppdatera ur mallen**, **Ändra mallen…** och **Släpp mallen** när kolumnen har en.
+- Kolumnmenyn har **Uppdatera ur mallen**, **Ändra mallen…** och **Stäng av mallen** när kolumnen har en.
+- **En avstängd mall kastas inte.** Märket bleknar till en streckad ram, statusraden tystnar, och kolumnen slutar följa sina källor — men mallen ligger kvar. **Slå på mallen igen** i kolumnmenyn tar tillbaka den, också i morgon och också efter en omladdning. `Ctrl+Z` hjälper bara den som märker misstaget direkt.
 - Döper du om en källkolumn följer mallen med, i samma ångra-steg.
 - Tar du bort en källkolumn säger märket ifrån i stället för att kolumnen fylls med halva värden. `Ctrl+Z` väcker den till liv igen.
 

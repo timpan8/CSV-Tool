@@ -266,6 +266,8 @@ If you paste the list as its own file, the import guesses semicolon — the righ
 
 Builds a new column from a template. Two things in one: the template merges columns, and it wraps each value in a structure.
 
+- **The template you last ran stays.** The field is pre-filled with it, and below it sits **Recently used** — the last eight as clickable buttons. The list is saved in the browser and survives a reload; *Start over* clears it. If the most recent one names a column this file does not have it is not filled in, but it stays as a button.
+
 1. Column menu → **Build column from template…**
 2. Write the template, e.g. `{Förnamn} {Efternamn}` or `('{Namn}'),`. **Add column** inserts a name for you.
 3. **Create the column**.
@@ -281,7 +283,8 @@ The first and last rows are counted in **the order you see now**. That is the sa
 
 **The column remembers its template.** With **Remember the template for the column** ticked, the header gets a `template` badge. The column **never** recalculates on its own — but when the sources change the badge turns yellow and the status bar offers **Update**, exactly the way *Sort again* does for a sorted list. The update is a single `Ctrl+Z`.
 
-- The column menu has **Update from the template**, **Change the template…** and **Drop the template** when the column has one.
+- The column menu has **Update from the template**, **Change the template…** and **Turn the template off** when the column has one.
+- **A template that is turned off is not thrown away.** The badge fades to a dashed outline, the status bar goes quiet, and the column stops following its sources — but the template stays. **Turn the template back on** in the column menu brings it back, tomorrow too and after a reload too. `Ctrl+Z` only helps the person who notices the mistake straight away.
 - If you rename a source column the template comes along, in the same undo step.
 - If you delete a source column the badge says so instead of the column being filled with half values. `Ctrl+Z` brings it back to life.
 

@@ -317,7 +317,9 @@ window.GUIDE_EN = {
             'The **How it comes out** box shows the first, a middle and the last row from your own file. The exception is otherwise visible in two cells out of a thousand.',
             'The first and last rows are counted in **the order you see now** — the same order `Ctrl+C` copies. A physical reading would have put the comma on the last copied row.',
             '**The column remembers its template** with **Remember the template for the column** ticked. The header gets a `template` badge, and the column **never** recalculates on its own — but when the sources change the badge turns yellow and the status bar offers **Update**, exactly the way *Sort again* does for a sorted list. The update is a single `Ctrl+Z`.',
-            'The column menu has **Update from the template**, **Change the template…** and **Drop the template** when the column has one. If you rename a source column the template comes along; if you delete one the badge says so instead of the column being filled with half values.'
+            'The column menu has **Update from the template**, **Change the template…** and **Turn the template off** when the column has one. If you rename a source column the template comes along; if you delete one the badge says so instead of the column being filled with half values.',
+            '**A template that is turned off is not thrown away.** The badge fades to a dashed outline, the status bar goes quiet and the column stops following its sources — but the template stays, and **Turn the template back on** brings it back. Tomorrow too, and after a reload too: `Ctrl+Z` only helps the person who notices straight away.',
+            '**The template you last ran stays.** The field is pre-filled with it, and **Recently used** shows the last eight as buttons. The list is saved in the browser; *Start over* clears it. If the most recent one names a column the file does not have it is not filled in, but it stays as a button.'
           ],
           before: { t: 'The template', items: ["('{Namn}'),", "last row: ('{Namn}')"] },
           after: { t: 'The column', items: ["('Anna Karlsson'),", "('Greta Öhrn')"] }

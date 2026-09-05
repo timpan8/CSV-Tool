@@ -191,29 +191,42 @@ export function SplitTool(props: {
       </div>
 
       {armonster ? (
-        <div class="falt">
-          <span class="falt__etikett">{t('Mönster')}</span>
-          <input
-            value={monster}
-            onInput={(e) => setMonster((e.currentTarget as HTMLInputElement).value)}
-          />
-          <p class="verktyg__sammanfattning">
-            {tj(
-              'Skriv värdet som det ser ut och sätt {0} runt det du vill plocka ut. Texten emellan är avgränsarna, och varje klammer blir en kolumn.',
-              <code>{'{Namn}'}</code>,
-            )}
-          </p>
-          {fel !== null && <Notis ton="fara">{t(fel)}</Notis>}
+        <>
+          <div class="falt">
+            <span class="falt__etikett">{t('Mönster')}</span>
+            <input
+              value={monster}
+              onInput={(e) => setMonster((e.currentTarget as HTMLInputElement).value)}
+            />
+            <p class="verktyg__sammanfattning">
+              {tj(
+                'Skriv värdet som det ser ut och sätt {0} runt det du vill plocka ut. Texten emellan är avgränsarna, och varje klammer blir en kolumn.',
+                <code>{'{Namn}'}</code>,
+              )}
+            </p>
+            {fel !== null && <Notis ton="fara">{t(fel)}</Notis>}
+          </div>
+
+          {/* Samma rad och samma etikett som i mallverktyget — det är samma
+              sorts text, och två paneler som gör samma sak ska se likadana ut. */}
           {monsterforslag.length > 0 && (
-            <div class="val" role="group" aria-label={t('Senast använda')}>
-              {monsterforslag.map((m, i) => (
-                <button key={i} class="val__knapp" title={m.text} onClick={() => setMonster(m.text)}>
-                  {m.text.length > 28 ? `${m.text.slice(0, 27)}…` : m.text}
-                </button>
-              ))}
+            <div class="falt">
+              <span class="falt__etikett">{t('Senast använda')}</span>
+              <div class="val" role="group">
+                {monsterforslag.map((m, i) => (
+                  <button
+                    key={i}
+                    class="val__knapp"
+                    title={m.text}
+                    onClick={() => setMonster(m.text)}
+                  >
+                    {kort(m.text)}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
-        </div>
+        </>
       ) : satt === 'position' ? (
         <div class="falt">
           <span class="falt__etikett">{t('Efter hur många tecken')}</span>
@@ -330,4 +343,9 @@ export function SplitTool(props: {
       )}
     </Verktygspanel>
   )
+}
+
+/** Kortar ett mönster så att chipset inte blir bredare än panelen. */
+function kort(text: string): string {
+  return text.length > 28 ? `${text.slice(0, 27)}…` : text
 }

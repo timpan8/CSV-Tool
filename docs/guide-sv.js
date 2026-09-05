@@ -317,7 +317,9 @@ window.GUIDE_SV = {
             'Rutan **Så blir det** visar första, mitten- och sista raden ur din egen fil. Undantaget syns annars i två celler av tusen.',
             'Första och sista raden räknas i **den ordning du ser nu** — samma ordning som `Ctrl+C` kopierar. En fysisk tolkning hade satt kommatecknet på den sista kopierade raden.',
             '**Kolumnen minns sin mall** med **Kom ihåg mallen för kolumnen** ikryssat. Rubriken får märket `mall`, och kolumnen räknas **aldrig** om av sig själv — men när källorna ändrats blir märket gult och statusraden erbjuder **Uppdatera**, precis som *Sortera om* gör för en sorterad lista. Uppdateringen är ett enda `Ctrl+Z`.',
-            'Kolumnmenyn har **Uppdatera ur mallen**, **Ändra mallen…** och **Släpp mallen** när kolumnen har en. Döper du om en källkolumn följer mallen med; tar du bort en säger märket ifrån i stället för att kolumnen fylls med halva värden.'
+            'Kolumnmenyn har **Uppdatera ur mallen**, **Ändra mallen…** och **Stäng av mallen** när kolumnen har en. Döper du om en källkolumn följer mallen med; tar du bort en säger märket ifrån i stället för att kolumnen fylls med halva värden.',
+            '**En avstängd mall kastas inte.** Märket bleknar till en streckad ram, statusraden tystnar och kolumnen slutar följa sina källor — men mallen ligger kvar, och **Slå på mallen igen** tar tillbaka den. Också i morgon, och också efter en omladdning: `Ctrl+Z` hjälper bara den som märker misstaget direkt.',
+            '**Mallen du sist körde ligger kvar.** Fältet är förifyllt med den, och **Senast använda** visar de åtta senaste som knappar. Listan sparas i webbläsaren; *Börja om* tömmer den. Nämner den senaste en kolumn filen saknar fylls den inte i, men den finns kvar som knapp.'
           ],
           before: { t: 'Mallen', items: ["('{Namn}'),", "sista raden: ('{Namn}')"] },
           after: { t: 'Kolumnen', items: ["('Anna Karlsson'),", "('Greta Öhrn')"] }
