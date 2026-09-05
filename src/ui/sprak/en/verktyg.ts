@@ -364,8 +364,6 @@ export const VERKTYG: Record<string, string> = {
   '{0} av reglerna räknas inte just nu — de är avslagna, ofärdiga eller pekar på en kolumn som tagits bort. De ligger kvar.':
     '{0} of the rules do not count right now — they are switched off, unfinished, or point at a column that has been deleted. They stay.',
   'Sök bland {0} värden…': 'Search among {0} values…',
-  'Visar de 200 vanligaste av {0}. Sök för att hitta fler.':
-    'Showing the 200 most common of {0}. Search to find more.',
   'Inga värden matchar.': 'No values match.',
 
 

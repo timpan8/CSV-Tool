@@ -203,6 +203,11 @@
   font-size: 13px;
 }
 
+.val__knapp--inaktiv {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .val__knapp--vald {
   background: var(--accent-svag);
   border-color: var(--accent);

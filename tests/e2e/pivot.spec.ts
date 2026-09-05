@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { ruta, satt } from './pivothjalp.js'
+import { antalRader, ruta, satt } from './pivothjalp.js'
 
 /*
  * Pivotvyn.
@@ -32,12 +32,12 @@ const cell = (page: Page, radetikett: string, kol: number) =>
     .locator('td')
     .nth(kol)
 
-test('pivoten öppnas med en tabell som redan säger något', async ({ page }) => {
+test('ett radfält och Antal rader ger en tabell som säger något', async ({ page }) => {
   await oppnaExempel(page)
   await oppnaPivot(page)
+  await satt(page, 'Rader', 'Status')
+  await antalRader(page)
 
-  // Förvalet väljer en kategorikolumn åt en, utan att man fyllt i något.
-  await expect(ruta(page, 'Rader').locator('.pivotruta__chip')).toHaveCount(1)
   await expect(page.locator('.pivottab tbody tr')).not.toHaveCount(0)
   // Statusens tre värden, och Totalt-raden som säger sexton.
   await expect(page.locator('.pivottab tbody th').first()).toContainText('Aktiv')
@@ -48,6 +48,7 @@ test('en korstabell räknar rätt i båda ledderna', async ({ page }) => {
   await oppnaExempel(page)
   await oppnaPivot(page)
 
+  await antalRader(page)
   await satt(page, 'Rader', 'Status')
   await satt(page, 'Kolumner', 'Ort')
 
@@ -68,6 +69,8 @@ test('en korstabell räknar rätt i båda ledderna', async ({ page }) => {
 test('andel av rad ger hundra procent i Totalt', async ({ page }) => {
   await oppnaExempel(page)
   await oppnaPivot(page)
+  await antalRader(page)
+  await satt(page, 'Rader', 'Status')
   await satt(page, 'Kolumner', 'Ort')
 
   await page.getByRole('radio', { name: '% av rad' }).click()
@@ -78,6 +81,8 @@ test('andel av rad ger hundra procent i Totalt', async ({ page }) => {
 test('klick på en kolumnrubrik sorterar raderna', async ({ page }) => {
   await oppnaExempel(page)
   await oppnaPivot(page)
+  await antalRader(page)
+  await satt(page, 'Rader', 'Status')
 
   const forsta = () => page.locator('.pivottab tbody tr').first().locator('th')
   await expect(forsta()).toContainText('Aktiv')
@@ -95,7 +100,7 @@ test('flera fält i Rader ger delsummor som går att fälla ihop', async ({ page
 
   // En nivålista *är* flera fält i Rader utan fält i Kolumner. Ingen egen
   // lägesväxel behövs för att säga det.
-  await satt(page, 'Kolumner')
+  await antalRader(page)
   await satt(page, 'Rader', 'Status', 'Ort')
 
   const rader = page.locator('.pivottab tbody tr')
@@ -111,6 +116,7 @@ test('flera fält i Rader ger delsummor som går att fälla ihop', async ({ page
 test('gör till ny flik ger en vanlig flik, och källan är orörd', async ({ page }) => {
   await oppnaExempel(page)
   await oppnaPivot(page)
+  await antalRader(page)
   await satt(page, 'Rader', 'Status')
 
   await page.getByRole('button', { name: 'Gör till ny flik' }).click()
@@ -160,18 +166,23 @@ test('paletten hittar också dit', async ({ page }) => {
   await expect(page.locator('.pivot')).toBeVisible()
 })
 
-test('byte av flik ger pivoten ett nytt förslag i stället för en tom tabell', async ({ page }) => {
+test('varje flik har sin egen plan, och den överlever ett flikbyte', async ({ page }) => {
   await oppnaExempel(page)
   await oppnaPivot(page)
+  await antalRader(page)
   await satt(page, 'Rader', 'Status')
 
   // Fliken finns kvar ovanför vyn, så bytet går att göra mitt i en pivot.
   await page.getByRole('button', { name: 'Gör till ny flik' }).click()
   await oppnaPivot(page)
-  await page.getByRole('button', { name: 'exempel-kunder.csv', exact: true }).click()
+  // Den nya fliken börjar från fyra tomma rutor — kolumn-id från den andra
+  // filen betyder ingenting här, och en plan som pekade på dem hade gett en
+  // tom tabell utan att säga varför.
+  await expect(ruta(page, 'Rader').locator('.pivotruta__chip')).toHaveCount(0)
+  await expect(page.locator('.pivot__tomt')).toBeVisible()
 
-  // Kolumn-id från den andra filen betyder ingenting här; tabellen ska ändå
-  // stå fylld, med ett förslag som gäller den fil man nu tittar på.
-  await expect(page.locator('.pivottab tbody tr')).not.toHaveCount(0)
+  // Tillbaka på källfliken står planen kvar.
+  await page.getByRole('button', { name: 'exempel-kunder.csv', exact: true }).click()
+  await expect(ruta(page, 'Rader').locator('.pivotruta__chip')).toHaveCount(1)
   await expect(page.locator('.pivottab tfoot')).toContainText('16')
 })

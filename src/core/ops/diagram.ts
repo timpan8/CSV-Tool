@@ -101,8 +101,21 @@ export function diagramdata(
    * varje källrad två gånger — i tabellen syns skillnaden som indrag, i ett
    * stapeldiagram som en stapel dubbelt så hög bredvid sina egna delar.
    */
-  const sistaNiva = Math.max(0, plan.rader.length - 1)
+  // Lövnivån läses ur resultatet, inte ur planen: ett radfält vars kolumn
+  // tagits bort finns i planen men inte i tabellen, och då är sista nivån en
+  // mindre än planen säger.
+  const sistaNiva = resultat.rader.reduce((m, r) => Math.max(m, r.niva), 0)
   const lov = ordning.filter((i) => resultat.rader[i]?.niva === sistaNiva)
+
+  /*
+   * Bara kolumnfält, inga radfält: tabellen visar en Totalt-rad med tal, och
+   * det är de talen som ska ritas. Kolumnlöven blir kategorier och Totalt-raden
+   * den enda serien — samma bild som om fälten legat i Rader, vilket är precis
+   * vad man menar när man lägger dem i Kolumner och ändå vill se staplar.
+   */
+  if (resultat.rader.length === 0 && resultat.kolumner.length > 0) {
+    return liggandeAxel(resultat, plan, m, visning, texter)
+  }
 
   /*
    * Kategorierna tas i tabellens ordning, inte i storleksordning.
@@ -209,6 +222,41 @@ export function diagramdata(
     utelamnadeSerier,
     utelamnadeKategorier,
     hinder: byggHinder(plan, m, serier, kategorier.length),
+  }
+}
+
+/** Diagrammet när kolumnlöven är kategorierna och Totalt-raden är serien. */
+function liggandeAxel(
+  resultat: Pivotresultat,
+  plan: Pivotplan,
+  m: number,
+  visning: Diagramvisning,
+  texter: { tomt: string; ovriga: string },
+): Diagramdata {
+  const steg = Math.max(1, plan.matvarden.length)
+  const totalkol = resultat.bredd - 1
+  const totalrad = resultat.rader.length
+  const valda = resultat.kolumner.slice(0, KATEGORITAK)
+  const kategorier = valda.map((lov) => kolumnrubrik(lov, texter.tomt, texter.ovriga))
+  const helhet = resultat.tal[(totalrad * resultat.bredd + totalkol) * steg + m]
+  const varden = valda.map((_, kol) => {
+    const tal = resultat.tal[(totalrad * resultat.bredd + kol) * steg + m]
+    if (tal === undefined || Number.isNaN(tal)) return null
+    if (visning === 'tal') return tal
+    // Andel av rad och andel av kolumn är samma sak när raden är Totalt.
+    if (helhet === undefined || Number.isNaN(helhet) || helhet === 0) return null
+    return tal / helhet
+  })
+  const serie: Diagramserie = { etikett: '', slot: 0, varden }
+  const tal = varden.filter((v): v is number => v !== null)
+  return {
+    kategorier,
+    serier: [serie],
+    max: tal.length === 0 ? 0 : Math.max(0, ...tal),
+    min: tal.length === 0 ? 0 : Math.min(0, ...tal),
+    utelamnadeSerier: 0,
+    utelamnadeKategorier: resultat.kolumner.length - valda.length,
+    hinder: byggHinder(plan, m, [serie], kategorier.length),
   }
 }
 

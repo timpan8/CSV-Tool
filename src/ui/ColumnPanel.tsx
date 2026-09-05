@@ -3,6 +3,7 @@ import type { Column, ColumnId, Frame } from '../core/types.js'
 import type { AppliedStep, Tab } from '../state/store.js'
 import { TYPE_LABELS } from '../core/infer.js'
 import { formatCount } from '../core/locale/sv.js'
+import { startaDrag } from './drag.js'
 import { t, tf } from './sprak.js'
 
 export function ColumnPanel(props: {
@@ -69,7 +70,10 @@ export function ColumnPanel(props: {
                 draggable
                 title={`${col.name} — ${t(TYPE_LABELS[col.type])}`}
                 onClick={() => props.onSelect(col.id)}
-                onDragStart={() => setDrar(col.id)}
+                onDragStart={(e) => {
+                  startaDrag(e)
+                  setDrar(col.id)
+                }}
                 onDragOver={(e) => {
                   e.preventDefault()
                   setMal(index)

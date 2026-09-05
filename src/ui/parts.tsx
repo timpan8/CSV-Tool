@@ -1,7 +1,7 @@
-import type { ComponentChildren } from 'preact'
+import { Component, type ComponentChildren } from 'preact'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { dismiss, toasts } from '../state/store.js'
-import { t } from './sprak.js'
+import { t, tf } from './sprak.js'
 
 export function Modal(props: {
   titel: string
@@ -319,6 +319,47 @@ export function Meny(props: {
   )
 }
 
+/**
+ * Felgränsen runt en hel vy.
+ *
+ * Ett kastat fel i en komponent utan gräns tar hela Preact-trädet med sig, och
+ * då är sessionen borta — filerna, historiken, allt — för ett fel i en vy.
+ * Gränsen kostar vyn och inget mer: det som står kvar är ett meddelande och
+ * en knapp tillbaka. En klasskomponent, eftersom bara sådana kan fånga.
+ */
+export class Felgrans extends Component<
+  { children: ComponentChildren; onStang: () => void },
+  { fel: string | null }
+> {
+  override state = { fel: null as string | null }
+
+  static getDerivedStateFromError(fel: unknown): { fel: string } {
+    return { fel: fel instanceof Error ? fel.message : String(fel) }
+  }
+
+  override componentDidCatch(fel: unknown): void {
+    console.error(fel)
+  }
+
+  override render() {
+    if (this.state.fel === null) return this.props.children
+    return (
+      <div class="felgrans">
+        <Notis ton="fara">{tf('Något gick fel i vyn: {0}', this.state.fel)}</Notis>
+        <button
+          class="knapp knapp--primar"
+          onClick={() => {
+            this.setState({ fel: null })
+            this.props.onStang()
+          }}
+        >
+          {t('Stäng vyn')}
+        </button>
+      </div>
+    )
+  }
+}
+
 export function Toastar() {
   return (
     <div class="toastar" aria-live="polite">
@@ -370,20 +411,28 @@ export function Val<T extends string>(props: {
   varden: readonly { varde: T; etikett: string; titel?: string; inaktiv?: string }[]
   valt: T | null
   onValj: (v: T) => void
+  /** Gruppens namn för skärmläsaren — det ord som står som rubrik bredvid. */
+  etikett?: string
 }) {
   return (
-    <div class="val" role="radiogroup">
+    <div class="val" role="radiogroup" aria-label={props.etikett}>
       {props.varden.map((v) => (
         <button
           key={v.varde}
-          class={`val__knapp${v.varde === props.valt ? ' val__knapp--vald' : ''}`}
+          class={`val__knapp${v.varde === props.valt ? ' val__knapp--vald' : ''}${v.inaktiv !== undefined ? ' val__knapp--inaktiv' : ''}`}
           role="radio"
           aria-checked={v.varde === props.valt}
-          // Ett avstängt val säger sitt skäl i titeln. Ett val som bara inte
-          // går att klicka på lär ingen något.
-          disabled={v.inaktiv !== undefined}
+          // Ett avstängt val säger sitt skäl. `aria-disabled` i stället för
+          // `disabled`, så att knappen går att nå med tangentbordet och skälet
+          // går att läsa — en knapp som bara inte går att klicka på lär ingen
+          // något. Samma val som menyposterna gör.
+          aria-disabled={v.inaktiv !== undefined}
+          aria-label={v.inaktiv === undefined ? undefined : `${t(v.etikett)} — ${v.inaktiv}`}
           title={v.inaktiv ?? (v.titel === undefined ? undefined : t(v.titel))}
-          onClick={() => props.onValj(v.varde)}
+          onClick={() => {
+            if (v.inaktiv !== undefined) return
+            props.onValj(v.varde)
+          }}
         >
           {t(v.etikett)}
         </button>

@@ -6,6 +6,9 @@ import { DIALOGER } from '../../src/ui/sprak/en/dialoger.js'
 import { FLERFIL } from '../../src/ui/sprak/en/flerfil.js'
 import { SKAL } from '../../src/ui/sprak/en/skal.js'
 import { VERKTYG } from '../../src/ui/sprak/en/verktyg.js'
+import { RUTOR } from '../../src/ui/Pivotpanel.js'
+import { DIAGRAMTYPER, RADLAYOUTER } from '../../src/ui/Pivot.js'
+import { BERAKNINGAR } from '../../src/core/ops/gruppera.js'
 
 /**
  * Vakten över ordboken.
@@ -81,6 +84,20 @@ describe('ordboken', () => {
       }
     }
     expect(Object.fromEntries(saknade)).toEqual({})
+  })
+
+  /*
+   * Tabellerna som går genom `t(variabel)` syns inte i literalsökningen ovan.
+   * De prövas här post för post — en tabelltext utan ordbokspost hade annars
+   * bara märkts genom att gränssnittet stod kvar på svenska.
+   */
+  it('har en engelsk motsvarighet till varje tabelltext i pivoten', () => {
+    const ord: string[] = []
+    for (const r of RUTOR) ord.push(r.namn, r.hjalp)
+    for (const r of RADLAYOUTER) ord.push(r.etikett, r.hjalp)
+    for (const d of DIAGRAMTYPER) ord.push(d.etikett, d.hjalp)
+    for (const b of BERAKNINGAR) ord.push(b.etikett)
+    expect(ord.filter((o) => !(o in EN))).toEqual([])
   })
 
   it('har inga övergivna poster', () => {

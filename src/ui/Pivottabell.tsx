@@ -3,11 +3,10 @@ import type { JSX } from 'preact'
 import type { Frame } from '../core/types.js'
 import { findColumn } from '../core/frame/frame.js'
 import { formatCount, formatSum } from '../core/locale/sv.js'
-import { berakningspost } from '../core/ops/gruppera.js'
-import type { Berakning } from '../core/ops/gruppera.js'
 import type { Kolumnlov, Pivotplan, Pivotresultat, Pivotrubrik } from '../core/ops/pivot.js'
+import { matvardenamn } from './matvarde.js'
 import { dold, ordnaRader, type Sortering } from './pivotordning.js'
-import { t, tf } from './sprak.js'
+import { sprak, t, tf } from './sprak.js'
 
 /** Hur cellernas tal visas. Andelen är en avläsning, inte en annan beräkning. */
 export type Visning = 'tal' | 'andelRad' | 'andelKolumn'
@@ -92,6 +91,7 @@ export function Pivottabell(props: {
    * ”ingenting” är två olika svar. Ordningen är visningsordningen, så
    * föräldern har alltid passerat innan sitt barn.
    */
+  const sprakNu = sprak.value
   const vagar = useMemo(() => {
     const senaste: string[] = []
     return ordnade.map((i) => {
@@ -100,7 +100,9 @@ export function Pivottabell(props: {
       senaste[rad.niva] = radetikett(rad)
       return [...senaste]
     })
-  }, [ordnade, resultat])
+    // `radetikett` skriver *(tomt)* och *Övriga* på det språk som gäller.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ordnade, resultat, sprakNu])
 
   /** Cellens text, med andelen uträknad mot rätt helhet. */
   const cell = (rad: number, kol: number, m: number): string => {
@@ -127,19 +129,32 @@ export function Pivottabell(props: {
     return lov.nivaer.map(rubriktext).join(' › ')
   }
 
-  const sorterbar = (kol: number, m: number, namn: string) => (
-    <button
-      class="pivottab__sortera"
-      aria-label={tf('Sortera raderna efter {0}', namn)}
-      onClick={() => props.onSortera(kol, m)}
-    >
-      {props.sortering?.kol === kol && props.sortering.m === m
-        ? props.sortering.ned
-          ? '↓'
-          : '↑'
-        : '↕'}
-    </button>
-  )
+  /** Sorteringens riktning på en kolumn, som `aria-sort` vill ha den. */
+  const sortlage = (kol: number, m: number): 'ascending' | 'descending' | 'none' =>
+    props.sortering?.kol === kol && props.sortering.m === m
+      ? props.sortering.ned
+        ? 'descending'
+        : 'ascending'
+      : 'none'
+
+  const sorterbar = (kol: number, m: number, namn: string) => {
+    const lage = sortlage(kol, m)
+    return (
+      <button
+        class="pivottab__sortera"
+        aria-label={
+          lage === 'none'
+            ? tf('Sortera raderna efter {0}', namn)
+            : lage === 'descending'
+              ? tf('Sortera raderna efter {0}, nu fallande', namn)
+              : tf('Sortera raderna efter {0}, nu stigande', namn)
+        }
+        onClick={() => props.onSortera(kol, m)}
+      >
+        <span aria-hidden="true">{lage === 'none' ? '↕' : lage === 'descending' ? '↓' : '↑'}</span>
+      </button>
+    )
+  }
 
   /** Två löv delar väg ned till och med våning `n`. */
   const sammaVag = (a: Kolumnlov, b: Kolumnlov, n: number): boolean => {
@@ -170,6 +185,7 @@ export function Pivottabell(props: {
             <th
               key={`horn-${celler.length}`}
               class="pivottab__horn"
+              scope="col"
               rowSpan={hornSpann}
               style={{ top: basTop }}
             >
@@ -189,6 +205,8 @@ export function Pivottabell(props: {
               <th
                 key={`ovriga-${k}`}
                 class="pivottab__kolrubrik"
+                scope={flera ? 'colgroup' : 'col'}
+                aria-sort={flera ? undefined : sortlage(k, 0)}
                 rowSpan={rubrikvaningar}
                 colSpan={steg}
                 style={{ top: basTop }}
@@ -213,6 +231,8 @@ export function Pivottabell(props: {
           <th
             key={`k${n}-${k}`}
             class="pivottab__kolrubrik"
+            scope={innerst && !flera ? 'col' : 'colgroup'}
+            aria-sort={innerst && !flera ? sortlage(k, 0) : undefined}
             colSpan={(j - k) * steg}
             style={{ top: topp }}
           >
@@ -233,6 +253,8 @@ export function Pivottabell(props: {
           <th
             key="totalt"
             class="pivottab__kolrubrik pivottab__kolrubrik--total"
+            scope={flera ? 'colgroup' : 'col'}
+            aria-sort={flera ? undefined : sortlage(totalkol, 0)}
             rowSpan={rubrikvaningar}
             colSpan={steg}
             style={{ top: basTop }}
@@ -251,7 +273,13 @@ export function Pivottabell(props: {
         <tr key="matvarden">
           {Array.from({ length: resultat.bredd }, (_, kol) =>
             plan.matvarden.map((m, mi) => (
-              <th key={`${kol}-${m.id}`} class="pivottab__matvarde" style={{ top: topp }}>
+              <th
+                key={`${kol}-${m.id}`}
+                class="pivottab__matvarde"
+                scope="col"
+                aria-sort={sortlage(kol, mi)}
+                style={{ top: topp }}
+              >
                 {matvardenamn(m, props.frame)}
                 {sorterbar(kol, mi, `${kolumnnamn(kol)} · ${matvardenamn(m, props.frame)}`)}
               </th>
@@ -263,16 +291,28 @@ export function Pivottabell(props: {
     return rader
   }
 
+  /*
+   * Utan mätvärde finns inga tal, men rubrikerna spänner ändå en spalt var.
+   * En tom cell per spalt håller tabellen i form tills något dragits till
+   * Värden; en rad utan celler hade fått rubrikerna att stå över ingenting.
+   */
   const cellrader = (rad: number, klass: string) =>
     Array.from({ length: resultat.bredd }, (_, kol) =>
-      plan.matvarden.map((m, mi) => (
-        <td
-          key={`${kol}-${m.id}`}
-          class={`pivottab__tal${kol === totalkol ? ' pivottab__tal--total' : ''}${klass}`}
-        >
-          {visaTal(cell(rad, kol, mi), props.visning)}
-        </td>
-      )),
+      plan.matvarden.length === 0
+        ? [
+            <td
+              key={`${kol}-tom`}
+              class={`pivottab__tal${kol === totalkol ? ' pivottab__tal--total' : ''}${klass}`}
+            />,
+          ]
+        : plan.matvarden.map((m, mi) => (
+            <td
+              key={`${kol}-${m.id}`}
+              class={`pivottab__tal${kol === totalkol ? ' pivottab__tal--total' : ''}${klass}`}
+            >
+              {visaTal(cell(rad, kol, mi), props.visning)}
+            </td>
+          )),
     )
 
   /**
@@ -309,6 +349,7 @@ export function Pivottabell(props: {
       <tr key={rad.stig} class={rad.niva > indragFran ? 'pivottab__rad--barn' : undefined}>
         <th
           class="pivottab__radrubrik"
+          scope="row"
           style={{ paddingLeft: 9 + (rad.niva - indragFran) * 16 }}
         >
           {fallknapp(plats, rad.stig, etikett)}
@@ -331,7 +372,7 @@ export function Pivottabell(props: {
     return (
       <tr key={rad.stig} class={rad.niva < raddim.length - 1 ? 'pivottab__rad--delsumma' : undefined}>
         {raddim.map((_, n) => (
-          <th key={n} class="pivottab__radrubrik">
+          <th key={n} class="pivottab__radrubrik" scope={n === rad.niva ? 'row' : undefined}>
             {n === rad.niva && fallknapp(plats, rad.stig, etikett)}
             {n <= rad.niva && (
               <span class="pivottab__rubriktext" title={vag[n] ?? ''}>
@@ -349,7 +390,7 @@ export function Pivottabell(props: {
   const totalfot = (hornSpan: number) => (
     <tfoot>
       <tr>
-        <th class="pivottab__radrubrik" colSpan={hornSpan}>
+        <th class="pivottab__radrubrik" scope="row" colSpan={hornSpan}>
           {t('Totalt')}
           <span class="pivottab__radantal">{formatCount(resultat.antalKallrader)}</span>
         </th>
@@ -400,7 +441,7 @@ export function Pivottabell(props: {
                 </tbody>
                 <tfoot>
                   <tr>
-                    <th class="pivottab__radrubrik">
+                    <th class="pivottab__radrubrik" scope="row">
                       {t('Totalt')}
                       <span class="pivottab__radantal">{formatCount(rad.antal)}</span>
                     </th>
@@ -425,7 +466,7 @@ export function Pivottabell(props: {
 
   return (
     <div class="pivottab__omslag">
-      <table class="pivottab">
+      <table class={`pivottab${spalter ? ' pivottab--spalter' : ''}`}>
         <thead>{rubrikrader(horn, 0)}</thead>
         <tbody>
           {ordnade.map((i, plats) => {
@@ -452,17 +493,4 @@ function visaTal(text: string, visning: Visning): string {
   if (text === '' || visning !== 'tal') return text
   const tal = Number(text.replace(',', '.'))
   return Number.isNaN(tal) ? text : formatSum(tal)
-}
-
-/**
- * Mätvärdets rubrik.
- *
- * Beräkningens ord översätts, kolumnnamnet aldrig — det är data ur filen och
- * ska stå som det står. Samma regel som resten av gränssnittet följer.
- */
-function matvardenamn(matvarde: Berakning, frame: Frame): string {
-  if (matvarde.namn.trim() !== '') return matvarde.namn.trim()
-  const ord = t(berakningspost(matvarde.typ).etikett)
-  const col = matvarde.colId === null ? undefined : findColumn(frame, matvarde.colId)
-  return col ? `${ord} ${col.name}` : ord
 }

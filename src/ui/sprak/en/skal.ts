@@ -141,6 +141,8 @@ export const SKAL: Record<string, string> = {
   'Ta bort helt tomma rader': 'Delete completely empty rows',
   'Ta bort helt tomma kolumner': 'Delete completely empty columns',
   Stäng: 'Close',
+  'Stäng vyn': 'Close the view',
+  'Något gick fel i vyn: {0}': 'Something went wrong in the view: {0}',
 
   /* ---------- Paletten ---------- */
   'Sök bland kommandon': 'Search commands',

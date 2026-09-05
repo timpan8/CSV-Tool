@@ -487,9 +487,16 @@ export function pivotera(frame: Frame, plan: Pivotplan): Pivotresultat {
     .filter((c): c is Column => c !== undefined)
     .map((col) => byggDimension(col, radkalla, normalisera, plan.kolumntak, plan.tommaMed))
 
-  const axel = byggKolumnaxel(koldim, radkalla, frame.rowCount, KOLUMNLOVTAK)
+  // Med ett enda kolumnfält *är* produkten fältet, och `kolumntak` har redan
+  // gjort sitt. Lövtaket finns för att två korta fält inte ska ge hundra
+  // spalter — inte för att köra över valet Spalter = 50.
+  const lovtak = koldim.length <= 1 ? Number.POSITIVE_INFINITY : KOLUMNLOVTAK
+  const axel = byggKolumnaxel(koldim, radkalla, frame.rowCount, lovtak)
   const kolumner = axel.lov
-  const kolhink = kolumner.length > 0 ? axel.hink : null
+  // Nyckeln är fälten, inte löven: ett kolumnfält där varje rad saknar värde
+  // ger noll löv, och då hör raderna hemma utanför — inte i Totalt som om
+  // fältet aldrig funnits.
+  const kolhink = koldim.length > 0 ? axel.hink : null
   const bredd = kolumner.length + 1
   const totalKol = bredd - 1
   const steg = Math.max(1, plan.matvarden.length)
@@ -800,7 +807,7 @@ export function pivotera(frame: Frame, plan: Pivotplan): Pivotresultat {
 
   return {
     kolumner,
-    kolumnnivaer: koldim.length,
+    kolumnnivaer: kolumner.length === 0 ? 0 : koldim.length,
     rader: radlista,
     bredd,
     hojd: radlista.length + 1,
@@ -817,74 +824,19 @@ export function pivotera(frame: Frame, plan: Pivotplan): Pivotresultat {
 }
 
 /**
- * En pivot som säger något direkt, utan att man fyllt i ett formulär.
+ * Planen pivoten öppnas med: fyra tomma rutor.
  *
- * Kandidaterna är kolumner med mellan två och femtio olika värden — färre än
- * två säger ingenting, fler än femtio är en identifierare och inte en
- * kategori. Den med *minst* antal värden blir raddimension, eftersom en kort
- * tabell är lättare att läsa än en lång, och nästa blir kolumndimension.
- * Mätvärdet blir antal rader: det behöver ingen kolumn och kan aldrig bli tomt.
+ * Verktyget gissade förut en raddimension och ett mätvärde åt en. Det såg
+ * hjälpsamt ut och var det inte: det man fick var någon annans fråga, och det
+ * första man gjorde var att plocka bort den. Tomma rutor säger i stället
+ * precis vad som ska hända — dra dit ett fält — och det som sedan står i
+ * tabellen är det man själv bad om.
  */
-export function foreslagenPlan(frame: Frame, startkolumn: ColumnId | null = null): Pivotplan {
-  const synliga = frame.columns.filter((c) => !c.hidden)
-  const unika = new Map<ColumnId, number>()
-  for (const col of synliga) {
-    const sedd = new Uint8Array(col.dict.length)
-    let antal = 0
-    for (let i = 0; i < frame.view.length; i++) {
-      const kod = col.codes[frame.view[i]!]!
-      if (kod === 0 || sedd[kod] === 1) continue
-      sedd[kod] = 1
-      antal += 1
-    }
-    unika.set(col.id, antal)
-  }
-
-  /*
-   * Vad som duger som dimension.
-   *
-   * Tre regler, och alla tre kommer av samma sak: en dimension är en
-   * *kategori*, inte en storhet och inte en identifierare.
-   *
-   * **Inga talkolumner.** Ett belopp är något man summerar, inte något man
-   * grupperar på. Fjorton beloppsrubriker i sidled är ingen överblick, och
-   * kolumnen gör mycket mer nytta som mätvärde.
-   *
-   * **Högst femtio värden**, för att femhundra rubriker inte är en överblick.
-   *
-   * **Minst två rader per värde i snitt.** En kolumn där nästan varje rad har
-   * sitt eget värde är en identifierare, och en pivot på ett kundnummer är
-   * exakt lika lång som filen.
-   *
-   * Hittas ingen kategori alls föreslås ingen kolumndimension. En ärlig
-   * lista är bättre än en korstabell byggd på fel kolumn — och det är ett
-   * klick att välja själv.
-   */
-  const kandidater = synliga
-    .filter((c) => {
-      if (c.type === 'number') return false
-      const n = unika.get(c.id) ?? 0
-      return n >= 2 && n <= 50 && n * 2 <= frame.view.length
-    })
-    .sort((a, b) => (unika.get(a.id) ?? 0) - (unika.get(b.id) ?? 0))
-
-  /*
-   * En utpekad kolumn väger tyngre än allt ovan.
-   *
-   * Reglerna finns för att välja åt den som inte har valt. Har man högerklickat
-   * på Ort och bett om en pivot är frågan redan ställd, och ett verktyg som
-   * svarar på en annan fråga än den man ställde är värre än ett som gissar
-   * illa. Därför skickar knappen i verktygsfältet och paletten `null` — där är
-   * ingen kolumn utpekad — och kolumnmenyn skickar sin.
-   */
-  const start = startkolumn === null ? undefined : findColumn(frame, startkolumn)
-  const rad = start ?? kandidater[0] ?? synliga[0]
-  const kolumn = kandidater.find((c) => c.id !== rad?.id)
-
+export function tomPlan(): Pivotplan {
   return {
-    rader: rad ? [rad.id] : [],
-    kolumner: kolumn ? [kolumn.id] : [],
-    matvarden: [{ id: nyttMatvardeId(), typ: 'antal', colId: null, namn: '' }],
+    rader: [],
+    kolumner: [],
+    matvarden: [],
     filter: TOMT_FILTER,
     strunta: { skiftlage: false, blanksteg: true, diakriter: false },
     tommaMed: false,
@@ -928,15 +880,35 @@ export function pivotTillFrame(
   plan: Pivotplan,
   frame: Frame,
   namn: string,
-  texter: { totalt: string; tomt: string; ovriga: string },
+  /**
+   * Orden som inte är data: Totalt, tomt, Övriga — och mätvärdets namn, som
+   * vyn översätter. Kärnan skriver svenska, och en flik som blandade engelska
+   * rubriker med svenska mätvärden hade sett ut som ett fel.
+   */
+  texter: {
+    totalt: string
+    tomt: string
+    ovriga: string
+    matnamn?: (m: Berakning) => string
+  },
 ): Frame {
   const raddim = plan.rader
     .map((id) => findColumn(frame, id))
     .filter((c): c is Column => c !== undefined)
   const sista = raddim.length - 1
-  const lov = resultat.rader
-    .map((rad, i) => ({ rad, i }))
-    .filter(({ rad }) => rad.niva === sista)
+  /*
+   * Utan radfält finns bara Totalt-raden — och den är då hela svaret, inte en
+   * summa av något annat. Den blir flikens enda rad. Utan mätvärden *och* utan
+   * radfält finns ingenting att skriva, och fliken blir ärligt tom.
+   */
+  const lov: { i: number; etiketter: string[] }[] =
+    raddim.length === 0
+      ? plan.matvarden.length === 0
+        ? []
+        : [{ i: resultat.rader.length, etiketter: [] }]
+      : resultat.rader
+          .map((rad, i) => ({ i, etiketter: rad.etiketter, niva: rad.niva }))
+          .filter((rad) => rad.niva === sista)
   const antalRader = lov.length
 
   const kolumner: Column[] = []
@@ -950,7 +922,7 @@ export function pivotTillFrame(
   for (let n = 0; n < raddim.length; n++) {
     const col = ny(raddim[n]!.name)
     for (let r = 0; r < antalRader; r++) {
-      col.codes[r] = intern(col, lov[r]!.rad.etiketter[n] ?? '')
+      col.codes[r] = intern(col, lov[r]!.etiketter[n] ?? '')
     }
     col.type = raddim[n]!.type
     col.typeLocked = raddim[n]!.typeLocked
@@ -966,7 +938,8 @@ export function pivotTillFrame(
         ? texter.totalt
         : kolumnrubrik(rubrik, texter.tomt, texter.ovriga)
     for (let m = 0; m < plan.matvarden.length; m++) {
-      const matnamn = berakningsnamn(plan.matvarden[m]!, frame)
+      const mv = plan.matvarden[m]!
+      const matnamn = texter.matnamn ? texter.matnamn(mv) : berakningsnamn(mv, frame)
       const col = ny(enda ? kolnamn : `${kolnamn} · ${matnamn}`)
       for (let r = 0; r < antalRader; r++) {
         const bas = (lov[r]!.i * resultat.bredd + kol) * steg + m
@@ -991,16 +964,25 @@ export function pivotTillFrame(
   }
 }
 
-/** Förslag på namn för fliken pivoten skapar. */
-export function pivotnamn(frame: Frame, plan: Pivotplan): string {
+/**
+ * Förslag på namn för fliken pivoten skapar.
+ *
+ * `per` och `pivot` är de två orden i namnet som inte är data, och de kommer
+ * från vyn så att namnet talar samma språk som resten av fliken.
+ */
+export function pivotnamn(
+  frame: Frame,
+  plan: Pivotplan,
+  ord: { per: string; pivot: string } = { per: 'per', pivot: 'pivot' },
+): string {
   const rad = plan.rader
     .map((id) => findColumn(frame, id)?.name)
     .filter((n): n is string => n !== undefined)
   const kol = plan.kolumner
     .map((id) => findColumn(frame, id)?.name)
     .filter((n): n is string => n !== undefined)
-  if (rad.length === 0 && kol.length === 0) return `${frame.name} – pivot`
-  if (kol.length === 0) return `${frame.name} per ${rad.join(', ')}`
-  if (rad.length === 0) return `${frame.name} per ${kol.join(', ')}`
-  return `${frame.name} per ${rad.join(', ')} × ${kol.join(', ')}`
+  if (rad.length === 0 && kol.length === 0) return `${frame.name} – ${ord.pivot}`
+  if (kol.length === 0) return `${frame.name} ${ord.per} ${rad.join(', ')}`
+  if (rad.length === 0) return `${frame.name} ${ord.per} ${kol.join(', ')}`
+  return `${frame.name} ${ord.per} ${rad.join(', ')} × ${kol.join(', ')}`
 }
