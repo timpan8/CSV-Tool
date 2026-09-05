@@ -6,27 +6,12 @@ Hur du använder CSV-verkstan, ett verktyg i taget. Varje avsnitt säger vad ver
 
 ## Innehåll
 
-**[Kom igång](#kom-igång)** · [Så ser skärmen ut](#så-ser-skärmen-ut)
-
-**[Öppna och exportera](#öppna-och-exportera)** · [Öppna en fil](#öppna-en-fil) · [Exportera](#exportera) · [Klistra in som en ny fil](#klistra-in-som-en-ny-fil)
-
-**[Tabellen](#tabellen)** · [Sortera](#sortera) · [Filter](#filter) · [Dubbletter](#dubbletter) · [Sök](#sök) · [Ångra och gör om](#ångra-och-gör-om)
-
-**[Städa och skriva om](#städa-och-skriva-om)** · [Snabbstädning av text](#snabbstädning-av-text) · [Datum](#datum) · [Tal](#tal) · [Telefon](#telefon) · [E-post till namn](#e-post-till-namn) · [Dela en kolumn](#dela-en-kolumn) · [Dela till rader](#dela-till-rader) · [Bygg kolumn ur mall](#bygg-kolumn-ur-mall) · [Räkna](#räkna) · [Sök och ersätt](#sök-och-ersätt)
-
-**[Sammanfatta och analysera](#sammanfatta-och-analysera)** · [Gruppera och summera](#gruppera-och-summera) · [Pivot](#pivot) · [Kolumnöversikt](#kolumnöversikt) · [Kolumninspektören](#kolumninspektören)
-
-**[Flera filer](#flera-filer)** · [Slå ihop två filer](#slå-ihop-två-filer) · [Matchningsverkstaden](#matchningsverkstaden) · [Kombinera filer](#kombinera-filer) · [Fyll en mall med data](#fyll-en-mall-med-data)
-
-**[Spara arbetet](#spara-arbetet)** · [Profiler](#profiler) · [Flikarna finns kvar](#flikarna-finns-kvar) · [Börja om](#börja-om)
-
-**[Genvägar och inställningar](#genvägar-och-inställningar)** · [Kommandopaletten](#kommandopaletten) · [Tangentbord](#tangentbord) · [Språk, tema och verktygsfält](#språk-tema-och-verktygsfält)
 | Område | Avsnitt |
 | --- | --- |
 | **[1. Kom igång](#kom-igång)** | [Så ser skärmen ut](#så-ser-skärmen-ut) |
 | **[2. Öppna och exportera](#öppna-och-exportera)** | [Öppna en fil](#öppna-en-fil) · [Exportera](#exportera) · [Klistra in som en ny fil](#klistra-in-som-en-ny-fil) |
 | **[3. Tabellen](#tabellen)** | [Sortera](#sortera) · [Filter](#filter) · [Dubbletter](#dubbletter) · [Sök](#sök) · [Ångra och gör om](#ångra-och-gör-om) |
-| **[4. Städa och skriva om](#städa-och-skriva-om)** | [Snabbstädning av text](#snabbstädning-av-text) · [Datum](#datum) · [Tal](#tal) · [Telefon](#telefon) · [E-post till namn](#e-post-till-namn) · [Dela en kolumn](#dela-en-kolumn) · [Slå ihop kolumner](#slå-ihop-kolumner) · [Räkna](#räkna) · [Sök och ersätt](#sök-och-ersätt) |
+| **[4. Städa och skriva om](#städa-och-skriva-om)** | [Snabbstädning av text](#snabbstädning-av-text) · [Datum](#datum) · [Tal](#tal) · [Telefon](#telefon) · [E-post till namn](#e-post-till-namn) · [Dela en kolumn](#dela-en-kolumn) · [Dela till rader](#dela-till-rader) · [Bygg kolumn ur mall](#bygg-kolumn-ur-mall) · [Räkna](#räkna) · [Sök och ersätt](#sök-och-ersätt) |
 | **[5. Sammanfatta och analysera](#sammanfatta-och-analysera)** | [Gruppera och summera](#gruppera-och-summera) · [Pivot](#pivot) · [Kolumnöversikt](#kolumnöversikt) · [Kolumninspektören](#kolumninspektören) |
 | **[6. Flera filer](#flera-filer)** | [Slå ihop två filer](#slå-ihop-två-filer) · [Matchningsverkstaden](#matchningsverkstaden) · [Kombinera filer](#kombinera-filer) · [Fyll en mall med data](#fyll-en-mall-med-data) |
 | **[7. Spara arbetet](#spara-arbetet)** | [Profiler](#profiler) · [Flikarna finns kvar](#flikarna-finns-kvar) · [Börja om](#börja-om) |

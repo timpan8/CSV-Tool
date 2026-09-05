@@ -277,22 +277,50 @@ window.GUIDE_SV = {
           ],
           notes: [
             '**Vid sista** mellanslaget håller ihop dubbelnamn: `Anna Karlsson` och `Carl-Johan Nilsson` delas lika.',
-            'Det som inte får plats hamnar i sista kolumnen i stället för att försvinna. Panelen varnar när det händer.'
+            'Det som inte får plats hamnar i sista kolumnen i stället för att försvinna. Panelen varnar när det händer.',
+            '**Efter ett mönster** är det femte sättet, och det är mallen baklänges: skriv värdet som det ser ut och sätt klamrar runt det du vill plocka ut. Texten emellan är avgränsarna, och varje klammer blir en kolumn med sitt eget namn.',
+            'Att den avslutande texten måste sitta i slutet är det som städar bort `<>` på köpet — inget reguljärt uttryck behövs. Avgränsare inuti söks från vänster, precis som **Vid första**.',
+            'Ett värde som inte matchar mönstret ger tomma celler och räknas som ett problem. **Bara omatchade** filtrerar fram just dem, och källkolumnen står kvar orörd, så ingenting tappas.'
+          ],
+          before: { t: 'Värdet', items: ['last1 first1 <last1.first1@exempel.com>'] },
+          after: { t: 'Mönstret {Namn} <{E-post}> ger', items: ['Namn: last1 first1 · E-post: last1.first1@exempel.com'] }
+        },
+        {
+          id: 'dela-till-rader', t: 'Dela till rader',
+          lead: 'Delar en kolumn på höjden i stället för på bredden: **en rad per del**. Adresser klistrade ur Outlook ligger som `a <x@y>; b <z@w>; c <q@r>` i en enda cell, och de är inte tre fält på en person — de är tre personer.',
+          steps: [
+            'Kolumnmenyn → **Dela till rader…**',
+            'Välj vid vilket tecken.',
+            'Klicka **Skapa ny flik med 48 rader**. Antalet står på knappen.'
+          ],
+          notes: [
+            'Resultatet blir en **ny flik**. Originalfliken rörs inte, och övriga kolumners värden följer med ner på de nya raderna.',
+            'Delningen går på **det du ser**: har du filtrerat är det de raderna som delas, och panelen säger det.',
+            'En cell utan avgränsare ger en oförändrad rad. Ingen rad försvinner för att en cell var tom.',
+            'Klistrar du in listan som en egen fil gissar importen på semikolon — rätt för en CSV, fel för en adresslista där semikolonen skiljer *personer* och inte *fält*. Välj **Lodstreck** i importdialogen, så håller raden ihop. Det är den enda platsen valet går att göra: efteråt är den redan delad.',
+            'Åt andra hållet finns **Gruppera och summera** med beräkningen *lista*. Den kapar vid femtio värden och skriver ut hur många fler det fanns, så en kapad lista aldrig ser ut som en fullständig.'
           ]
         },
         {
-          id: 'slaihop-kolumner', t: 'Slå ihop kolumner', img: 'slaihop-kolumner.png',
-          cap: 'Mallverktyget bygger en ny kolumn ur en mall.',
-          lead: 'Bygger en ny kolumn ur en mall.',
+          id: 'slaihop-kolumner', t: 'Bygg kolumn ur mall', img: 'slaihop-kolumner.png',
+          cap: 'Mallverktyget bygger en ny kolumn ur en mall, med undantag för första och sista raden.',
+          lead: 'Bygger en ny kolumn ur en mall. Två saker i ett: mallen slår ihop kolumner, och den lägger en struktur runt varje värde. Allt utanför klamrarna kommer med som det står, så mallen bygger lika gärna en rad SQL som ett fullständigt namn.',
           steps: [
-            'Kolumnmenyn → **Slå ihop kolumner…**',
-            'Skriv mallen, t.ex. `{Förnamn} {Efternamn}` eller `{Namn}, {Ort}`. **Lägg till kolumn** sätter in ett namn åt dig.',
+            'Kolumnmenyn → **Bygg kolumn ur mall…**',
+            'Skriv mallen, t.ex. `{Förnamn} {Efternamn}` eller `(\'{Användarnamn}\'),`. **Lägg till kolumn** sätter in ett namn åt dig.',
+            'Behöver sista raden se annorlunda ut — en SQL-lista saknar kommatecknet där — kryssa i **Sista raden ska se annorlunda ut** och ändra bara slutet.',
             'Klicka **Skapa kolumnen**.'
           ],
           notes: [
             'Kolumnnamn som inte finns rapporteras som ett fel i stället för att tyst bli tomma.',
-            '**Städa bort luckor efter tomma värden** tar bort de dubbla mellanslag som annars uppstår när ett fält är tomt.'
-          ]
+            '**Städa bort luckor efter tomma värden** tar bort de dubbla mellanslag som annars uppstår när ett fält är tomt.',
+            'Rutan **Så blir det** visar första, mitten- och sista raden ur din egen fil. Undantaget syns annars i två celler av tusen.',
+            'Första och sista raden räknas i **den ordning du ser nu** — samma ordning som `Ctrl+C` kopierar. En fysisk tolkning hade satt kommatecknet på den sista kopierade raden.',
+            '**Kolumnen minns sin mall** med **Kom ihåg mallen för kolumnen** ikryssat. Rubriken får märket `mall`, och kolumnen räknas **aldrig** om av sig själv — men när källorna ändrats blir märket gult och statusraden erbjuder **Uppdatera**, precis som *Sortera om* gör för en sorterad lista. Uppdateringen är ett enda `Ctrl+Z`.',
+            'Kolumnmenyn har **Uppdatera ur mallen**, **Ändra mallen…** och **Släpp mallen** när kolumnen har en. Döper du om en källkolumn följer mallen med; tar du bort en säger märket ifrån i stället för att kolumnen fylls med halva värden.'
+          ],
+          before: { t: 'Mallen', items: ["('{Namn}'),", "sista raden: ('{Namn}')"] },
+          after: { t: 'Kolumnen', items: ["('Anna Karlsson'),", "('Greta Öhrn')"] }
         },
         {
           id: 'rakna', t: 'Räkna', img: 'rakna.png',
