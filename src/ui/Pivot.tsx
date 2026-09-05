@@ -2,8 +2,17 @@ import { useMemo, useState } from 'preact/hooks'
 import type { ColumnId, Frame } from '../core/types.js'
 import { visibleColumns } from '../core/frame/frame.js'
 import { formatCount, rader as raderText } from '../core/locale/sv.js'
-import { berakningspost } from '../core/ops/gruppera.js'
+import { berakningsnamn, berakningspost } from '../core/ops/gruppera.js'
 import type { Berakning, Berakningstyp } from '../core/ops/gruppera.js'
+import {
+  diagramdata,
+  linjeArTveksam,
+  type Diagramplan,
+  type Diagramtyp,
+  type Stapellage,
+} from '../core/ops/diagram.js'
+import { Diagram, Diagramforklaring, type Punktinfo } from './Diagram.js'
+import { ordnaRader } from './pivotordning.js'
 import {
   arAdditiv,
   foreslagenPlan,
@@ -20,6 +29,23 @@ import { Pivottabell, type Sortering, type Visning } from './Pivottabell.js'
 import { t, tf } from './sprak.js'
 
 type Lage = 'korstabell' | 'nivalista'
+/** Vilken av de två läsningarna som visas. Samma tal, två former. */
+type Yta = 'tabell' | 'diagram'
+
+const DIAGRAMTYPER: { typ: Diagramtyp; etikett: string; hjalp: string }[] = [
+  { typ: 'staplar', etikett: 'Staplar', hjalp: 'En stapel per rad, stående.' },
+  {
+    typ: 'liggande',
+    etikett: 'Liggande',
+    hjalp: 'Staplar på sidan — plats för långa namn bredvid stapeln i stället för under.',
+  },
+  {
+    typ: 'linje',
+    etikett: 'Linje',
+    hjalp: 'En linje per serie. Rätt när raddimensionen har en naturlig ordning, som ett datum.',
+  },
+  { typ: 'cirkel', etikett: 'Cirkel', hjalp: 'Delar av en helhet, en serie i taget.' },
+]
 
 /**
  * Pivotvyn.
@@ -52,6 +78,13 @@ export function Pivot(props: {
   const [visning, setVisning] = useState<Visning>('tal')
   const [sortering, setSortering] = useState<Sortering | null>(null)
   const [hopfallda, setHopfallda] = useState<Set<string>>(new Set())
+  const [yta, setYta] = useState<Yta>('tabell')
+  const [diagramplan, setDiagramplan] = useState<Diagramplan>({
+    typ: 'staplar',
+    stapellage: 'grupperade',
+    matvarde: 0,
+  })
+  const [punkt, setPunkt] = useState<Punktinfo | null>(null)
 
   const andra = (delta: Partial<Pivotplan>) => {
     setPlan({ ...plan, ...delta })
@@ -157,6 +190,37 @@ export function Pivot(props: {
 
   const otolkbara = resultat.lasbarhet.filter((l) => l.ifyllda > 0 && l.lasta < l.ifyllda)
 
+  /*
+   * Diagrammet läser samma resultat som tabellen, i samma ordning.
+   *
+   * Det är därför de aldrig kan säga olika saker — och därför en sortering man
+   * klickat fram i tabellen står kvar när man byter till staplar.
+   */
+  const ordnade = useMemo(
+    () => ordnaRader(resultat, sortering, Math.max(1, plan.matvarden.length)),
+    [resultat, sortering, plan.matvarden.length],
+  )
+  const diagram = useMemo(
+    () => diagramdata(resultat, plan, diagramplan, ordnade, additiv ? visning : 'tal'),
+    [resultat, plan, diagramplan, ordnade, additiv, visning],
+  )
+  const hindrad = diagram.hinder[diagramplan.typ]
+  /*
+   * Utan kolumndimension har den enda serien inget eget namn — den *är* hela
+   * svaret. Att kalla den "(tomt)" vore fel: det är inget tomt värde, det är
+   * frånvaron av en uppdelning. Mätvärdets namn säger vad man tittar på.
+   */
+  const matvardenamn = berakningsnamn(plan.matvarden[diagramplan.matvarde] ?? plan.matvarden[0]!, frame)
+  const serienamn = (etikett: string) => (etikett === '' ? matvardenamn : etikett)
+  const diagramrubrik = tf(
+    '{0} per {1}',
+    matvardenamn,
+    plan.rader
+      .map((id) => frame.columns.find((c) => c.id === id)?.name)
+      .filter((n): n is string => n !== undefined)
+      .join(', ') || frame.name,
+  )
+
   return (
     <div class="pivot">
       <div class="pivot__topp">
@@ -168,22 +232,39 @@ export function Pivot(props: {
               ` · ${tf('{0} utan värde står utanför', raderText(resultat.utanNyckel))}`}
           </span>
         </div>
-        <Val<Lage>
-          varden={[
-            {
-              varde: 'korstabell',
-              etikett: 'Korstabell',
-              titel: 'Två håll samtidigt: en dimension som rader, en som kolumner.',
-            },
-            {
-              varde: 'nivalista',
-              etikett: 'Nivålista',
-              titel: 'Ett håll i flera nivåer, med delsummor som går att fälla ihop.',
-            },
-          ]}
-          valt={lage}
-          onValj={bytLage}
-        />
+        <div class="pivot__vaxlar">
+          <Val<Lage>
+            varden={[
+              {
+                varde: 'korstabell',
+                etikett: 'Korstabell',
+                titel: 'Två håll samtidigt: en dimension som rader, en som kolumner.',
+              },
+              {
+                varde: 'nivalista',
+                etikett: 'Nivålista',
+                titel: 'Ett håll i flera nivåer, med delsummor som går att fälla ihop.',
+              },
+            ]}
+            valt={lage}
+            onValj={bytLage}
+          />
+          <Val<Yta>
+            varden={[
+              { varde: 'tabell', etikett: 'Tabell', titel: 'Talen, rad för rad.' },
+              {
+                varde: 'diagram',
+                etikett: 'Diagram',
+                titel: 'Samma tal som form. Tabellen är alltid ett klick bort.',
+              },
+            ]}
+            valt={yta}
+            onValj={(v) => {
+              setYta(v)
+              setPunkt(null)
+            }}
+          />
+        </div>
       </div>
 
       <div class="pivot__band">
@@ -376,12 +457,78 @@ export function Pivot(props: {
         </div>
       </div>
 
+      {/*
+        Diagrammets eget band, bara när diagrammet syns. Typen och stapelläget
+        är inget tabellen har någon användning för, och ett band som visar
+        kontroller utan verkan är värre än ett som byter innehåll.
+      */}
+      {yta === 'diagram' && (
+        <div class="pivot__band pivot__band--diagram">
+          <div class="pivot__falt">
+            <span class="falt__etikett">{t('Form')}</span>
+            <div class="val" role="radiogroup" aria-label={t('Form')}>
+              {DIAGRAMTYPER.map((d) => {
+                const skal = diagram.hinder[d.typ]
+                return (
+                  <button
+                    key={d.typ}
+                    class={`val__knapp${diagramplan.typ === d.typ ? ' val__knapp--vald' : ''}`}
+                    role="radio"
+                    aria-checked={diagramplan.typ === d.typ}
+                    disabled={skal !== undefined}
+                    title={skal ?? t(d.hjalp)}
+                    onClick={() => setDiagramplan({ ...diagramplan, typ: d.typ })}
+                  >
+                    {t(d.etikett)}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {diagramplan.typ !== 'cirkel' && diagramplan.typ !== 'linje' && diagram.serier.length > 1 && (
+            <div class="pivot__falt">
+              <span class="falt__etikett">{t('Staplarna')}</span>
+              <Val<Stapellage>
+                varden={[
+                  { varde: 'grupperade', etikett: 'Bredvid varandra' },
+                  { varde: 'staplade', etikett: 'På varandra' },
+                ]}
+                valt={diagramplan.stapellage}
+                onValj={(v) => setDiagramplan({ ...diagramplan, stapellage: v })}
+              />
+            </div>
+          )}
+
+          {plan.matvarden.length > 1 && (
+            <label class="pivot__falt">
+              <span class="falt__etikett">{t('Rita')}</span>
+              <select
+                value={String(diagramplan.matvarde)}
+                onChange={(e) =>
+                  setDiagramplan({
+                    ...diagramplan,
+                    matvarde: Number((e.currentTarget as HTMLSelectElement).value),
+                  })
+                }
+              >
+                {plan.matvarden.map((m, i) => (
+                  <option key={m.id} value={String(i)}>
+                    {berakningsnamn(m, frame)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      )}
+
       <div class="pivot__kropp">
         {plan.rader.length === 0 && plan.kolumn === null ? (
           <p class="pivot__tomt">
             {t('Välj en kolumn att dela upp på, så räknar pivoten resten.')}
           </p>
-        ) : (
+        ) : yta === 'tabell' ? (
           <Pivottabell
             frame={frame}
             plan={plan}
@@ -392,6 +539,52 @@ export function Pivot(props: {
             hopfallda={hopfallda}
             onVaxlaNod={vaxlaNod}
           />
+        ) : hindrad !== undefined ? (
+          /*
+           * Formen kan bli omöjlig medan man tittar på den — lägger man till
+           * en kolumndimension med cirkeln uppe finns det plötsligt två
+           * serier att dela upp. Då står skälet där bilden skulle ha stått,
+           * i stället för att en tårta ritas av det första bästa.
+           */
+          <p class="pivot__tomt">{hindrad}</p>
+        ) : (
+          <div class="pivot__diagramyta">
+            <Diagram
+              data={diagram}
+              plan={diagramplan}
+              visning={additiv ? visning : 'tal'}
+              rubrik={diagramrubrik}
+              onPeka={setPunkt}
+            />
+            <Diagramforklaring data={diagram} />
+            {punkt && (
+              /*
+               * Rutan hamnar under märket när det inte finns plats ovanför.
+               * Ytan klipper det som sticker utanför — en inforuta med
+               * avskuren överkant är sämre än en som byter sida.
+               */
+              <div
+                class={`diagram__inforuta${punkt.y < 64 ? ' diagram__inforuta--under' : ''}`}
+                style={{ left: punkt.x, top: punkt.y }}
+                role="status"
+              >
+                <div class="diagram__inforuta__kategori">
+                  {punkt.kategori === '' ? t('(tomt)') : punkt.kategori}
+                </div>
+                {punkt.rader.map((r) => (
+                  <div class="diagram__inforuta__rad" key={r.etikett}>
+                    <span
+                      class="diagram__streck"
+                      style={{ background: `var(--serie-${r.slot + 1})` }}
+                      aria-hidden="true"
+                    />
+                    <strong>{r.varde}</strong>
+                    <span>{serienamn(r.etikett)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -401,6 +594,21 @@ export function Pivot(props: {
             <Notis ton="info">
               {t(
                 'Andel går bara att räkna på mätvärden som kan läggas ihop. Ett snitt är ingen del av ett annat snitt, och unika värden i en cell är inga delar av de unika i raden.',
+              )}
+            </Notis>
+          )}
+          {yta === 'diagram' && diagramplan.typ === 'linje' && linjeArTveksam(frame, plan) && (
+            <Notis ton="info">
+              {t(
+                'En linje antyder att det finns värden mellan punkterna, och mellan två orter finns inga. Staplar säger samma sak utan att lova det.',
+              )}
+            </Notis>
+          )}
+          {yta === 'diagram' && diagram.utelamnadeKategorier > 0 && (
+            <Notis ton="info">
+              {tf(
+                'Diagrammet visar de {0} första raderna. Tabellen har allihop.',
+                formatCount(diagram.kategorier.length),
               )}
             </Notis>
           )}

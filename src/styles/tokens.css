@@ -47,6 +47,36 @@
   --typ-epost: #7c3aed;
   --typ-bool: #d97706;
 
+  /*
+   * Diagramserier.
+   *
+   * En egen palett, och inte de betydelsebärande färgerna ovan: lånar ett
+   * diagram rött till "serie 8" betyder rött inte längre "det här tar bort"
+   * någonstans i verktyget. Samma skäl håller --typ-* borta härifrån.
+   *
+   * Ordningen är säkerhetsmekanismen, inte smaken. Åtta nyanser i den här
+   * följden klarar alla gränsvärden för intilliggande par — det är den
+   * ordning staplar, linjer och segment faktiskt jämförs i. Byter man plats
+   * på två av dem måste hela uppsättningen valideras om.
+   *
+   * Kontrollerad mot ytorna nedan (OKLab ΔE ×100):
+   *   ljust  mot #ffffff — sämsta granne färgblind 9,1 · normalseende 19,6
+   *   mörkt  mot #0f172a — sämsta granne färgblind 8,4 · normalseende 19,3
+   *
+   * I ljust läge ligger aqua, gult och magenta under 3:1 mot vit yta. Det är
+   * tillåtet just för att pivoten har en tabellvy med samma tal ett klick
+   * bort, och för att serier upp till fyra får direktetiketter. Tas någon av
+   * de två utvägarna bort måste de tre färgerna göras mörkare.
+   */
+  --serie-1: #2a78d6;
+  --serie-2: #eb6834;
+  --serie-3: #1baf7a;
+  --serie-4: #eda100;
+  --serie-5: #e87ba4;
+  --serie-6: #008300;
+  --serie-7: #4a3aa7;
+  --serie-8: #e34948;
+
   /* Mått */
   --radhojd: 30px;
   --rubrikhojd: 46px;
@@ -101,6 +131,17 @@
     --typ-epost: #c4b5fd;
     --typ-bool: #fcd34d;
 
+    /* Samma åtta nyanser, egna steg för den mörka ytan — inte en vändning av
+       de ljusa. Grönt är sig självt: det klarade båda ytorna som det var. */
+    --serie-1: #3987e5;
+    --serie-2: #d95926;
+    --serie-3: #199e70;
+    --serie-4: #c98500;
+    --serie-5: #d55181;
+    --serie-6: #008300;
+    --serie-7: #9085e9;
+    --serie-8: #e66767;
+
     --skugga: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px rgb(0 0 0 / 0.3);
     --skugga-hog: 0 4px 12px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.45);
     --frys-skugga: 4px 0 6px -4px rgb(0 0 0 / 0.5);
@@ -138,6 +179,15 @@
   --typ-datum: #5eead4;
   --typ-epost: #c4b5fd;
   --typ-bool: #fcd34d;
+
+  --serie-1: #3987e5;
+  --serie-2: #d95926;
+  --serie-3: #199e70;
+  --serie-4: #c98500;
+  --serie-5: #d55181;
+  --serie-6: #008300;
+  --serie-7: #9085e9;
+  --serie-8: #e66767;
 
   --skugga: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px rgb(0 0 0 / 0.3);
   --skugga-hog: 0 4px 12px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.45);

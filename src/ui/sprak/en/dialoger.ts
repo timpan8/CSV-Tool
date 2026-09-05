@@ -345,4 +345,39 @@ export const DIALOGER: Record<string, string> = {
   Spalter: 'Columns shown',
   'Gör till ny flik': 'Make a new tab',
   'Stäng pivoten': 'Close the pivot',
+
+  /* ---------- Diagrammet ---------- */
+  Diagram: 'Chart',
+  'Talen, rad för rad.': 'The numbers, row by row.',
+  'Samma tal som form. Tabellen är alltid ett klick bort.':
+    'The same numbers as shapes. The table is always one click away.',
+  Form: 'Shape',
+  Staplar: 'Bars',
+  'En stapel per rad, stående.': 'One upright bar per row.',
+  Liggande: 'Sideways',
+  'Staplar på sidan — plats för långa namn bredvid stapeln i stället för under.':
+    'Bars on their side — room for long names beside the bar instead of under it.',
+  Linje: 'Line',
+  'En linje per serie. Rätt när raddimensionen har en naturlig ordning, som ett datum.':
+    'One line per series. Right when the row dimension has an order of its own, like a date.',
+  Cirkel: 'Pie',
+  'Delar av en helhet, en serie i taget.': 'Parts of a whole, one series at a time.',
+  Staplarna: 'The bars',
+  'Bredvid varandra': 'Side by side',
+  'På varandra': 'Stacked',
+  Rita: 'Plot',
+  '{0} per {1}': '{0} by {1}',
+  'och {0} till som inte fick plats': 'and {0} more that did not fit',
+  'Det finns inget att rita med de här valen.': 'There is nothing to plot with these choices.',
+  'Diagrammet visar de {0} första raderna. Tabellen har allihop.':
+    'The chart shows the first {0} rows. The table has all of them.',
+  'En linje antyder att det finns värden mellan punkterna, och mellan två orter finns inga. Staplar säger samma sak utan att lova det.':
+    'A line suggests there are values between the points, and between two towns there are none. Bars say the same thing without promising that.',
+  'Cirkel visar delar av en helhet, och det här mätvärdet går inte att lägga ihop.':
+    'A pie shows parts of a whole, and this measure cannot be added up.',
+  'Cirkel visar en serie i taget. Ta bort kolumndimensionen, eller välj staplar.':
+    'A pie shows one series at a time. Drop the column dimension, or pick bars.',
+  'Fler än sex tårtbitar går inte att skilja åt. Staplar klarar fler.':
+    'More than six slices cannot be told apart. Bars handle more.',
+  'En enda del är ingen helhet att dela upp.': 'A single part is no whole to divide.',
 }
