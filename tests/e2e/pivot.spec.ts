@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { ruta, satt } from './pivothjalp.js'
 
 /*
  * Pivotvyn.
@@ -21,16 +22,7 @@ async function oppnaPivot(page: Page) {
   await expect(page.locator('.pivot')).toBeVisible()
 }
 
-const valj = (page: Page, etikett: string) =>
-  page.locator('.pivot__band label', { hasText: etikett }).locator('select')
-
 const falt = (page: Page) => page.locator('.palett__falt')
-
-/** Slår på en nivå utan att råka slå av den som redan är vald. */
-async function valjNiva(page: Page, namn: string) {
-  const knapp = page.locator('.pivot__band .val__knapp').filter({ hasText: namn })
-  if ((await knapp.getAttribute('aria-pressed')) !== 'true') await knapp.click()
-}
 
 /** Cellen på raden som börjar med `radetikett`, i kolumn nummer `kol` (0-baserat). */
 const cell = (page: Page, radetikett: string, kol: number) =>
@@ -45,7 +37,7 @@ test('pivoten öppnas med en tabell som redan säger något', async ({ page }) =
   await oppnaPivot(page)
 
   // Förvalet väljer en kategorikolumn åt en, utan att man fyllt i något.
-  await expect(valj(page, 'Rader')).toHaveValue(/.+/)
+  await expect(ruta(page, 'Rader').locator('.pivotruta__chip')).toHaveCount(1)
   await expect(page.locator('.pivottab tbody tr')).not.toHaveCount(0)
   // Statusens tre värden, och Totalt-raden som säger sexton.
   await expect(page.locator('.pivottab tbody th').first()).toContainText('Aktiv')
@@ -56,8 +48,8 @@ test('en korstabell räknar rätt i båda ledderna', async ({ page }) => {
   await oppnaExempel(page)
   await oppnaPivot(page)
 
-  await valj(page, 'Rader').selectOption({ label: 'Status' })
-  await valj(page, 'Kolumner').selectOption({ label: 'Ort' })
+  await satt(page, 'Rader', 'Status')
+  await satt(page, 'Kolumner', 'Ort')
 
   // Malmö är den enda ort som återkommer, och båda raderna är Aktiv.
   const rubriker = page.locator('.pivottab thead th')
@@ -76,7 +68,7 @@ test('en korstabell räknar rätt i båda ledderna', async ({ page }) => {
 test('andel av rad ger hundra procent i Totalt', async ({ page }) => {
   await oppnaExempel(page)
   await oppnaPivot(page)
-  await valj(page, 'Kolumner').selectOption({ label: 'Ort' })
+  await satt(page, 'Kolumner', 'Ort')
 
   await page.getByRole('radio', { name: '% av rad' }).click()
   const sista = page.locator('.pivottab tbody tr').first().locator('td').last()
@@ -97,13 +89,14 @@ test('klick på en kolumnrubrik sorterar raderna', async ({ page }) => {
   await expect(forsta()).not.toContainText('Aktiv')
 })
 
-test('nivålistan ger delsummor som går att fälla ihop', async ({ page }) => {
+test('flera fält i Rader ger delsummor som går att fälla ihop', async ({ page }) => {
   await oppnaExempel(page)
   await oppnaPivot(page)
 
-  await page.getByRole('radio', { name: 'Nivålista' }).click()
-  await valjNiva(page, 'Status')
-  await valjNiva(page, 'Ort')
+  // En nivålista *är* flera fält i Rader utan fält i Kolumner. Ingen egen
+  // lägesväxel behövs för att säga det.
+  await satt(page, 'Kolumner')
+  await satt(page, 'Rader', 'Status', 'Ort')
 
   const rader = page.locator('.pivottab tbody tr')
   const fore = await rader.count()
@@ -118,7 +111,7 @@ test('nivålistan ger delsummor som går att fälla ihop', async ({ page }) => {
 test('gör till ny flik ger en vanlig flik, och källan är orörd', async ({ page }) => {
   await oppnaExempel(page)
   await oppnaPivot(page)
-  await valj(page, 'Rader').selectOption({ label: 'Status' })
+  await satt(page, 'Rader', 'Status')
 
   await page.getByRole('button', { name: 'Gör till ny flik' }).click()
   await expect(page.locator('.rutnat')).toBeVisible()
@@ -170,7 +163,7 @@ test('paletten hittar också dit', async ({ page }) => {
 test('byte av flik ger pivoten ett nytt förslag i stället för en tom tabell', async ({ page }) => {
   await oppnaExempel(page)
   await oppnaPivot(page)
-  await valj(page, 'Rader').selectOption({ label: 'Status' })
+  await satt(page, 'Rader', 'Status')
 
   // Fliken finns kvar ovanför vyn, så bytet går att göra mitt i en pivot.
   await page.getByRole('button', { name: 'Gör till ny flik' }).click()

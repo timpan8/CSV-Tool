@@ -1,17 +1,39 @@
 import { useMemo } from 'preact/hooks'
+import type { JSX } from 'preact'
 import type { Frame } from '../core/types.js'
 import { findColumn } from '../core/frame/frame.js'
 import { formatCount, formatSum } from '../core/locale/sv.js'
 import { berakningspost } from '../core/ops/gruppera.js'
 import type { Berakning } from '../core/ops/gruppera.js'
-import type { Pivotplan, Pivotresultat, Pivotrubrik } from '../core/ops/pivot.js'
+import type { Kolumnlov, Pivotplan, Pivotresultat, Pivotrubrik } from '../core/ops/pivot.js'
 import { dold, ordnaRader, type Sortering } from './pivotordning.js'
 import { t, tf } from './sprak.js'
 
 /** Hur cellernas tal visas. Andelen är en avläsning, inte en annan beräkning. */
 export type Visning = 'tal' | 'andelRad' | 'andelKolumn'
 
+/**
+ * Hur radfälten ritas när de är flera.
+ *
+ * **Indragen** är en lista med nivåer och delsummor — bäst när man vill borra
+ * sig ned. **Kolumner** ger varje radfält en egen spalt, som en vanlig tabell
+ * man kan läsa i sidled. **Block** lägger det översta radfältets värden bredvid
+ * varandra, var och en med sin egen lista: samma uppgifter, men jämförelsen
+ * mellan grupperna sker med ögat i stället för med fingret på skärmen.
+ */
+export type Radlayout = 'indragen' | 'kolumner' | 'block'
+
 export type { Sortering }
+
+/**
+ * Rubrikvåningens höjd i pixlar.
+ *
+ * `position: sticky` behöver sitt `top` i pixlar, och med nästlade kolumnfält
+ * kan våningarna bli tre eller fyra. Stilen ger därför varje rubrikcell en
+ * fast radhöjd — `line-height` plus dess egen inramning — just för att talet
+ * ska gå att räkna ut i stället för att skrivas in en gång och sedan bli fel.
+ */
+const RUBRIKHOJD = 30
 
 /**
  * Pivotens tabell.
@@ -22,15 +44,15 @@ export type { Sortering }
  * med musen gratis. Virtualiseringen finns för filer med hundratusen rader —
  * en pivot med hundratusen rader vore inte en överblick.
  *
- * Rubrikraden har två våningar när mätvärdena är flera: kolumnvärdet överst
- * och mätvärdena under. Med ett enda mätvärde vore den andra våningen en rad
- * som upprepade samma ord, så den ritas inte.
+ * Rubriken har en våning per kolumnfält, och en till när mätvärdena är flera.
+ * Med ett enda kolumnfält och ett enda mätvärde blir det den enda raden.
  */
 export function Pivottabell(props: {
   frame: Frame
   plan: Pivotplan
   resultat: Pivotresultat
   visning: Visning
+  layout: Radlayout
   sortering: Sortering | null
   onSortera: (kol: number, m: number) => void
   hopfallda: Set<string>
@@ -44,24 +66,41 @@ export function Pivottabell(props: {
   const raddim = plan.rader
     .map((id) => findColumn(props.frame, id))
     .filter((c) => c !== undefined)
+  const rubrikvaningar = Math.max(1, resultat.kolumnnivaer)
 
   const ordnade = useMemo(
     () => ordnaRader(resultat, props.sortering, steg),
     [resultat, props.sortering, steg],
   )
 
-  /**
-   * Har raden barn under sig?
-   *
-   * Läses ur den ordnade listan, inte ur trädet: i visningsordning står en
-   * nods första barn alltid direkt efter den. Att i stället söka upp raden
-   * med `indexOf` hade gjort ritningen kvadratisk i antalet rader.
-   */
-  const harBarn = (plats: number): boolean => {
-    const rad = resultat.rader[ordnade[plats]!]!
-    const nasta = resultat.rader[ordnade[plats + 1] ?? -1]
-    return nasta !== undefined && nasta.niva > rad.niva
+  const rubriktext = (rubrik: Pivotrubrik | undefined): string => {
+    if (rubrik === undefined) return ''
+    if (rubrik.ovriga) return t('Övriga')
+    if (rubrik.tom) return t('(tomt)')
+    return rubrik.etikett
   }
+
+  const radetikett = (rad: { ovriga: boolean; tom: boolean; etiketter: string[]; niva: number }) =>
+    rad.ovriga ? t('Övriga') : rad.tom ? t('(tomt)') : (rad.etiketter[rad.niva] ?? '')
+
+  /**
+   * Varje rads hela väg, nivå för nivå.
+   *
+   * Behövs bara i spaltlayouten, där en lövrad bär hela sin väg och inte bara
+   * sitt eget värde. Vägen kan inte läsas ur `etiketter` ensamt: en förälder
+   * som är Övriga eller tom står som tom sträng där, och `(tomt)` och
+   * ”ingenting” är två olika svar. Ordningen är visningsordningen, så
+   * föräldern har alltid passerat innan sitt barn.
+   */
+  const vagar = useMemo(() => {
+    const senaste: string[] = []
+    return ordnade.map((i) => {
+      const rad = resultat.rader[i]!
+      senaste.length = rad.niva
+      senaste[rad.niva] = radetikett(rad)
+      return [...senaste]
+    })
+  }, [ordnade, resultat])
 
   /** Cellens text, med andelen uträknad mot rätt helhet. */
   const cell = (rad: number, kol: number, m: number): string => {
@@ -80,10 +119,12 @@ export function Pivottabell(props: {
     })
   }
 
-  const rubriktext = (rubrik: Pivotrubrik): string => {
-    if (rubrik.ovriga) return t('Övriga')
-    if (rubrik.tom) return t('(tomt)')
-    return rubrik.etikett
+  /** Kolumnens namn i klartext — hela vägen, för skärmläsaren och titeln. */
+  const kolumnnamn = (kol: number): string => {
+    const lov = resultat.kolumner[kol]
+    if (lov === undefined) return t('Totalt')
+    if (lov.ovriga) return t('Övriga')
+    return lov.nivaer.map(rubriktext).join(' › ')
   }
 
   const sorterbar = (kol: number, m: number, namn: string) => (
@@ -100,9 +141,126 @@ export function Pivottabell(props: {
     </button>
   )
 
-  function kolumnnamn(kol: number): string {
-    const rubrik = resultat.kolumner[kol]
-    return rubrik === undefined ? t('Totalt') : rubriktext(rubrik)
+  /** Två löv delar väg ned till och med våning `n`. */
+  const sammaVag = (a: Kolumnlov, b: Kolumnlov, n: number): boolean => {
+    if (a.ovriga || b.ovriga) return false
+    for (let i = 0; i <= n; i++) if (a.stig[i] !== b.stig[i]) return false
+    return true
+  }
+
+  /**
+   * Rubrikvåningarna.
+   *
+   * En `<tr>` per kolumnfält. Löv som delar väg ned till våningen slås ihop
+   * till en cell — det är den sammanslagningen som gör en nästlad rubrik läsbar,
+   * och den enda i tabellen: **cellerna** slås aldrig ihop, eftersom en
+   * sammanslagen datacell ser prydlig ut och gör tabellen omöjlig att sortera
+   * och kopiera ur.
+   */
+  const rubrikrader = (horn: JSX.Element[], basTop: number): JSX.Element[] => {
+    const rader: JSX.Element[] = []
+    const hornSpann = rubrikvaningar + (flera ? 1 : 0)
+
+    for (let n = 0; n < rubrikvaningar; n++) {
+      const topp = basTop + n * RUBRIKHOJD
+      const celler: JSX.Element[] = []
+      if (n === 0) {
+        for (const h of horn) {
+          celler.push(
+            <th
+              key={`horn-${celler.length}`}
+              class="pivottab__horn"
+              rowSpan={hornSpann}
+              style={{ top: basTop }}
+            >
+              {h}
+            </th>,
+          )
+        }
+      }
+
+      let k = 0
+      while (k < resultat.kolumner.length) {
+        const lov = resultat.kolumner[k]!
+        if (lov.ovriga) {
+          // Övriga är många vägar, inte en. Rubriken spänner alla våningar.
+          if (n === 0) {
+            celler.push(
+              <th
+                key={`ovriga-${k}`}
+                class="pivottab__kolrubrik"
+                rowSpan={rubrikvaningar}
+                colSpan={steg}
+                style={{ top: basTop }}
+              >
+                <span class="pivottab__rubriktext">{t('Övriga')}</span>
+                <span class="pivottab__ovriga">
+                  {tf('{0} kombinationer', formatCount(resultat.doldaKolumnlov))}
+                </span>
+                {!flera && sorterbar(k, 0, t('Övriga'))}
+              </th>,
+            )
+          }
+          k += 1
+          continue
+        }
+        let j = k + 1
+        while (j < resultat.kolumner.length && sammaVag(resultat.kolumner[j]!, lov, n)) j += 1
+        const rubrik = lov.nivaer[n]
+        const text = rubriktext(rubrik)
+        const innerst = n === rubrikvaningar - 1
+        celler.push(
+          <th
+            key={`k${n}-${k}`}
+            class="pivottab__kolrubrik"
+            colSpan={(j - k) * steg}
+            style={{ top: topp }}
+          >
+            <span class="pivottab__rubriktext" title={text}>
+              {text}
+            </span>
+            {rubrik?.ovriga && (
+              <span class="pivottab__ovriga">{tf('{0} värden', formatCount(rubrik.varden))}</span>
+            )}
+            {innerst && !flera && sorterbar(k, 0, kolumnnamn(k))}
+          </th>,
+        )
+        k = j
+      }
+
+      if (n === 0) {
+        celler.push(
+          <th
+            key="totalt"
+            class="pivottab__kolrubrik pivottab__kolrubrik--total"
+            rowSpan={rubrikvaningar}
+            colSpan={steg}
+            style={{ top: basTop }}
+          >
+            {t('Totalt')}
+            {!flera && sorterbar(totalkol, 0, t('Totalt'))}
+          </th>,
+        )
+      }
+      rader.push(<tr key={`v${n}`}>{celler}</tr>)
+    }
+
+    if (flera) {
+      const topp = basTop + rubrikvaningar * RUBRIKHOJD
+      rader.push(
+        <tr key="matvarden">
+          {Array.from({ length: resultat.bredd }, (_, kol) =>
+            plan.matvarden.map((m, mi) => (
+              <th key={`${kol}-${m.id}`} class="pivottab__matvarde" style={{ top: topp }}>
+                {matvardenamn(m, props.frame)}
+                {sorterbar(kol, mi, `${kolumnnamn(kol)} · ${matvardenamn(m, props.frame)}`)}
+              </th>
+            )),
+          )}
+        </tr>,
+      )
+    }
+    return rader
   }
 
   const cellrader = (rad: number, klass: string) =>
@@ -117,94 +275,166 @@ export function Pivottabell(props: {
       )),
     )
 
+  /**
+   * Har raden barn under sig?
+   *
+   * Läses ur den ordnade listan, inte ur trädet: i visningsordning står en
+   * nods första barn alltid direkt efter den. Att i stället söka upp raden
+   * med `indexOf` hade gjort ritningen kvadratisk i antalet rader.
+   */
+  const harBarn = (plats: number): boolean => {
+    const rad = resultat.rader[ordnade[plats]!]!
+    const nasta = resultat.rader[ordnade[plats + 1] ?? -1]
+    return nasta !== undefined && nasta.niva > rad.niva
+  }
+
+  const fallknapp = (plats: number, stig: string, etikett: string) =>
+    harBarn(plats) ? (
+      <button
+        class="pivottab__falla"
+        aria-expanded={!props.hopfallda.has(stig)}
+        aria-label={tf('Visa eller dölj raderna under {0}', etikett)}
+        onClick={() => props.onVaxlaNod(stig)}
+      >
+        {props.hopfallda.has(stig) ? '▸' : '▾'}
+      </button>
+    ) : null
+
+  /** En rad i den indragna listan: ett radrubrikfält med indrag per nivå. */
+  const indragenRad = (plats: number, indragFran = 0) => {
+    const i = ordnade[plats]!
+    const rad = resultat.rader[i]!
+    const etikett = radetikett(rad)
+    return (
+      <tr key={rad.stig} class={rad.niva > indragFran ? 'pivottab__rad--barn' : undefined}>
+        <th
+          class="pivottab__radrubrik"
+          style={{ paddingLeft: 9 + (rad.niva - indragFran) * 16 }}
+        >
+          {fallknapp(plats, rad.stig, etikett)}
+          <span class="pivottab__rubriktext" title={etikett}>
+            {etikett}
+          </span>
+          <span class="pivottab__radantal">{formatCount(rad.antal)}</span>
+        </th>
+        {cellrader(i, '')}
+      </tr>
+    )
+  }
+
+  /** En rad i spaltlayouten: ett `<th>` per radfält, med hela vägen utskriven. */
+  const spaltRad = (plats: number) => {
+    const i = ordnade[plats]!
+    const rad = resultat.rader[i]!
+    const vag = vagar[plats] ?? []
+    const etikett = radetikett(rad)
+    return (
+      <tr key={rad.stig} class={rad.niva < raddim.length - 1 ? 'pivottab__rad--delsumma' : undefined}>
+        {raddim.map((_, n) => (
+          <th key={n} class="pivottab__radrubrik">
+            {n === rad.niva && fallknapp(plats, rad.stig, etikett)}
+            {n <= rad.niva && (
+              <span class="pivottab__rubriktext" title={vag[n] ?? ''}>
+                {vag[n] ?? ''}
+              </span>
+            )}
+            {n === rad.niva && <span class="pivottab__radantal">{formatCount(rad.antal)}</span>}
+          </th>
+        ))}
+        {cellrader(i, '')}
+      </tr>
+    )
+  }
+
+  const totalfot = (hornSpan: number) => (
+    <tfoot>
+      <tr>
+        <th class="pivottab__radrubrik" colSpan={hornSpan}>
+          {t('Totalt')}
+          <span class="pivottab__radantal">{formatCount(resultat.antalKallrader)}</span>
+        </th>
+        {cellrader(totalrad, ' pivottab__tal--total')}
+      </tr>
+    </tfoot>
+  )
+
+  /*
+   * Blocklayouten: det översta radfältets värden bredvid varandra.
+   *
+   * Varje block är en egen tabell med egna kolumnrubriker och egen delsumma i
+   * foten, och de rullar i sidled tillsammans. Ett enda radfält har inget att
+   * dela upp i block, och då är valet detsamma som den indragna listan.
+   */
+  const blockgrupper = useMemo(() => {
+    const ut: { topp: number; barn: number[] }[] = []
+    ordnade.forEach((i, plats) => {
+      const rad = resultat.rader[i]!
+      if (rad.niva === 0) ut.push({ topp: plats, barn: [] })
+      else ut[ut.length - 1]?.barn.push(plats)
+    })
+    return ut
+  }, [ordnade, resultat])
+
+  if (props.layout === 'block' && raddim.length > 1) {
+    return (
+      <div class="pivottab__omslag pivottab__omslag--block">
+        {blockgrupper.map((grupp) => {
+          const rad = resultat.rader[ordnade[grupp.topp]!]!
+          const etikett = radetikett(rad)
+          return (
+            <div class="pivottab__block" key={rad.stig}>
+              <h4 class="pivottab__blockrubrik" title={etikett}>
+                {etikett}
+                <span class="pivottab__radantal">{formatCount(rad.antal)}</span>
+              </h4>
+              <table class="pivottab">
+                <thead>
+                  {rubrikrader([<>{raddim.slice(1).map((c) => c.name).join(' › ')}</>], RUBRIKHOJD)}
+                </thead>
+                <tbody>
+                  {grupp.barn.map((plats) => {
+                    const barn = resultat.rader[ordnade[plats]!]!
+                    if (dold(barn.stig, props.hopfallda)) return null
+                    return indragenRad(plats, 1)
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th class="pivottab__radrubrik">
+                      {t('Totalt')}
+                      <span class="pivottab__radantal">{formatCount(rad.antal)}</span>
+                    </th>
+                    {cellrader(ordnade[grupp.topp]!, ' pivottab__tal--total')}
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )
+        })}
+        {blockgrupper.length === 0 && (
+          <p class="pivot__tomt">{t('Inga rader att visa.')}</p>
+        )}
+      </div>
+    )
+  }
+
+  const spalter = props.layout === 'kolumner' && raddim.length > 0
+  const horn = spalter
+    ? raddim.map((c) => <>{c.name}</>)
+    : [<>{raddim.map((c) => c.name).join(' › ')}</>]
+
   return (
     <div class="pivottab__omslag">
       <table class="pivottab">
-        <thead>
-          <tr>
-            <th class="pivottab__horn" rowSpan={flera ? 2 : 1} colSpan={Math.max(1, raddim.length)}>
-              {raddim.map((c) => c.name).join(' › ')}
-            </th>
-            {resultat.kolumner.map((rubrik, kol) => (
-              <th key={kol} class="pivottab__kolrubrik" colSpan={steg}>
-                <span class="pivottab__rubriktext" title={rubriktext(rubrik)}>
-                  {rubriktext(rubrik)}
-                </span>
-                {rubrik.ovriga && (
-                  <span class="pivottab__ovriga">
-                    {tf('{0} värden', formatCount(rubrik.varden))}
-                  </span>
-                )}
-                {!flera && sorterbar(kol, 0, kolumnnamn(kol))}
-              </th>
-            ))}
-            <th class="pivottab__kolrubrik pivottab__kolrubrik--total" colSpan={steg}>
-              {t('Totalt')}
-              {!flera && sorterbar(totalkol, 0, t('Totalt'))}
-            </th>
-          </tr>
-          {flera && (
-            <tr>
-              {Array.from({ length: resultat.bredd }, (_, kol) =>
-                plan.matvarden.map((m, mi) => (
-                  <th key={`${kol}-${m.id}`} class="pivottab__matvarde">
-                    {matvardenamn(m, props.frame)}
-                    {sorterbar(kol, mi, `${kolumnnamn(kol)} · ${matvardenamn(m, props.frame)}`)}
-                  </th>
-                )),
-              )}
-            </tr>
-          )}
-        </thead>
-
+        <thead>{rubrikrader(horn, 0)}</thead>
         <tbody>
           {ordnade.map((i, plats) => {
             const rad = resultat.rader[i]!
             if (dold(rad.stig, props.hopfallda)) return null
-            const fallbar = harBarn(plats)
-            const hopfalld = props.hopfallda.has(rad.stig)
-            const etikett = rad.ovriga
-              ? t('Övriga')
-              : rad.tom
-                ? t('(tomt)')
-                : (rad.etiketter[rad.niva] ?? '')
-            return (
-              <tr key={rad.stig} class={rad.niva > 0 ? 'pivottab__rad--barn' : undefined}>
-                <th
-                  class="pivottab__radrubrik"
-                  colSpan={Math.max(1, raddim.length)}
-                  style={{ paddingLeft: 9 + rad.niva * 16 }}
-                >
-                  {fallbar && (
-                    <button
-                      class="pivottab__falla"
-                      aria-expanded={!hopfalld}
-                      aria-label={tf('Visa eller dölj raderna under {0}', etikett)}
-                      onClick={() => props.onVaxlaNod(rad.stig)}
-                    >
-                      {hopfalld ? '▸' : '▾'}
-                    </button>
-                  )}
-                  <span class="pivottab__rubriktext" title={etikett}>
-                    {etikett}
-                  </span>
-                  <span class="pivottab__radantal">{formatCount(rad.antal)}</span>
-                </th>
-                {cellrader(i, '')}
-              </tr>
-            )
+            return spalter ? spaltRad(plats) : indragenRad(plats)
           })}
         </tbody>
-
-        <tfoot>
-          <tr>
-            <th class="pivottab__radrubrik" colSpan={Math.max(1, raddim.length)}>
-              {t('Totalt')}
-              <span class="pivottab__radantal">{formatCount(resultat.antalKallrader)}</span>
-            </th>
-            {cellrader(totalrad, ' pivottab__tal--total')}
-          </tr>
-        </tfoot>
+        {totalfot(horn.length)}
       </table>
     </div>
   )

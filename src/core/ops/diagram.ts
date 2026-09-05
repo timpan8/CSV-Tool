@@ -1,6 +1,6 @@
 import type { Frame } from '../types.js'
 import { findColumn } from '../frame/frame.js'
-import { arAdditiv, type Pivotplan, type Pivotresultat } from './pivot.js'
+import { arAdditiv, kolumnrubrik, type Pivotplan, type Pivotresultat } from './pivot.js'
 
 /**
  * Diagrammets data.
@@ -80,6 +80,14 @@ export function diagramdata(
   /** Radernas ordning i tabellen, som index in i `resultat.rader`. */
   ordning: readonly number[],
   visning: Diagramvisning = 'tal',
+  /**
+   * Vad tomt och Övriga heter.
+   *
+   * De två orden är de enda i den här filen som är text för en läsare och inte
+   * data ur filen, och därför de enda som kommer utifrån. Resten av
+   * serienamnen står i kolumnen.
+   */
+  texter: { tomt: string; ovriga: string } = { tomt: '', ovriga: '' },
 ): Diagramdata {
   const steg = Math.max(1, plan.matvarden.length)
   const m = Math.min(Math.max(0, d.matvarde), steg - 1)
@@ -131,7 +139,13 @@ export function diagramdata(
   const kandidater =
     resultat.kolumner.length === 0
       ? [{ kol: totalkol, etikett: '' }]
-      : resultat.kolumner.map((rubrik, kol) => ({ kol, etikett: rubrik.etikett }))
+      : resultat.kolumner.map((lov, kol) => ({
+          kol,
+          // Hela vägen genom kolumnfälten. Med ett fält är det värdet som
+          // förut; med flera är `Sverige` ensamt tvetydigt så fort samma land
+          // står under både Aktiv och Vilande.
+          etikett: kolumnrubrik(lov, texter.tomt, texter.ovriga),
+        }))
 
   /*
    * Vilka serier som får plats avgörs av storleken, mätt på Totalt-raden —

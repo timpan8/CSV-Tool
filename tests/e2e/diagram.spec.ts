@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { satt } from './pivothjalp.js'
 
 /*
  * Diagrammet.
@@ -18,17 +19,13 @@ async function oppnaDiagram(page: Page) {
   await expect(page.locator('.pivot')).toBeVisible()
 }
 
-const valj = (page: Page, etikett: string) =>
-  page.locator('.pivot__band label', { hasText: etikett }).locator('select')
-
 const form = (page: Page, namn: string) =>
   page.getByRole('radio', { name: namn, exact: true })
 
-/** Ställ in pivoten och gå till diagrammet. */
+/** Ställ in pivoten via fältpanelen och gå till diagrammet. */
 async function rita(page: Page, rader: string, kolumner: string | null) {
-  await valj(page, 'Rader').selectOption({ label: rader })
-  if (kolumner === null) await valj(page, 'Kolumner').selectOption({ index: 0 })
-  else await valj(page, 'Kolumner').selectOption({ label: kolumner })
+  await satt(page, 'Rader', rader)
+  await satt(page, 'Kolumner', ...(kolumner === null ? [] : [kolumner]))
   await page.getByRole('radio', { name: 'Diagram', exact: true }).click()
   await expect(page.locator('.diagram__duk')).toBeVisible()
 }
@@ -103,7 +100,7 @@ test('alla fyra formerna går att välja, och cirkeln säger nej med skäl', asy
   // Med en kolumndimension finns två serier, och en tårta kan bara dela upp
   // en. Knappen stängs av med skälet i klartext.
   await form(page, 'Staplar').click()
-  await valj(page, 'Kolumner').selectOption({ label: 'Ort' })
+  await satt(page, 'Kolumner', 'Ort')
   await expect(form(page, 'Cirkel')).toBeDisabled()
   await expect(form(page, 'Cirkel')).toHaveAttribute('title', /en serie i taget/)
 })
@@ -144,8 +141,8 @@ test('linjediagrammets hårkors visar alla serier vid en kategori', async ({ pag
 
 test('sorteringen i tabellen följer med till diagrammet', async ({ page }) => {
   await oppnaDiagram(page)
-  await valj(page, 'Rader').selectOption({ label: 'Status' })
-  await valj(page, 'Kolumner').selectOption({ index: 0 })
+  await satt(page, 'Rader', 'Status')
+  await satt(page, 'Kolumner')
 
   // Stigande på Totalt: minsta gruppen först.
   await page.getByRole('button', { name: /Sortera raderna efter/ }).last().click()

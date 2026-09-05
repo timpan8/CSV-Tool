@@ -301,23 +301,52 @@ export const DIALOGER: Record<string, string> = {
 
 
   /* ---------- Pivotvyn ---------- */
-  Korstabell: 'Cross table',
-  'Två håll samtidigt: en dimension som rader, en som kolumner.':
-    'Two directions at once: one dimension as rows, one as columns.',
-  Nivålista: 'Level list',
-  'Ett håll i flera nivåer, med delsummor som går att fälla ihop.':
-    'One direction in several levels, with subtotals you can collapse.',
   'Pivot…': 'Pivot table…',
   'Gruppera åt två håll i en egen vy. Datat rörs inte.':
     'Group in two directions in a view of its own. The data is left alone.',
-  'Korstabell eller nivålista i en egen vy: gruppera åt två håll och se summorna direkt. Datat rörs inte.':
-    'A cross table or a level list in a view of its own: group in two directions and see the totals at once. The data is left alone.',
-  Nivåer: 'Levels',
-  Mätvärden: 'Measures',
-  '＋ Lägg till mätvärde': '＋ Add measure',
-  'Ta bort mätvärdet': 'Remove the measure',
-  ingen: 'none',
+  'Dra fält mellan Filter, Kolumner, Rader och Värden i en egen vy, och se summorna direkt. Datat rörs inte.':
+    'Drag fields between Filters, Columns, Rows and Values in a view of its own, and see the totals at once. The data is left alone.',
   'Byt plats på rader och kolumner': 'Swap rows and columns',
+
+  /* Fältpanelen och de tre radlayouterna. */
+  Fält: 'Fields',
+  Värden: 'Values',
+  'Pivotens fält': "The pivot's fields",
+  'Sök fält…': 'Search fields…',
+  'Inget fält matchar sökningen.': 'No field matches the search.',
+  'Dra hit ett fält': 'Drag a field here',
+  'Dölj fältpanelen': 'Hide the field panel',
+  'Visa eller dölj fältpanelen': 'Show or hide the field panel',
+  '(borttagen kolumn)': '(removed column)',
+  alla: 'all',
+  'Vad som räknas med. Utan valda värden gäller alla.':
+    'What is counted. With no values ticked, all of them count.',
+  'Fälten i sidled. Flera fält nästlas utifrån och in.':
+    'The fields across. Several fields nest from the outside in.',
+  'Fälten på höjden. Flera fält ger nivåer med delsummor.':
+    'The fields down the side. Several fields give levels with subtotals.',
+  'Vad som räknas i varje cell.': 'What is worked out in each cell.',
+  'Åtgärder för {0}': 'Actions for {0}',
+  'Lägg till {0}': 'Add {0}',
+  'Lägg i {0}': 'Put in {0}',
+  'Flytta till {0}': 'Move to {0}',
+  'Flytta upp': 'Move up',
+  'Flytta ned': 'Move down',
+  'Ligger redan först.': 'Already first.',
+  'Ligger redan sist.': 'Already last.',
+  'Ta bort ur pivoten': 'Remove from the pivot',
+  'Fältet har ingen kolumn att gruppera på.': 'The field has no column to group by.',
+  Radfälten: 'Row fields',
+  Indragen: 'Indented',
+  'En lista med nivåer och delsummor att fälla ihop.':
+    'A list with levels and subtotals you can collapse.',
+  'Egna spalter': 'Own columns',
+  'Ett radfält per spalt, med hela vägen på varje rad.':
+    'One row field per column, with the whole path on every row.',
+  Block: 'Blocks',
+  'Det översta radfältets värden bredvid varandra, var och en med sin egen lista.':
+    "The top row field's values side by side, each with a list of its own.",
+  'Block behöver minst två fält i Rader.': 'Blocks need at least two fields in Rows.',
   '% av rad': '% of row',
   'Cellens del av radens Totalt.': "The cell's share of the row's Total.",
   '% av kolumn': '% of column',
@@ -327,10 +356,11 @@ export const DIALOGER: Record<string, string> = {
   Totalt: 'Total',
   Övriga: 'Other',
   '{0} värden': '{0} values',
+  '{0} kombinationer': '{0} combinations',
   'Sortera raderna efter {0}': 'Sort the rows by {0}',
   'Visa eller dölj raderna under {0}': 'Show or hide the rows under {0}',
-  'Välj en kolumn att dela upp på, så räknar pivoten resten.':
-    'Pick a column to break the data down by, and the pivot works out the rest.',
+  'Dra ett fält till Rader eller Kolumner, så räknar pivoten resten.':
+    'Drag a field to Rows or Columns, and the pivot works out the rest.',
   '{0} utan värde står utanför': '{0} with no value are left out',
   'Andel går bara att räkna på mätvärden som kan läggas ihop. Ett snitt är ingen del av ett annat snitt, och unika värden i en cell är inga delar av de unika i raden.':
     'A share can only be worked out for measures that add up. One average is no part of another, and the distinct values in a cell are no part of the distinct values in the row.',
@@ -338,6 +368,8 @@ export const DIALOGER: Record<string, string> = {
     'The column has more values than fit. The {0} most common get columns of their own, the rest sit in Other — the totals still add up.',
   '{0} radvärden fick inte plats och ligger i Övriga.':
     '{0} row values did not fit and sit in Other.',
+  '{0} kolumnkombinationer fick inte plats och ligger i Övriga. Färre fält i Kolumner ger fler egna spalter.':
+    '{0} column combinations did not fit and sit in Other. Fewer fields in Columns give more columns of their own.',
   'Tabellen visar de första {0} raderna. Gör en flik för att få med allihop.':
     'The table shows the first {0} rows. Make a tab to get all of them.',
   '{0} av {1} värden gick att läsa som tal. Resten räknas inte med.':

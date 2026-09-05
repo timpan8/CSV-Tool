@@ -1,9 +1,7 @@
 import { useMemo, useState } from 'preact/hooks'
-import type { ColumnId, Frame } from '../core/types.js'
-import { visibleColumns } from '../core/frame/frame.js'
+import type { Frame } from '../core/types.js'
 import { formatCount, rader as raderText } from '../core/locale/sv.js'
-import { berakningsnamn, berakningspost } from '../core/ops/gruppera.js'
-import type { Berakning, Berakningstyp } from '../core/ops/gruppera.js'
+import { berakningsnamn } from '../core/ops/gruppera.js'
 import {
   diagramdata,
   linjeArTveksam,
@@ -17,20 +15,24 @@ import {
   arAdditiv,
   foreslagenPlan,
   KOLUMNTAK_VAL,
-  nyttMatvardeId,
-  pivotberakningar,
   pivotera,
   pivotnamn,
   pivotTillFrame,
   type Pivotplan,
 } from '../core/ops/pivot.js'
 import { Notis, Val } from './parts.js'
-import { Pivottabell, type Sortering, type Visning } from './Pivottabell.js'
+import { Pivotpanel } from './Pivotpanel.js'
+import { Pivottabell, type Radlayout, type Sortering, type Visning } from './Pivottabell.js'
 import { t, tf } from './sprak.js'
 
-type Lage = 'korstabell' | 'nivalista'
 /** Vilken av de två läsningarna som visas. Samma tal, två former. */
 type Yta = 'tabell' | 'diagram'
+
+const RADLAYOUTER: { varde: Radlayout; etikett: string; hjalp: string }[] = [
+  { varde: 'indragen', etikett: 'Indragen', hjalp: 'En lista med nivåer och delsummor att fälla ihop.' },
+  { varde: 'kolumner', etikett: 'Egna spalter', hjalp: 'Ett radfält per spalt, med hela vägen på varje rad.' },
+  { varde: 'block', etikett: 'Block', hjalp: 'Det översta radfältets värden bredvid varandra, var och en med sin egen lista.' },
+]
 
 const DIAGRAMTYPER: { typ: Diagramtyp; etikett: string; hjalp: string }[] = [
   { typ: 'staplar', etikett: 'Staplar', hjalp: 'En stapel per rad, stående.' },
@@ -56,11 +58,11 @@ const DIAGRAMTYPER: { typ: Diagramtyp; etikett: string; hjalp: string }[] = [
  * ta med sig svaret finns *Gör till ny flik*, och därifrån går export, filter
  * och sortering som för vilken fil som helst.
  *
- * Två uppställningar av samma beräkning. **Korstabellen** delar upp åt två
- * håll och är förvalet, eftersom det är där mönstret syns. **Nivålistan**
- * delar upp åt ett håll i flera nivåer, med delsummor man kan fälla ihop —
- * samma svar, men ordnat för den som vill borra sig ned i stället för att
- * jämföra i sidled.
+ * **Fyra rutor i en panel till höger** säger vad tabellen är: fälten i Rader
+ * och Kolumner delar upp, fälten i Värden räknas, fälten i Filter avgör vad
+ * som räknas med. Det ersatte en lägesväxel mellan *korstabell* och
+ * *nivålista* — en nivålista *är* flera fält i Rader utan fält i Kolumner, och
+ * två ställen som styr samma sak är ett för mycket.
  */
 export function Pivot(props: {
   frame: Frame
@@ -69,12 +71,11 @@ export function Pivot(props: {
   onStang: () => void
 }) {
   const { frame } = props
-  const synliga = visibleColumns(frame)
 
   const [plan, setPlan] = useState<Pivotplan>(() => foreslagenPlan(frame))
-  const [lage, setLage] = useState<Lage>('korstabell')
-  /** Kolumndimensionen som nivålistan lade undan, så att den kommer tillbaka. */
-  const [sparadKolumn, setSparadKolumn] = useState<ColumnId | null>(null)
+  const [layout, setLayout] = useState<Radlayout>('indragen')
+  /** Panelen går att fälla in: en bred korstabell ska kunna få hela fönstret. */
+  const [panel, setPanel] = useState(true)
   const [visning, setVisning] = useState<Visning>('tal')
   const [sortering, setSortering] = useState<Sortering | null>(null)
   const [hopfallda, setHopfallda] = useState<Set<string>>(new Set())
@@ -107,63 +108,14 @@ export function Pivot(props: {
   const additiv = plan.matvarden.length > 0 && plan.matvarden.every(arAdditiv)
   const filtrerat = frame.view.length !== frame.rowCount
 
-  const byggMatvarde = (typ: Berakningstyp): Berakning => {
-    const post = berakningspost(typ)
-    // En kolumn som redan delar upp tabellen är sällan den man vill summera:
-    // *summa Ort per Ort* är kolumnens eget värde skrivet en gång till.
-    const upptagna = new Set([...plan.rader, plan.kolumn])
-    const ledig = synliga.filter((c) => !upptagna.has(c.id))
-    const tal = ledig.find((c) => c.type === 'number') ?? ledig[0]
-    return {
-      id: nyttMatvardeId(),
-      typ,
-      colId: post.behoverKolumn ? (tal?.id ?? synliga[0]?.id ?? null) : null,
-      namn: '',
-    }
-  }
-
-  const andraMatvarde = (id: string, delta: Partial<Berakning>) =>
-    andra({
-      matvarden: plan.matvarden.map((m) => {
-        if (m.id !== id) return m
-        const ny = { ...m, ...delta }
-        // Byter man till *Antal rader* finns ingen kolumn att räkna på, och
-        // byter man därifrån måste det finnas en.
-        const post = berakningspost(ny.typ)
-        if (!post.behoverKolumn) ny.colId = null
-        else if (ny.colId === null) ny.colId = synliga[0]?.id ?? null
-        return ny
-      }),
-    })
-
-  const vaxlaNiva = (id: ColumnId) => {
-    const i = plan.rader.indexOf(id)
-    andra({ rader: i >= 0 ? plan.rader.filter((x) => x !== id) : [...plan.rader, id] })
-  }
-
-  const bytLage = (nytt: Lage) => {
-    setLage(nytt)
-    setSortering(null)
-    setHopfallda(new Set())
-    if (nytt === 'nivalista') {
-      setSparadKolumn(plan.kolumn)
-      setPlan({ ...plan, kolumn: null })
-    } else {
-      // Korstabellen har en raddimension och en kolumndimension. Har man byggt
-      // tre nivåer behålls den första — resten hade blivit delsummerader i en
-      // matris, och en matris med delsummor är inte längre en matris.
-      setPlan({
-        ...plan,
-        rader: plan.rader.slice(0, 1),
-        kolumn: sparadKolumn ?? plan.kolumn,
-      })
-    }
-  }
-
-  const bytHall = () => {
-    const forsta = plan.rader[0] ?? null
-    andra({ rader: plan.kolumn === null ? [] : [plan.kolumn], kolumn: forsta })
-  }
+  /*
+   * Byt håll: hela Rader mot hela Kolumner.
+   *
+   * Med ett fält i vardera är det samma sak som förut. Med flera är det den
+   * enda vändning som betyder något — att vända fält för fält vore en annan
+   * tabell, inte samma tabell sedd från andra hållet.
+   */
+  const bytHall = () => andra({ rader: plan.kolumner, kolumner: plan.rader })
 
   const sortera = (kol: number, m: number) =>
     setSortering((f) =>
@@ -201,7 +153,11 @@ export function Pivot(props: {
     [resultat, sortering, plan.matvarden.length],
   )
   const diagram = useMemo(
-    () => diagramdata(resultat, plan, diagramplan, ordnade, additiv ? visning : 'tal'),
+    () =>
+      diagramdata(resultat, plan, diagramplan, ordnade, additiv ? visning : 'tal', {
+        tomt: t('(tomt)'),
+        ovriga: t('Övriga'),
+      }),
     [resultat, plan, diagramplan, ordnade, additiv, visning],
   )
   const hindrad = diagram.hinder[diagramplan.typ]
@@ -233,22 +189,6 @@ export function Pivot(props: {
           </span>
         </div>
         <div class="pivot__vaxlar">
-          <Val<Lage>
-            varden={[
-              {
-                varde: 'korstabell',
-                etikett: 'Korstabell',
-                titel: 'Två håll samtidigt: en dimension som rader, en som kolumner.',
-              },
-              {
-                varde: 'nivalista',
-                etikett: 'Nivålista',
-                titel: 'Ett håll i flera nivåer, med delsummor som går att fälla ihop.',
-              },
-            ]}
-            valt={lage}
-            onValj={bytLage}
-          />
           <Val<Yta>
             varden={[
               { varde: 'tabell', etikett: 'Tabell', titel: 'Talen, rad för rad.' },
@@ -264,145 +204,44 @@ export function Pivot(props: {
               setPunkt(null)
             }}
           />
+          <button
+            class="knapp"
+            aria-pressed={panel}
+            title={t('Visa eller dölj fältpanelen')}
+            onClick={() => setPanel(!panel)}
+          >
+            {t('Fält')}
+          </button>
         </div>
       </div>
 
       <div class="pivot__band">
-        {lage === 'korstabell' ? (
-          <>
-            <label class="pivot__falt">
-              <span class="falt__etikett">{t('Rader')}</span>
-              <select
-                value={plan.rader[0] ?? ''}
-                onChange={(e) => {
-                  const v = (e.currentTarget as HTMLSelectElement).value
-                  andra({ rader: v === '' ? [] : [v] })
-                }}
-              >
-                <option value="">{t('ingen')}</option>
-                {synliga.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+        <button
+          class="knapp pivot__byt"
+          title={t('Byt plats på rader och kolumner')}
+          aria-label={t('Byt plats på rader och kolumner')}
+          onClick={bytHall}
+        >
+          ⇄
+        </button>
 
-            <button
-              class="knapp pivot__byt"
-              title={t('Byt plats på rader och kolumner')}
-              aria-label={t('Byt plats på rader och kolumner')}
-              onClick={bytHall}
-            >
-              ⇄
-            </button>
-
-            <label class="pivot__falt">
-              <span class="falt__etikett">{t('Kolumner')}</span>
-              <select
-                value={plan.kolumn ?? ''}
-                onChange={(e) => {
-                  const v = (e.currentTarget as HTMLSelectElement).value
-                  andra({ kolumn: v === '' ? null : v })
-                }}
-              >
-                <option value="">{t('ingen')}</option>
-                {synliga.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </>
-        ) : (
-          <div class="pivot__falt pivot__falt--brett">
-            <span class="falt__etikett">{t('Nivåer')}</span>
-            <div class="val" role="group">
-              {synliga.map((c) => {
-                const i = plan.rader.indexOf(c.id)
-                return (
-                  <button
-                    key={c.id}
-                    class={`val__knapp${i >= 0 ? ' val__knapp--vald' : ''}`}
-                    aria-pressed={i >= 0}
-                    onClick={() => vaxlaNiva(c.id)}
-                  >
-                    {i >= 0 && plan.rader.length > 1 && (
-                      <span class="gruppera__ordning">{i + 1}</span>
-                    )}
-                    {c.name}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        <div class="pivot__falt pivot__falt--brett">
-          <span class="falt__etikett">{t('Mätvärden')}</span>
-          <div class="pivot__matvarden">
-            {plan.matvarden.map((m) => {
-              const post = berakningspost(m.typ)
-              return (
-                <div key={m.id} class="pivot__matvarde">
-                  <select
-                    aria-label={t('Beräkning')}
-                    value={m.typ}
-                    title={t(post.hjalp)}
-                    onChange={(e) =>
-                      andraMatvarde(m.id, {
-                        typ: (e.currentTarget as HTMLSelectElement).value as Berakningstyp,
-                      })
-                    }
-                  >
-                    {pivotberakningar().map((b) => (
-                      <option key={b.typ} value={b.typ}>
-                        {t(b.etikett)}
-                      </option>
-                    ))}
-                  </select>
-                  {post.behoverKolumn ? (
-                    <select
-                      aria-label={t('Kolumn att räkna på')}
-                      value={m.colId ?? ''}
-                      onChange={(e) =>
-                        andraMatvarde(m.id, {
-                          colId: (e.currentTarget as HTMLSelectElement).value,
-                        })
-                      }
-                    >
-                      {synliga.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span class="pivot__allarader">{t('alla rader')}</span>
-                  )}
-                  {plan.matvarden.length > 1 && (
-                    <button
-                      class="kolrad__oga"
-                      aria-label={t('Ta bort mätvärdet')}
-                      title={t('Ta bort mätvärdet')}
-                      onClick={() =>
-                        andra({ matvarden: plan.matvarden.filter((x) => x.id !== m.id) })
-                      }
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              )
-            })}
-            <button
-              class="knapp knapp--tyst"
-              onClick={() => andra({ matvarden: [...plan.matvarden, byggMatvarde('summa')] })}
-            >
-              {t('＋ Lägg till mätvärde')}
-            </button>
-          </div>
+        <div class="pivot__falt">
+          <span class="falt__etikett">{t('Radfälten')}</span>
+          <Val<Radlayout>
+            varden={RADLAYOUTER.map((r) => ({
+              varde: r.varde,
+              etikett: r.etikett,
+              titel: r.hjalp,
+              // Block delar upp på det översta radfältet och listar resten
+              // under det. Med ett enda fält finns inget att lista.
+              inaktiv:
+                r.varde === 'block' && plan.rader.length < 2
+                  ? t('Block behöver minst två fält i Rader.')
+                  : undefined,
+            }))}
+            valt={layout}
+            onValj={setLayout}
+          />
         </div>
 
         <div class="pivot__falt">
@@ -523,10 +362,11 @@ export function Pivot(props: {
         </div>
       )}
 
-      <div class="pivot__kropp">
-        {plan.rader.length === 0 && plan.kolumn === null ? (
+      <div class={`pivot__kropp${panel ? ' pivot__kropp--panel' : ''}`}>
+        <div class="pivot__yta">
+        {plan.rader.length === 0 && plan.kolumner.length === 0 ? (
           <p class="pivot__tomt">
-            {t('Välj en kolumn att dela upp på, så räknar pivoten resten.')}
+            {t('Dra ett fält till Rader eller Kolumner, så räknar pivoten resten.')}
           </p>
         ) : yta === 'tabell' ? (
           <Pivottabell
@@ -534,6 +374,7 @@ export function Pivot(props: {
             plan={plan}
             resultat={resultat}
             visning={additiv ? visning : 'tal'}
+            layout={layout}
             sortering={sortering}
             onSortera={sortera}
             hopfallda={hopfallda}
@@ -586,6 +427,10 @@ export function Pivot(props: {
             )}
           </div>
         )}
+        </div>
+        {panel && (
+          <Pivotpanel frame={frame} plan={plan} onPlan={andra} onStang={() => setPanel(false)} />
+        )}
       </div>
 
       <div class="pivot__fot">
@@ -617,6 +462,14 @@ export function Pivot(props: {
               {tf(
                 'Kolumnen har fler värden än som får plats. De {0} vanligaste har egna spalter, resten ligger i Övriga — summorna stämmer fortfarande.',
                 formatCount(plan.kolumntak),
+              )}
+            </Notis>
+          )}
+          {resultat.doldaKolumnlov > 0 && (
+            <Notis ton="info">
+              {tf(
+                '{0} kolumnkombinationer fick inte plats och ligger i Övriga. Färre fält i Kolumner ger fler egna spalter.',
+                formatCount(resultat.doldaKolumnlov),
               )}
             </Notis>
           )}

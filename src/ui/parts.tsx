@@ -367,7 +367,7 @@ export function Notis(props: {
  * blir översättningsbar utan att någon behöver komma ihåg det.
  */
 export function Val<T extends string>(props: {
-  varden: readonly { varde: T; etikett: string; titel?: string }[]
+  varden: readonly { varde: T; etikett: string; titel?: string; inaktiv?: string }[]
   valt: T | null
   onValj: (v: T) => void
 }) {
@@ -379,7 +379,10 @@ export function Val<T extends string>(props: {
           class={`val__knapp${v.varde === props.valt ? ' val__knapp--vald' : ''}`}
           role="radio"
           aria-checked={v.varde === props.valt}
-          title={v.titel === undefined ? undefined : t(v.titel)}
+          // Ett avstängt val säger sitt skäl i titeln. Ett val som bara inte
+          // går att klicka på lär ingen något.
+          disabled={v.inaktiv !== undefined}
+          title={v.inaktiv ?? (v.titel === undefined ? undefined : t(v.titel))}
           onClick={() => props.onValj(v.varde)}
         >
           {t(v.etikett)}
