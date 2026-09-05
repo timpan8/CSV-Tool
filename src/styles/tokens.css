@@ -81,6 +81,9 @@
   --radhojd: 30px;
   --rubrikhojd: 46px;
   --panel-bredd: 260px;
+  /* Pivotens fältpanel bär hela kolumnnamn i chips — `ADGroup_SamAccountName`
+     bryts i två rader vid kolumnpanelens bredd. */
+  --pivot-panel-bredd: 300px;
   --inspektor-bredd: 300px;
   --verktyg-bredd: 392px;
   --radie: 6px;

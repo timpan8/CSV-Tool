@@ -9,6 +9,7 @@ import {
   pivotberakningar,
   pivotera,
   pivotnamn,
+  radernaBakom,
   pivotTillFrame,
   type Pivotplan,
   type Pivotresultat,
@@ -383,6 +384,114 @@ describe('flera kolumnfält', () => {
     // Totalt står kvar: Övriga bär raderna som inte fick egen spalt.
     expect(cell(res, res.rader.length, res.bredd - 1)).toBe('49')
     expect(res.kolumner.reduce((s, l) => s + l.rader, 0)).toBe(49)
+  })
+})
+
+describe('radernaBakom', () => {
+  /**
+   * Det bärande påståendet, prövat över hela matrisen: **antalet rader
+   * funktionen ger är talet som står i cellen.** Med `antal` som mätvärde är
+   * cellens tal per definition antalet rader bakom den, så varje cell i varje
+   * uppställning blir ett eget litet påstående.
+   */
+  const stammerOverallt = (f: Frame, over: Partial<Pivotplan>) => {
+    const p = plan(f, over)
+    const res = pivotera(f, p)
+    for (let rad = 0; rad <= res.rader.length; rad++) {
+      for (let kol = 0; kol < res.bredd; kol++) {
+        const text = cell(res, rad, kol)
+        const vantat = text === '' ? 0 : Number(text)
+        const rader = radernaBakom(res, rad, kol)
+        expect(rader.length, `rad ${rad}, kolumn ${kol}`).toBe(vantat)
+      }
+    }
+    return res
+  }
+
+  it('ger alltid lika många rader som cellen säger — korstabell', () => {
+    stammerOverallt(ORTER, { rader: [kol(ORTER, 'Ort')], kolumner: [kol(ORTER, 'Status')] })
+  })
+
+  it('ger alltid lika många rader som cellen säger — nivåer med delsummor', () => {
+    // Delsummeraderna är poängen: där ligger en kolumns rader utspridda i
+    // bandet, en klunga per barn, och en funktion som skivade hade svarat fel.
+    const res = stammerOverallt(ORTER, {
+      rader: [kol(ORTER, 'Status'), kol(ORTER, 'Ort')],
+      kolumner: [kol(ORTER, 'Kund')],
+    })
+    expect(res.rader.some((r) => r.niva === 0)).toBe(true)
+  })
+
+  it('ger alltid lika många rader som cellen säger — utan kolumnfält', () => {
+    stammerOverallt(ORTER, { rader: [kol(ORTER, 'Ort')], kolumner: [] })
+  })
+
+  it('ger raderna själva, inte bara antalet', () => {
+    const p = plan(ORTER, { rader: [kol(ORTER, 'Ort')], kolumner: [kol(ORTER, 'Status')] })
+    const res = pivotera(ORTER, p)
+    const malmo = res.rader.findIndex((r) => r.etiketter[0] === 'Malmö')
+    const aktiv = res.kolumner.findIndex((l) => l.nivaer[0]?.etikett === 'Aktiv')
+    // Malmö × Aktiv är filens två första rader.
+    expect([...radernaBakom(res, malmo, aktiv)]).toEqual([0, 1])
+    // Malmö × Totalt tar med den avslutade också.
+    expect([...radernaBakom(res, malmo, res.bredd - 1)]).toEqual([0, 1, 2])
+  })
+
+  it('Totalt-raden är varje källrad som kom med, en gång', () => {
+    const p = plan(ORTER, { rader: [kol(ORTER, 'Ort')], kolumner: [kol(ORTER, 'Status')] })
+    const res = pivotera(ORTER, p)
+    const alla = radernaBakom(res, res.rader.length, res.bredd - 1)
+    expect(alla.length).toBe(res.antalKallrader)
+    expect(new Set(alla).size).toBe(alla.length)
+  })
+
+  it('ett Övriga-löv bär raderna som inte fick en egen spalt', () => {
+    const rader: string[][] = []
+    for (const kod of ['A', 'A', 'A', 'B', 'B', 'C', 'D']) rader.push([kod, 'x'])
+    const f = frameOf(['Kod', 'Allt'], rader)
+    const res = pivotera(
+      f,
+      plan(f, { rader: [kol(f, 'Allt')], kolumner: [kol(f, 'Kod')], kolumntak: 2 }),
+    )
+    const ovriga = res.kolumner.findIndex((l) => l.nivaer[0]?.ovriga === true)
+    expect(ovriga).toBeGreaterThanOrEqual(0)
+    // C och D — de två som vikts in. Ett filter på etiketten hade inte kunnat
+    // hitta dem alls: Övriga bär bara ett antal.
+    expect([...radernaBakom(res, 0, ovriga)]).toEqual([5, 6])
+  })
+
+  it('en tom cell ger noll rader, inte alla', () => {
+    const p = plan(ORTER, { rader: [kol(ORTER, 'Ort')], kolumner: [kol(ORTER, 'Status')] })
+    const res = pivotera(ORTER, p)
+    const kiruna = res.rader.findIndex((r) => r.etiketter[0] === 'Kiruna')
+    const avslutad = res.kolumner.findIndex((l) => l.nivaer[0]?.etikett === 'Avslutad')
+    expect(cell(res, kiruna, avslutad)).toBe('')
+    expect(radernaBakom(res, kiruna, avslutad).length).toBe(0)
+  })
+
+  it('filtret i planen gäller också för raderna bakom', () => {
+    const p = plan(ORTER, {
+      rader: [kol(ORTER, 'Ort')],
+      kolumner: [],
+      filter: {
+        ...TOMT_FILTER,
+        regler: [
+          {
+            id: 'r1',
+            colId: kol(ORTER, 'Status'),
+            operator: 'iLista',
+            varde: '',
+            varden: ['Aktiv'],
+            av: false,
+          },
+        ],
+      },
+    })
+    const res = pivotera(ORTER, p)
+    const alla = radernaBakom(res, res.rader.length, res.bredd - 1)
+    expect(alla.length).toBe(4)
+    // Rad 2 är Malmö/Avslutad och ska inte vara med.
+    expect([...alla]).not.toContain(2)
   })
 })
 
