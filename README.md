@@ -6,6 +6,8 @@ Ett webbaserat verktyg för att läsa in, städa, matcha och exportera CSV- och 
 
 📖 **[Användarguide](docs/ANVANDARGUIDE.md)** — hur varje verktyg används, med bilder och ett klick till rätt avsnitt. ([User guide in English](docs/USER-GUIDE.md))
 
+Samma guide finns som **sida** med sidomeny, sökruta och svensk/engelsk växlare: den publiceras med appen på `…/guide/`, och `docs/guide.html` går att öppna direkt från disk efter en klon. Innehållet är detsamma — sidan är till för att slå upp i, markdown-filerna för att läsas på GitHub.
+
 Guiden svarar på *hur gör jag*. Resten av den här filen svarar på *varför är det byggt så*.
 
 ## Två principer

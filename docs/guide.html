@@ -1,0 +1,943 @@
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      Samma löfte som appen, i samma form: sidan får inte göra ett enda
+      nätverksanrop. Den läser bara sina egna filer och bilderna i bilder/.
+
+      `img-src 'self' file:` — från file:// är sidans ursprung opakt, och
+      'self' matchar då ingenting. Utan schemat blir bilderna blockerade för
+      den som bara öppnar filen från disk, vilket är det vanligaste sättet att
+      läsa guiden.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' file:; style-src 'unsafe-inline'; img-src 'self' file: data:; connect-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Användarguide — CSV-verkstan</title>
+    <meta
+      name="description"
+      content="Användarguide till CSV-verkstan: öppna, städa, matcha och exportera CSV- och Excel-filer direkt i webbläsaren."
+    />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232563EB'/%3E%3Cpath d='M7 10h18M7 16h18M7 22h18M13 8v16M21 8v16' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E" />
+
+    <style>
+      /*
+       * Färgerna är appens egna, ur src/styles/tokens.css, skrivna som
+       * bokstavliga värden: sidan ska gå att öppna från disk utan att någon
+       * annan fil behöver följa med. Bara det ljusa läget — guiden läses
+       * bredvid appen, inte i den.
+       */
+      :root {
+        --yta: #ffffff;
+        --yta-2: #f8fafc;
+        --yta-3: #f1f5f9;
+        --linje: #e2e8f0;
+        --linje-stark: #cbd5e1;
+        --text: #0f172a;
+        --text-svag: #64748b;
+        --text-svagast: #94a3b8;
+        --text-brod: #334155;
+        --text-brod-svag: #475569;
+        --accent: #2563eb;
+        --accent-svag: #dbeafe;
+        --accent-text: #1d4ed8;
+        --varning-svag: #fef3c7;
+        --varning-linje: #fde68a;
+        --varning-text: #92400e;
+        --varning-text-stark: #78350f;
+        --lyckat-svag: #d1fae5;
+        --lyckat-linje: #a7f3d0;
+        --lyckat-text: #065f46;
+        --lyckat-text-stark: #064e3b;
+        --fara-svag: #fee2e2;
+        --fara-linje: #fecaca;
+        --fara-text: #7f1d1d;
+        --radie: 9px;
+        --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+          'Noto Sans', sans-serif;
+        --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono',
+          monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      /* Den som ber om mindre rörelse ska inte få sidan att glida förbi
+         trettio avsnitt när ett ankare klickas. */
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+      }
+
+      body {
+        margin: 0;
+        display: flex;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        min-height: 100vh;
+        background: var(--yta-2);
+        color: var(--text);
+        font-family: var(--font);
+        -webkit-font-smoothing: antialiased;
+        text-wrap: pretty;
+      }
+
+      a {
+        color: var(--accent-text);
+        text-decoration: none;
+      }
+
+      a:hover {
+        color: var(--accent);
+        text-decoration: underline;
+      }
+
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      ::selection {
+        background: var(--accent-svag);
+      }
+
+      ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: var(--linje-stark);
+        border-radius: 6px;
+      }
+
+      code,
+      kbd {
+        font-family: var(--font-mono);
+      }
+
+      code {
+        font-size: 0.9em;
+        padding: 1px 5px;
+        background: var(--yta-3);
+        border: 1px solid var(--linje);
+        border-radius: 4px;
+        white-space: nowrap;
+      }
+
+      strong {
+        font-weight: 650;
+        color: var(--text);
+      }
+
+      em {
+        color: var(--text-brod);
+      }
+
+      /* ------------------------------------------------------------ menyn */
+
+      .sidomeny {
+        flex: 0 0 292px;
+        position: sticky;
+        top: 0;
+        align-self: stretch;
+        max-height: 100vh;
+        overflow-y: auto;
+        background: var(--yta);
+        border-right: 1px solid var(--linje);
+        padding: 26px 18px 48px 26px;
+      }
+
+      .marke {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 22px;
+      }
+
+      .marke .ikon {
+        width: 30px;
+        height: 30px;
+        flex: 0 0 30px;
+        border-radius: 7px;
+        background: var(--accent);
+        color: #ffffff;
+        display: grid;
+        place-items: center;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .marke .namn {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        min-width: 0;
+      }
+
+      .marke .namn strong {
+        font-size: 14px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
+
+      .marke .namn span {
+        font-size: 11.5px;
+        color: var(--text-svag);
+      }
+
+      .sprakval {
+        display: flex;
+        gap: 4px;
+        padding: 3px;
+        background: var(--yta-3);
+        border-radius: 7px;
+        margin-bottom: 12px;
+      }
+
+      .sprakval button {
+        flex: 1;
+        border: 0;
+        cursor: pointer;
+        padding: 6px 0;
+        border-radius: 5px;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        background: transparent;
+        color: var(--text-svag);
+      }
+
+      .sprakval button[aria-pressed='true'] {
+        background: var(--yta);
+        color: var(--text);
+        box-shadow: 0 1px 2px rgb(15 23 42 / 0.08);
+      }
+
+      .sokruta {
+        width: 100%;
+        padding: 8px 11px;
+        border: 1px solid var(--linje-stark);
+        border-radius: 7px;
+        font: inherit;
+        font-size: 12.5px;
+        color: var(--text);
+        background: var(--yta);
+        margin-bottom: 20px;
+      }
+
+      .sokruta:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-svag);
+      }
+
+      nav {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      .meny-omrade {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .meny-rubrik {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding-bottom: 6px;
+        color: var(--text);
+        font-size: 12.5px;
+        font-weight: 650;
+        letter-spacing: -0.005em;
+      }
+
+      .nr {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 400;
+        color: var(--text-svagast);
+      }
+
+      .meny-lank {
+        display: block;
+        padding: 4px 10px 4px 26px;
+        margin-left: 2px;
+        border-left: 2px solid var(--linje);
+        border-radius: 0 5px 5px 0;
+        font-size: 12.5px;
+        color: var(--text-brod-svag);
+      }
+
+      .meny-lank:hover {
+        background: var(--yta-3);
+        text-decoration: none;
+      }
+
+      .meny-lank.ar-aktiv {
+        border-left-color: var(--accent);
+        background: var(--yta-3);
+        color: var(--accent);
+        font-weight: 650;
+      }
+
+      #inga-traffar {
+        font-size: 12.5px;
+        color: var(--text-svagast);
+      }
+
+      #meny-lock {
+        display: none;
+      }
+
+      #meny-lada > summary {
+        cursor: pointer;
+        padding: 8px 0;
+        font-size: 12.5px;
+        font-weight: 650;
+        color: var(--text);
+        list-style-position: inside;
+      }
+
+      /* ------------------------------------------------------------ sidan */
+
+      main {
+        flex: 1 1 620px;
+        min-width: 0;
+        padding-bottom: 96px;
+      }
+
+      header {
+        padding: 64px 48px 40px;
+        background: var(--yta);
+        border-bottom: 1px solid var(--linje);
+      }
+
+      header > div {
+        max-width: 760px;
+      }
+
+      .ovanrubrik {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 14px;
+      }
+
+      h1 {
+        margin: 0 0 14px;
+        font-size: 40px;
+        line-height: 1.08;
+        letter-spacing: -0.025em;
+        font-weight: 680;
+      }
+
+      #ingress {
+        margin: 0;
+        font-size: 16.5px;
+        line-height: 1.6;
+        color: var(--text-brod-svag);
+        max-width: 62ch;
+      }
+
+      /*
+       * De två sakerna man behöver tro på innan man litar på verktyget står
+       * överst, inte som en fotnot: att filen stannar på datorn, och att
+       * ingenting ändras utan att man ser resultatet först.
+       */
+      #fakta {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
+        margin-top: 28px;
+      }
+
+      #fakta > div {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 14px 16px;
+        background: var(--yta-2);
+        border: 1px solid var(--linje);
+        border-radius: 8px;
+      }
+
+      #fakta strong {
+        font-size: 13px;
+      }
+
+      #fakta span {
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--text-svag);
+      }
+
+      section {
+        padding: 56px 48px 0;
+        max-width: 956px;
+      }
+
+      .omrade-rubrik {
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid var(--text);
+      }
+
+      .omrade-rubrik .nr {
+        font-size: 12px;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 25px;
+        letter-spacing: -0.02em;
+        font-weight: 660;
+      }
+
+      .underrubrik {
+        margin-left: auto;
+        font-size: 12.5px;
+        color: var(--text-svag);
+        text-align: right;
+      }
+
+      .omrade-intro {
+        margin-top: 22px;
+        padding: 18px 20px;
+        background: var(--yta);
+        border: 1px solid var(--linje);
+        border-radius: 10px;
+      }
+
+      .omrade-intro p {
+        margin: 0;
+        font-size: 14.5px;
+        line-height: 1.65;
+        color: var(--text-brod);
+      }
+
+      /* --------------------------------------------------------- avsnittet */
+
+      article {
+        margin-top: 34px;
+        padding: 26px 28px 28px;
+        background: var(--yta);
+        border: 1px solid var(--linje);
+        border-radius: 12px;
+        box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+      }
+
+      /* Rubriken ska inte hamna under menyns överkant när den klickas fram. */
+      section,
+      article {
+        scroll-margin-top: 12px;
+      }
+
+      h3 {
+        margin: 0 0 10px;
+        font-size: 18.5px;
+        letter-spacing: -0.015em;
+        font-weight: 650;
+      }
+
+      .ingress {
+        margin: 0 0 18px;
+        font-size: 14.5px;
+        line-height: 1.65;
+        color: var(--text-brod);
+        max-width: 68ch;
+      }
+
+      h4 {
+        margin: 0 0 10px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 400;
+        color: var(--text-svagast);
+      }
+
+      figure {
+        margin: 0 0 20px;
+      }
+
+      /*
+       * Bilderna tas i skärmens egen skala (`deviceScaleFactor: 1`), så deras
+       * naturliga storlek är den de ska visas i. Ramen krymper till bilden och
+       * bilden växer aldrig förbi den: en uppförstorad skärmbild av en
+       * inställningsruta blir suddig, och suddig text är värre än liten.
+       */
+      .bildram {
+        display: block;
+        width: fit-content;
+        max-width: 100%;
+        padding: 8px;
+        background: var(--yta-3);
+        border: 1px solid var(--linje);
+        border-radius: 10px;
+        cursor: zoom-in;
+        font: inherit;
+      }
+
+      .bildram img {
+        display: block;
+        max-width: 100%;
+        height: auto;
+        border-radius: 5px;
+        border: 1px solid var(--linje-stark);
+        background: var(--yta);
+      }
+
+      figcaption {
+        margin-top: 8px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--text-svag);
+        max-width: 60ch;
+      }
+
+      .forklaring {
+        margin: 0 0 4px;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 12px;
+      }
+
+      .forklaring li {
+        display: flex;
+        gap: 10px;
+        padding: 12px 14px;
+        background: var(--yta-2);
+        border: 1px solid var(--linje);
+        border-radius: 8px;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--text-brod-svag);
+      }
+
+      .forklaring .siffra {
+        flex: 0 0 20px;
+        height: 20px;
+        border-radius: 5px;
+        background: var(--text);
+        color: #ffffff;
+        display: grid;
+        place-items: center;
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+
+      .steg,
+      .noteringar {
+        margin-bottom: 18px;
+      }
+
+      .steg ol,
+      .noteringar ul,
+      .omrade-intro ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+
+      .steg li,
+      .noteringar li,
+      .omrade-intro li {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+      }
+
+      .steg li {
+        gap: 12px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: #1e293b;
+      }
+
+      .steg .siffra {
+        flex: 0 0 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--accent-svag);
+        color: var(--accent-text);
+        display: grid;
+        place-items: center;
+        font-size: 11.5px;
+        font-weight: 700;
+      }
+
+      .noteringar li,
+      .omrade-intro li {
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: var(--text-brod-svag);
+      }
+
+      .streck {
+        color: var(--linje-stark);
+      }
+
+      /* "Värt att veta" är inte steg. Den tunna linjen säger det utan ord:
+         allt ovanför den är hur du gör, allt under den är vad du bör veta. */
+      .noteringar {
+        margin-top: 4px;
+        padding-top: 16px;
+        border-top: 1px dashed var(--linje);
+        margin-bottom: 0;
+      }
+
+      .omrade-intro ul {
+        margin-top: 12px;
+        gap: 8px;
+      }
+
+      .fore-efter {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .fore-efter .ruta {
+        padding: 12px 14px;
+        border-radius: var(--radie);
+      }
+
+      .fore-efter h4 {
+        font-family: var(--font);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        margin-bottom: 8px;
+      }
+
+      .fore-efter ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+      }
+
+      .fore-efter .fore {
+        background: var(--varning-svag);
+        border: 1px solid var(--varning-linje);
+      }
+
+      .fore-efter .fore h4 {
+        color: var(--varning-text);
+      }
+
+      .fore-efter .fore li {
+        color: var(--varning-text-stark);
+      }
+
+      .fore-efter .efter {
+        background: var(--lyckat-svag);
+        border: 1px solid var(--lyckat-linje);
+      }
+
+      .fore-efter .efter h4 {
+        color: var(--lyckat-text);
+      }
+
+      .fore-efter .efter li {
+        color: var(--lyckat-text-stark);
+      }
+
+      .tabellram {
+        margin-bottom: 18px;
+        border: 1px solid var(--linje);
+        border-radius: var(--radie);
+        overflow: hidden;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13.5px;
+      }
+
+      th {
+        text-align: left;
+        padding: 9px 14px;
+        background: var(--yta-2);
+        font-size: 11.5px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-svag);
+        border-bottom: 1px solid var(--linje);
+        font-weight: 650;
+      }
+
+      td {
+        padding: 9px 14px;
+        border-top: 1px solid var(--yta-3);
+        color: var(--text-brod);
+        line-height: 1.5;
+        vertical-align: top;
+      }
+
+      .tangenter {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 6px 24px;
+      }
+
+      .tangenter > div {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 7px 0;
+        border-bottom: 1px solid var(--yta-3);
+      }
+
+      kbd {
+        font-size: 12px;
+        padding: 3px 7px;
+        background: var(--yta-3);
+        border: 1px solid var(--linje);
+        border-bottom-width: 2px;
+        border-radius: 5px;
+        color: var(--text);
+        white-space: nowrap;
+      }
+
+      .tangenter span {
+        font-size: 13.5px;
+        color: var(--text-brod-svag);
+      }
+
+      .varning {
+        margin: 16px 0 0;
+        padding: 12px 14px;
+        background: var(--fara-svag);
+        border: 1px solid var(--fara-linje);
+        border-radius: var(--radie);
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--fara-text);
+      }
+
+      footer {
+        padding: 56px 48px 0;
+        max-width: 956px;
+      }
+
+      footer div {
+        padding-top: 24px;
+        border-top: 1px solid var(--linje);
+        display: flex;
+        gap: 16px;
+        align-items: baseline;
+        font-size: 12.5px;
+        color: var(--text-svag);
+      }
+
+      /* ------------------------------------------------------- förstoringen */
+
+      #forstoring {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: grid;
+        place-items: center;
+        padding: 32px;
+        margin: 0;
+        background: rgb(15 23 42 / 0.72);
+        cursor: zoom-out;
+        animation: tona-in 0.14s ease-out;
+      }
+
+      #forstoring[hidden] {
+        display: none;
+      }
+
+      #forstoring button {
+        display: block;
+        border: 0;
+        padding: 0;
+        background: none;
+        cursor: zoom-out;
+      }
+
+      #forstoring img {
+        display: block;
+        max-width: 100%;
+        max-height: 82vh;
+        border-radius: 8px;
+        background: var(--yta);
+        box-shadow: 0 12px 32px rgb(0 0 0 / 0.4);
+      }
+
+      #forstoring figcaption {
+        margin: 10px auto 0;
+        max-width: 70ch;
+        color: var(--linje);
+        font-size: 12.5px;
+        text-align: center;
+      }
+
+      @keyframes tona-in {
+        from {
+          opacity: 0;
+        }
+      }
+
+      /* ---------------------------------------------------------- smal skärm */
+
+      /*
+       * Under den här bredden får menyn inte längre plats bredvid texten. Den
+       * lägger sig då överst som en vanlig innehållsförteckning — en sticky
+       * meny som är 100vh hög äter hela skärmen på en telefon.
+       */
+      @media (max-width: 900px) {
+        .sidomeny {
+          flex: 1 1 100%;
+          position: static;
+          max-height: none;
+          border-right: 0;
+          border-bottom: 1px solid var(--linje);
+          padding: 20px 24px 28px;
+        }
+
+        #meny-lock {
+          display: list-item;
+        }
+
+        header {
+          padding: 40px 24px 32px;
+        }
+
+        h1 {
+          font-size: 31px;
+        }
+
+        section,
+        footer {
+          padding-left: 24px;
+          padding-right: 24px;
+        }
+
+        article {
+          padding: 20px 18px 22px;
+        }
+      }
+
+      /* ------------------------------------------------------------- utskrift */
+
+      @media print {
+        /* Ett hopfällt <details> skriver inte ut sitt innehåll. Menyn ska
+           ändå inte med på papper, så den fälls inte ut — den tas bort. */
+        .sidomeny,
+        footer {
+          display: none;
+        }
+
+        body {
+          background: #ffffff;
+        }
+
+        article {
+          box-shadow: none;
+          break-inside: avoid;
+        }
+
+        header {
+          padding: 0 0 24px;
+        }
+
+        section {
+          padding: 24px 0 0;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <aside class="sidomeny">
+      <div class="marke">
+        <span class="ikon" aria-hidden="true">CSV</span>
+        <span class="namn">
+          <strong>CSV-verkstan</strong>
+          <span id="meny-titel">Användarguide</span>
+        </span>
+      </div>
+
+      <div class="sprakval" id="sprak">
+        <button type="button" data-sprak="sv" aria-pressed="true" lang="sv">Svenska</button>
+        <button type="button" data-sprak="en" aria-pressed="false" lang="en">English</button>
+      </div>
+
+      <input type="search" id="sok" class="sokruta" placeholder="Sök i guiden…" />
+
+      <!--
+        På en bred skärm står menyn öppen bredvid texten och locket är dolt.
+        På en smal skärm ligger den ovanför innehållet, och en meny med
+        trettiotre rader skulle då kräva två skärmars rullning innan guiden ens
+        börjar — samma stökiga vägval som sidomenyn finns till för att slippa.
+      -->
+      <details id="meny-lada" open>
+        <summary id="meny-lock">Innehåll</summary>
+        <nav id="meny" aria-label="Innehåll"></nav>
+        <span id="inga-traffar" hidden></span>
+      </details>
+    </aside>
+
+    <main>
+      <header>
+        <div>
+          <p class="ovanrubrik">CSV-verkstan</p>
+          <h1 id="titel">Användarguide</h1>
+          <p id="ingress"></p>
+          <div id="fakta"></div>
+        </div>
+      </header>
+
+      <div id="innehall"></div>
+
+      <footer>
+        <div>
+          <a href="#" id="till-toppen">Till toppen</a>
+          <span id="sidfot-titel"></span>
+        </div>
+      </footer>
+    </main>
+
+    <figure id="forstoring" hidden>
+      <button type="button"><img alt="" /></button>
+      <figcaption></figcaption>
+    </figure>
+
+    <script src="guide-sv.js"></script>
+    <script src="guide-en.js"></script>
+    <script src="guide.js"></script>
+  </body>
+</html>

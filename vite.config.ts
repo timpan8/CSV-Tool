@@ -1,3 +1,5 @@
+import { cp, rename } from 'node:fs/promises'
+import { join } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 
 /**
@@ -38,8 +40,43 @@ function contentSecurityPolicy(): Plugin {
   }
 }
 
+/**
+ * Användarguiden med i publiceringen.
+ *
+ * Guiden ligger i `docs/` därför att det är där repots dokumentation hör
+ * hemma, och `docs/guide.html` går att öppna direkt från disk. GitHub renderar
+ * däremot inte HTML ur ett repo — den som inte klonat ser bara källkoden. Så
+ * sidan följer med bygget och blir läsbar på `…/guide/` bredvid appen.
+ *
+ * Filen döps om till `index.html` på vägen: adressen ska vara `/guide/`, inte
+ * `/guide/guide.html`. Namnet i repot är `guide.html` av motsatt skäl — en
+ * `index.html` i `docs/` säger ingenting om vad den innehåller.
+ *
+ * Kopieringen sker i `closeBundle` och inte via `public/`: bilderna är fyra
+ * megabyte som Vite annars skulle läsa in i minnet som tillgångar, och de
+ * finns redan på rätt plats under `docs/`.
+ */
+function anvandarguiden(): Plugin {
+  let utkatalog = 'dist'
+  return {
+    name: 'csv-verkstan-guide',
+    apply: 'build',
+    configResolved(config) {
+      utkatalog = config.build.outDir
+    },
+    async closeBundle() {
+      const mal = join(utkatalog, 'guide')
+      for (const fil of ['guide.html', 'guide.js', 'guide-sv.js', 'guide-en.js']) {
+        await cp(join('docs', fil), join(mal, fil), { recursive: true })
+      }
+      await cp('docs/bilder', join(mal, 'bilder'), { recursive: true })
+      await rename(join(mal, 'guide.html'), join(mal, 'index.html'))
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [contentSecurityPolicy()],
+  plugins: [contentSecurityPolicy(), anvandarguiden()],
   // Relativ bas gör bygget sökvägsoberoende: det fungerar på GitHub Pages
   // under /CSV-Tool/ lika väl som på ett eget domännamn, utan att sökvägen
   // behöver byggas in.
