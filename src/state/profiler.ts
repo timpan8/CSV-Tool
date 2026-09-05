@@ -4,7 +4,7 @@ import { visibleColumns } from '../core/frame/frame.js'
 import { rubriknyckel } from '../core/ops/rubriker.js'
 import { stadningarEfterId } from '../core/ops/clean.js'
 import { delaVarde } from '../core/ops/columns.js'
-import { korMall, tolkaMall } from '../core/ops/columns.js'
+import { korMallar, tolkaMall, type Mallar } from '../core/ops/columns.js'
 import { datumTransform, tolkaDatum } from '../core/ops/dates.js'
 import { epostNamndelar, epostTransform } from '../core/ops/email.js'
 import { skrivTal, talTransform, tolkaTal } from '../core/ops/numbers.js'
@@ -320,9 +320,19 @@ export function korSteg(tab: Tab, steg: Profilsteg): Stegresultat {
   }
 
   if (steg.typ === 'mall') {
-    const tolkning = tolkaMall(steg.mall, frame)
-    if (tolkning.okanda.length > 0) {
-      return { steg, utfall: 'kolumnSaknas', andrade: 0, saknad: tolkning.okanda.join(', ') }
+    // Alla tre mallarna tolkas mot filen: ett stavfel i undantaget för sista
+    // raden ska stoppa steget lika säkert som ett i huvudmallen.
+    const tolkningar = [steg.mall, steg.forsta, steg.sista]
+      .filter((m): m is string => m !== undefined)
+      .map((m) => tolkaMall(m, frame))
+    const okanda = [...new Set(tolkningar.flatMap((t) => t.okanda))]
+    if (okanda.length > 0) {
+      return { steg, utfall: 'kolumnSaknas', andrade: 0, saknad: okanda.join(', ') }
+    }
+    const mallar: Mallar = {
+      delar: tolkaMall(steg.mall, frame).delar,
+      forsta: steg.forsta === undefined ? null : tolkaMall(steg.forsta, frame).delar,
+      sista: steg.sista === undefined ? null : tolkaMall(steg.sista, frame).delar,
     }
     const forsta = frame.columns[0]
     if (!forsta) return { steg, utfall: 'kolumnSaknas', andrade: 0 }
@@ -332,7 +342,7 @@ export function korSteg(tab: Tab, steg: Profilsteg): Stegresultat {
         etikett: beskrivSteg(steg),
         kind: 'merge',
         profil: steg,
-        rad: (f, row) => [korMall(f, row, tolkning.delar, { stadaLuckor: steg.stadaLuckor })],
+        rad: (f, row) => [korMallar(f, row, mallar, { stadaLuckor: steg.stadaLuckor })],
         nyaKolumner: [steg.namn],
       },
       frame,

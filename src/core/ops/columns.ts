@@ -136,6 +136,30 @@ export interface Malltolkning {
 const PLATSHALLARE = /\{([^{}]*)\}/g
 
 /**
+ * Delar en malltext i text- och platshållardelar.
+ *
+ * Vet ingenting om filen, och det är hela poängen: mönsteruttaget i
+ * `plockaUr` läser samma syntax, men där namnger platshållarna kolumner som
+ * ännu inte finns. En tolkning som krävde att namnen redan fanns hade gjort
+ * uttaget omöjligt att uttrycka med samma syntax som mallen.
+ */
+export function delaMall(text: string): Malldel[] {
+  const delar: Malldel[] = []
+  let sist = 0
+
+  PLATSHALLARE.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = PLATSHALLARE.exec(text)) !== null) {
+    if (m.index > sist) delar.push({ typ: 'text', varde: text.slice(sist, m.index) })
+    delar.push({ typ: 'kolumn', namn: m[1]!.trim() })
+    sist = m.index + m[0].length
+  }
+  if (sist < text.length) delar.push({ typ: 'text', varde: text.slice(sist) })
+
+  return delar
+}
+
+/**
  * Tolkar en mall som `{Förnamn} {Efternamn}`.
  *
  * Namn som inte finns i filen rapporteras i stället för att tyst bli tomma.
@@ -143,26 +167,18 @@ const PLATSHALLARE = /\{([^{}]*)\}/g
  * det är svårt att upptäcka när man bara ser resultatet.
  */
 export function tolkaMall(text: string, frame: Frame): Malltolkning {
-  const delar: Malldel[] = []
+  const delar = delaMall(text)
   const okanda: string[] = []
   const anvanda: string[] = []
-  let sist = 0
 
-  PLATSHALLARE.lastIndex = 0
-  let m: RegExpExecArray | null
-  while ((m = PLATSHALLARE.exec(text)) !== null) {
-    if (m.index > sist) delar.push({ typ: 'text', varde: text.slice(sist, m.index) })
-    const namn = m[1]!.trim()
-    delar.push({ typ: 'kolumn', namn })
-    const finns = frame.columns.some((c) => c.name === namn)
-    if (finns) {
-      if (!anvanda.includes(namn)) anvanda.push(namn)
-    } else if (!okanda.includes(namn)) {
-      okanda.push(namn)
+  for (const del of delar) {
+    if (del.typ !== 'kolumn') continue
+    if (frame.columns.some((c) => c.name === del.namn)) {
+      if (!anvanda.includes(del.namn)) anvanda.push(del.namn)
+    } else if (!okanda.includes(del.namn)) {
+      okanda.push(del.namn)
     }
-    sist = m.index + m[0].length
   }
-  if (sist < text.length) delar.push({ typ: 'text', varde: text.slice(sist) })
 
   return { delar, okanda, anvanda }
 }
@@ -195,4 +211,52 @@ export function korMall(
     }
   }
   return val.stadaLuckor ? ut.replace(/\s{2,}/g, ' ').trim() : ut
+}
+
+/**
+ * Huvudmallen och undantagen för första och sista raden.
+ *
+ * `null` betyder att raden följer huvudmallen. Undantagen finns för listor som
+ * bär en struktur runt sig: `('anna'),` på varje rad utom den sista, som ska
+ * sakna kommatecknet för att SQL-frågan ska gå att köra. Att sätta ihop den
+ * listan för hand är precis det slit ett verktyg ska ta bort.
+ */
+export interface Mallar {
+  delar: Malldel[]
+  forsta: Malldel[] | null
+  sista: Malldel[] | null
+}
+
+/**
+ * Mallen som gäller för en rad.
+ *
+ * Första och sista raden räknas i **vyns** ordning, inte filens. Skälet är att
+ * det är vyns sista rad som hamnar sist när markeringen kopieras med Ctrl+C —
+ * en fysisk tolkning hade satt kommatecknet på den sista kopierade raden och
+ * lämnat en kommalös rad mitt i listan, alltså precis det fel undantaget finns
+ * för att undvika. Priset är att en omsortering gör kolumnen inaktuell, och
+ * det är just vad regeln i statusraden säger till om.
+ *
+ * Är vyn en enda rad är den både första och sista. Då vinner `sista`: en lista
+ * med ett element behöver ingen inledning, men den behöver sitt slut.
+ *
+ * En rad som filtrerats bort ligger inte i vyn alls och följer huvudmallen.
+ */
+export function valjMall(frame: Frame, row: number, mallar: Mallar): Malldel[] {
+  const view = frame.view
+  if (view.length > 0) {
+    if (mallar.sista && view[view.length - 1] === row) return mallar.sista
+    if (mallar.forsta && view[0] === row) return mallar.forsta
+  }
+  return mallar.delar
+}
+
+/** Kör den mall som gäller för raden. */
+export function korMallar(
+  frame: Frame,
+  row: number,
+  mallar: Mallar,
+  val: Mallval = { stadaLuckor: true },
+): string {
+  return korMall(frame, row, valjMall(frame, row, mallar), val)
 }

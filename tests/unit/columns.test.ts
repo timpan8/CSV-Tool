@@ -6,9 +6,13 @@ import {
   STANDARDDELNING,
   delaVarde,
   inventeraDelning,
+  delaMall,
   korMall,
+  korMallar,
   tolkaMall,
+  valjMall,
   type Delning,
+  type Mallar,
 } from '../../src/core/ops/columns.js'
 
 function frameOf(headers: string[], rows: string[][]): Frame {
@@ -178,5 +182,82 @@ describe('korMall', () => {
   it('ger tomt för ett kolumnnamn som inte finns', () => {
     const { delar } = tolkaMall('{Saknas}', frame)
     expect(korMall(frame, 0, delar)).toBe('')
+  })
+})
+
+describe('delaMall', () => {
+  it('delar utan att bry sig om vilka kolumner som finns', () => {
+    expect(delaMall('{Namn} <{E-post}>')).toEqual([
+      { typ: 'kolumn', namn: 'Namn' },
+      { typ: 'text', varde: ' <' },
+      { typ: 'kolumn', namn: 'E-post' },
+      { typ: 'text', varde: '>' },
+    ])
+  })
+
+  it('ger en enda textdel för en mall utan platshållare', () => {
+    expect(delaMall('bara text')).toEqual([{ typ: 'text', varde: 'bara text' }])
+  })
+
+  it('trimmar namnet i platshållaren', () => {
+    expect(delaMall('{ Namn }')).toEqual([{ typ: 'kolumn', namn: 'Namn' }])
+  })
+})
+
+describe('mallar med undantag för första och sista raden', () => {
+  const frame = frameOf(
+    ['Användarnamn'],
+    [['anna'], ['bosse'], ['cesar'], ['david']],
+  )
+
+  const mallar = (mall: string, forsta: string | null, sista: string | null): Mallar => ({
+    delar: tolkaMall(mall, frame).delar,
+    forsta: forsta === null ? null : tolkaMall(forsta, frame).delar,
+    sista: sista === null ? null : tolkaMall(sista, frame).delar,
+  })
+
+  const sql = () => mallar("('{Användarnamn}'),", null, "('{Användarnamn}')")
+
+  it('utelämnar kommatecknet på sista raden', () => {
+    const m = sql()
+    expect(korMallar(frame, 0, m)).toBe("('anna'),")
+    expect(korMallar(frame, 2, m)).toBe("('cesar'),")
+    expect(korMallar(frame, 3, m)).toBe("('david')")
+  })
+
+  it('följer vyns ordning och inte filens', () => {
+    // Vänd ordningen: nu är rad 0 den sista raden man ser, och det är den
+    // raden som hamnar sist när markeringen kopieras.
+    const vand = { ...frame, view: Uint32Array.from([3, 2, 1, 0]) }
+    const m = sql()
+    expect(korMallar(vand, 0, m)).toBe("('anna')")
+    expect(korMallar(vand, 3, m)).toBe("('david'),")
+  })
+
+  it('lämnar en bortfiltrerad rad åt huvudmallen', () => {
+    const filtrerad = { ...frame, view: Uint32Array.from([0, 1]) }
+    const m = sql()
+    expect(korMallar(filtrerad, 1, m)).toBe("('bosse')")
+    // Rad 3 ligger inte i vyn alls och är därför varken första eller sista.
+    expect(korMallar(filtrerad, 3, m)).toBe("('david'),")
+  })
+
+  it('låter sista vinna när vyn är en enda rad', () => {
+    const en = { ...frame, view: Uint32Array.from([0]) }
+    const m = mallar('mitten', 'först', 'sist')
+    expect(korMallar(en, 0, m)).toBe('sist')
+  })
+
+  it('väljer huvudmallen när inga undantag är satta', () => {
+    const m = mallar('{Användarnamn}', null, null)
+    expect(valjMall(frame, 0, m)).toBe(m.delar)
+    expect(valjMall(frame, 3, m)).toBe(m.delar)
+  })
+
+  it('rör inte raderna emellan när bara första raden har undantag', () => {
+    const m = mallar('- {Användarnamn}', '{Användarnamn}:', null)
+    expect(korMallar(frame, 0, m)).toBe('anna:')
+    expect(korMallar(frame, 1, m)).toBe('- bosse')
+    expect(korMallar(frame, 3, m)).toBe('- david')
   })
 })

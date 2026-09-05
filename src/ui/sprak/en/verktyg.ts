@@ -201,10 +201,19 @@ export const VERKTYG: Record<string, string> = {
   'Delade ”{0}” i {1} kolumner': 'Split “{0}” into {1} columns',
 
 
-  /* ---------- Slå ihop kolumner ---------- */
-  'Slå ihop kolumner': 'Merge columns',
+  /* ---------- Bygg kolumn ur mall ---------- */
+  'Bygg kolumn ur mall': 'Build column from template',
+  Undantag: 'Exceptions',
+  'Första raden ska se annorlunda ut': 'The first row should look different',
+  'Sista raden ska se annorlunda ut': 'The last row should look different',
+  'Mall för första raden': 'Template for the first row',
+  'Mall för sista raden': 'Template for the last row',
+  'Första raden': 'First row',
+  'Sista raden': 'Last row',
+  'Så blir det': 'How it comes out',
+  'Första och sista raden är de du ser nu. Sorterar eller filtrerar du om behöver kolumnen byggas om.':
+    'The first and last rows are the ones you see now. Sort or filter differently and the column needs rebuilding.',
   Sammanslagen: 'Merged',
-  'Slog ihop till ”{0}”': 'Merged into “{0}”',
   Mall: 'Template',
   'Skriv {0} där ett värde ska in. Allt annat kommer med som det står.':
     'Write {0} where a value should go. Everything else comes along as written.',
@@ -422,7 +431,7 @@ export const VERKTYG: Record<string, string> = {
   'Telefon…': 'Phone numbers…',
   'E-post → namn…': 'Email → name…',
   'Dela kolumnen…': 'Split the column…',
-  'Slå ihop kolumner…': 'Merge columns…',
+  'Bygg kolumn ur mall…': 'Build column from template…',
   'Räkna…': 'Calculate…',
   'Sök och ersätt…': 'Find and replace…',
   'Trimma blanksteg': 'Trim whitespace',

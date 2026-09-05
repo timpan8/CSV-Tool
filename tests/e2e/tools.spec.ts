@@ -104,11 +104,11 @@ test('varnar när ett värde delas i fler delar än det finns kolumner', async (
   await expect(spokceller(page).nth(2)).toHaveText('se')
 })
 
-/* ---------- Slå ihop ---------- */
+/* ---------- Bygg kolumn ur mall ---------- */
 
 test('slår ihop kolumner efter en mall', async ({ page }) => {
   await oppnaExempel(page)
-  await oppna(page, 'Namn', 'Slå ihop kolumner…')
+  await oppna(page, 'Namn', 'Bygg kolumn ur mall…')
 
   const mallfalt = page.locator('.verktyg .falt', { hasText: 'Mall' }).locator('input').first()
   await mallfalt.fill('{Namn}, {Ort}')
@@ -120,9 +120,36 @@ test('slår ihop kolumner efter en mall', async ({ page }) => {
   await expect(cell(page, 'Anna Karlsson, Malmö').first()).toBeVisible()
 })
 
+test('lägger en SQL-struktur runt värdena och utelämnar kommatecknet sist', async ({ page }) => {
+  await oppnaExempel(page)
+  await oppna(page, 'Namn', 'Bygg kolumn ur mall…')
+
+  const mallfalt = page.locator('.verktyg .falt', { hasText: 'Mall' }).locator('input').first()
+  await mallfalt.fill("('{Namn}'),")
+
+  await page.getByRole('checkbox', { name: 'Sista raden ska se annorlunda ut' }).check()
+  // Undantaget börjar som en kopia av huvudmallen, så bara slutet ändras.
+  const sistafalt = page.getByRole('textbox', { name: 'Mall för sista raden' })
+  await expect(sistafalt).toHaveValue("('{Namn}'),")
+  await sistafalt.fill("('{Namn}')")
+
+  // Rutan visar första och sista raden ur filen, inte bara toppen — annars
+  // hade undantaget krävt att man scrollade till botten för att se det.
+  const prov = page.locator('.verktyg .falt', { hasText: 'Så blir det' })
+  await expect(prov).toContainText("('Anna Karlsson'),")
+  await expect(prov).toContainText("('Greta Öhrn')")
+
+  await page.getByRole('button', { name: 'Skapa kolumnen' }).click()
+  await expect(cell(page, "('Anna Karlsson'),").first()).toBeVisible()
+
+  // Sista radens värde saknar kommatecknet, och bara den.
+  await expect(cell(page, "('Greta Öhrn')")).toHaveCount(1)
+  await expect(cell(page, "('Greta Öhrn'),")).toHaveCount(0)
+})
+
 test('vägrar skapa kolumnen när mallen pekar på en kolumn som inte finns', async ({ page }) => {
   await oppnaExempel(page)
-  await oppna(page, 'Namn', 'Slå ihop kolumner…')
+  await oppna(page, 'Namn', 'Bygg kolumn ur mall…')
 
   const mallfalt = page.locator('.verktyg .falt', { hasText: 'Mall' }).locator('input').first()
   await mallfalt.fill('{Namn} {Stad}')

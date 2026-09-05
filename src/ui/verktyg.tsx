@@ -35,7 +35,7 @@ export const VERKTYG: Verktygspost[] = [
   // fil-sammanslagningen (SlaIhop-vyn). Ingen kollision i drift — paletten
   // prefixar verktygen som 'verktyg:slaihop' — och namnet går inte att byta:
   // det persisteras som stegtyp i sparade profiler.
-  { namn: 'slaihop', etikett: 'Slå ihop kolumner…' },
+  { namn: 'slaihop', etikett: 'Bygg kolumn ur mall…' },
   { namn: 'rakna', etikett: 'Räkna…' },
   { namn: 'ersatt', etikett: 'Sök och ersätt…' },
 ]

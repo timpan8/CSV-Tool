@@ -58,7 +58,21 @@ export type Profilsteg =
   | { typ: 'epost'; kolumn: string; falt: Epostfalt; val: Epostval; namn: string | string[] }
   | { typ: 'ersatt'; kolumn: string | string[]; inst: Ersattning }
   | { typ: 'dela'; kolumn: string; delning: Delning; namn: string[] }
-  | { typ: 'mall'; mall: string; namn: string; stadaLuckor: boolean }
+  /**
+   * Mallkolumnen.
+   *
+   * `forsta` och `sista` är valfria undantag för vyns första och sista rad —
+   * `undefined` betyder att alla rader följer `mall`, precis som i varje
+   * profil sparad innan fälten fanns. Därför behövde PROFILVERSION inte höjas.
+   */
+  | {
+      typ: 'mall'
+      mall: string
+      namn: string
+      stadaLuckor: boolean
+      forsta?: string
+      sista?: string
+    }
   /**
    * Beräknad kolumn. Formeln nämner sina kolumner vid namn, precis som
    * mallen, och är därför lika körbar på nästa fil.
@@ -192,7 +206,7 @@ export function beskrivStegDelar(steg: Profilsteg): {
     case 'dela':
       return utan('Dela {0} i {1}', steg.kolumn, steg.namn.join(', '))
     case 'mall':
-      return utan('Slå ihop kolumner till ”{0}”', steg.namn)
+      return utan('Bygg kolumnen ”{0}” ur en mall', steg.namn)
     case 'formel':
       return utan('Räkna ut ”{0}” som {1}', steg.namn, steg.uttryck)
     case 'dopOm':
