@@ -6,21 +6,20 @@ How to use CSV-verkstan, one tool at a time. Each section says what the tool doe
 
 ## Contents
 
-**[Getting started](#getting-started)** · [What the screen looks like](#what-the-screen-looks-like)
+| Area | Sections |
+| --- | --- |
+| **[1. Getting started](#getting-started)** | [What the screen looks like](#what-the-screen-looks-like) |
+| **[2. Opening and exporting](#opening-and-exporting)** | [Open a file](#open-a-file) · [Export](#export) · [Paste as a new file](#paste-as-a-new-file) |
+| **[3. The table](#the-table)** | [Sort](#sort) · [Filter](#filter) · [Duplicates](#duplicates) · [Search](#search) · [Undo and redo](#undo-and-redo) |
+| **[4. Cleaning and rewriting](#cleaning-and-rewriting)** | [Quick text cleanups](#quick-text-cleanups) · [Dates](#dates) · [Numbers](#numbers) · [Phone numbers](#phone-numbers) · [Email to name](#email-to-name) · [Split a column](#split-a-column) · [Merge columns](#merge-columns) · [Calculate](#calculate) · [Find and replace](#find-and-replace) |
+| **[5. Summarising and analysing](#summarising-and-analysing)** | [Group and summarise](#group-and-summarise) · [Pivot](#pivot) · [Column overview](#column-overview) · [The column inspector](#the-column-inspector) |
+| **[6. Multiple files](#multiple-files)** | [Merge two files](#merge-two-files) · [The matching workbench](#the-matching-workbench) · [Combine files](#combine-files) · [Fill a template with data](#fill-a-template-with-data) |
+| **[7. Keeping your work](#keeping-your-work)** | [Profiles](#profiles) · [Your tabs come back](#your-tabs-come-back) · [Start over](#start-over) |
+| **[8. Shortcuts and settings](#shortcuts-and-settings)** | [The command palette](#the-command-palette) · [Keyboard](#keyboard) · [Language, theme and toolbar](#language-theme-and-toolbar) |
 
-**[Opening and exporting](#opening-and-exporting)** · [Open a file](#open-a-file) · [Export](#export) · [Paste as a new file](#paste-as-a-new-file)
+> The guide is also available as a **page** — sidebar, search box, Swedish/English switch and screenshots that enlarge on click. It is published alongside the app at `…/guide/`, and after a clone `docs/guide.html` opens straight from disk.
 
-**[The table](#the-table)** · [Sort](#sort) · [Filter](#filter) · [Duplicates](#duplicates) · [Search](#search) · [Undo and redo](#undo-and-redo)
-
-**[Cleaning and rewriting](#cleaning-and-rewriting)** · [Quick text cleanups](#quick-text-cleanups) · [Dates](#dates) · [Numbers](#numbers) · [Phone numbers](#phone-numbers) · [Email to name](#email-to-name) · [Split a column](#split-a-column) · [Merge columns](#merge-columns) · [Calculate](#calculate) · [Find and replace](#find-and-replace)
-
-**[Summarising and analysing](#summarising-and-analysing)** · [Group and summarise](#group-and-summarise) · [Pivot](#pivot) · [Column overview](#column-overview) · [The column inspector](#the-column-inspector)
-
-**[Multiple files](#multiple-files)** · [Merge two files](#merge-two-files) · [The matching workbench](#the-matching-workbench) · [Combine files](#combine-files) · [Fill a template with data](#fill-a-template-with-data)
-
-**[Keeping your work](#keeping-your-work)** · [Profiles](#profiles) · [Your tabs come back](#your-tabs-come-back) · [Start over](#start-over)
-
-**[Shortcuts and settings](#shortcuts-and-settings)** · [The command palette](#the-command-palette) · [Keyboard](#keyboard) · [Language, theme and toolbar](#language-theme-and-toolbar)
+> **New here?** Read [Getting started](#getting-started) and [What the screen looks like](#what-the-screen-looks-like), then the section that answers your task. The guide is made to be looked things up in, not read front to back.
 
 > The interface switches between Swedish and English with `SV | EN` in the top-right corner. **Only the labels change language, never what the tool does:** sorting still follows Swedish rules (å ä ö after z), numbers are still written `1 240,50` and the date tool still reads `augusti`. The screenshots below are from the English interface.
 
