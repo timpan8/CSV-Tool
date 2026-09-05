@@ -1,5 +1,6 @@
 /**
- * Dialogerna och sidopanelerna: import, export, gruppera, profiler, kolumnöversikten, inspektören och kolumnpanelen.
+ * Dialogerna, pivoten och sidopanelerna: import, export, gruppera, pivoten,
+ * profiler, kolumnöversikten, inspektören och kolumnpanelen.
  *
  * Nyckeln är den svenska texten — se `sprak.ts`. En mening som saknas här
  * står kvar på svenska i gränssnittet.
@@ -298,4 +299,50 @@ export const DIALOGER: Record<string, string> = {
     'The suggestions come from what the columns contain, not from their type. One click opens the tool on the right column.',
   'Stäng översikten': 'Close the overview',
 
+
+  /* ---------- Pivotvyn ---------- */
+  Korstabell: 'Cross table',
+  'Två håll samtidigt: en dimension som rader, en som kolumner.':
+    'Two directions at once: one dimension as rows, one as columns.',
+  Nivålista: 'Level list',
+  'Ett håll i flera nivåer, med delsummor som går att fälla ihop.':
+    'One direction in several levels, with subtotals you can collapse.',
+  'Pivot…': 'Pivot table…',
+  'Gruppera åt två håll i en egen vy. Datat rörs inte.':
+    'Group in two directions in a view of its own. The data is left alone.',
+  'Korstabell eller nivålista i en egen vy: gruppera åt två håll och se summorna direkt. Datat rörs inte.':
+    'A cross table or a level list in a view of its own: group in two directions and see the totals at once. The data is left alone.',
+  Nivåer: 'Levels',
+  Mätvärden: 'Measures',
+  '＋ Lägg till mätvärde': '＋ Add measure',
+  'Ta bort mätvärdet': 'Remove the measure',
+  ingen: 'none',
+  'Byt plats på rader och kolumner': 'Swap rows and columns',
+  '% av rad': '% of row',
+  'Cellens del av radens Totalt.': "The cell's share of the row's Total.",
+  '% av kolumn': '% of column',
+  'Cellens del av kolumnens Totalt.': "The cell's share of the column's Total.",
+  'Ta med rader utan värde': 'Include rows with no value',
+  'Bara de {0} som visas nu': 'Only the {0} shown right now',
+  Totalt: 'Total',
+  Övriga: 'Other',
+  '{0} värden': '{0} values',
+  'Sortera raderna efter {0}': 'Sort the rows by {0}',
+  'Visa eller dölj raderna under {0}': 'Show or hide the rows under {0}',
+  'Välj en kolumn att dela upp på, så räknar pivoten resten.':
+    'Pick a column to break the data down by, and the pivot works out the rest.',
+  '{0} utan värde står utanför': '{0} with no value are left out',
+  'Andel går bara att räkna på mätvärden som kan läggas ihop. Ett snitt är ingen del av ett annat snitt, och unika värden i en cell är inga delar av de unika i raden.':
+    'A share can only be worked out for measures that add up. One average is no part of another, and the distinct values in a cell are no part of the distinct values in the row.',
+  'Kolumnen har fler värden än som får plats. De {0} vanligaste har egna spalter, resten ligger i Övriga — summorna stämmer fortfarande.':
+    'The column has more values than fit. The {0} most common get columns of their own, the rest sit in Other — the totals still add up.',
+  '{0} radvärden fick inte plats och ligger i Övriga.':
+    '{0} row values did not fit and sit in Other.',
+  'Tabellen visar de första {0} raderna. Gör en flik för att få med allihop.':
+    'The table shows the first {0} rows. Make a tab to get all of them.',
+  '{0} av {1} värden gick att läsa som tal. Resten räknas inte med.':
+    '{0} of {1} values could be read as numbers. The rest are left out.',
+  Spalter: 'Columns shown',
+  'Gör till ny flik': 'Make a new tab',
+  'Stäng pivoten': 'Close the pivot',
 }

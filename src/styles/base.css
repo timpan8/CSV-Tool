@@ -304,6 +304,8 @@ input[type='radio'] {
 .app > .slaihop,
 .app > .kombinera,
 .app > .verkstad,
+.app > .oversikt,
+.app > .pivot,
 .app > .tomt {
   flex: 1 1 0;
   min-height: 0;

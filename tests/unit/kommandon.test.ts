@@ -26,6 +26,7 @@ function handlare(): { h: Kommandohandlare; korda: string[] } {
     kombinera: r('kombinera'),
     mall: r('mall'),
     sammanfatta: r('sammanfatta'),
+    pivot: r('pivot'),
     oversikt: r('oversikt'),
     visaAllaRader: r('visaAllaRader'),
     stada: (id) => korda.push(`stada:${id}`),

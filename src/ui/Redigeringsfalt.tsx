@@ -7,6 +7,7 @@ import {
   IkonFilter,
   IkonFleraFiler,
   IkonGorOm,
+  IkonPivot,
   IkonSammanfatta,
   IkonSortera,
   IkonStada,
@@ -41,6 +42,7 @@ export interface RedigeringsfaltProps {
   stada: (x: number, y: number) => void
   fleraFiler: (x: number, y: number) => void
   sammanfatta: () => void
+  pivot: () => void
 }
 
 export function Redigeringsfalt(props: RedigeringsfaltProps) {
@@ -116,6 +118,14 @@ export function Redigeringsfalt(props: RedigeringsfaltProps) {
           etikett={t('Sammanfatta…')}
           title={t('En rad per grupp: summa Belopp per Ort, antal ordrar per kund. Resultatet blir en ny flik.')}
           onClick={props.sammanfatta}
+        />
+        <Verktygsknapp
+          ikon={<IkonPivot />}
+          etikett="Pivot"
+          title={t(
+            'Korstabell eller nivålista i en egen vy: gruppera åt två håll och se summorna direkt. Datat rörs inte.',
+          )}
+          onClick={props.pivot}
         />
         <Verktygsknapp
           ikon={<IkonFleraFiler />}

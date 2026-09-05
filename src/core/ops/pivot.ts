@@ -1,0 +1,818 @@
+import type { Column, ColumnId, Frame } from '../types.js'
+import { createColumn, intern } from '../frame/column.js'
+import { findColumn, identityView, newFrameId, uniqueColumnName } from '../frame/frame.js'
+import { inferAllTypes } from '../infer.js'
+import { kolumnrang, talnycklar, TOM_RANG } from '../frame/rank.js'
+import { byggNormaliserare, gruppIder, type Normalisering } from './duplicates.js'
+import { sorteraNiva } from './sort.js'
+import { skrivTal, type Talformat } from './numbers.js'
+import {
+  BERAKNINGAR,
+  berakningsnamn,
+  type Berakning,
+  type Berakningspost,
+  type Berakningstyp,
+  type Lasbarhet,
+} from './gruppera.js'
+
+/**
+ * Pivoten.
+ *
+ * Grupperingen svarar *en rad per grupp*. Pivoten svarar på samma fråga ställd
+ * åt två håll samtidigt: summa Belopp per Ort **och** per Status, i en matris
+ * där man ser mönstret utan att läsa en enda siffra i taget. Det är skillnaden
+ * mellan en lista och en överblick.
+ *
+ * **Samma begrepp om vad en grupp är.** Varje dimension normaliseras med
+ * `gruppIder` ur dubblettvyn, precis som `gruppera()` gör. Att dela den
+ * funktionen är hela poängen: *hitta dubbletter i Ort*, *summera per Ort* och
+ * *pivotera på Ort* måste vara eniga om vad som räknas som samma ort, annars
+ * är det tre verktyg som ger tre svar på samma fråga.
+ *
+ * **Men pivoten räknar på hela filen som förval.** Grupperingen lovar i sin
+ * dokumentation att den går på det man ser, och det löftet rörs inte här —
+ * pivoten har en egen radkälla och ett eget val. En överblick som tyst krympt
+ * för att ett filter låg kvar är sämre än ingen överblick alls, så valet står
+ * som en kryssruta i vyn i stället för att gissas.
+ *
+ * **Totalt räknas om, aldrig ihop.** Varje cell, varje radsumma, varje
+ * kolumnsumma och totalen räknas av samma funktion över ett större eller
+ * mindre band av rader. En total som summerade cellerna hade svarat fel på
+ * snitt (ett snitt av snitt är inget snitt) och på unika (samma kund i två
+ * orter är en kund, inte två). Det är den enda regel i den här filen som är
+ * värd att kunna utantill.
+ */
+
+/**
+ * Mätvärdena en pivot kan visa: sju av grupperingens tio.
+ *
+ * *Första värdet*, *Sista värdet* och *Lista värdena* saknas, och skälet är
+ * delsummorna. De tre svaren beror på radernas ordning, och en delsummerad
+ * rad räknas över ett band där flera kolumners rader ligger om varandra —
+ * ”första värdet i Malmö” hade blivit det första i den ordning pivoten råkade
+ * sortera, inte i filen. De sju som är kvar ger samma svar oavsett hur raderna
+ * ligger, och det är just det som gör att en delsumma kan räknas om från
+ * grunden. Vill man ha de tre finns de kvar i *Sammanfatta*, där radordningen
+ * är väldefinierad.
+ */
+export const PIVOTBERAKNINGAR: readonly Berakningstyp[] = [
+  'antal',
+  'summa',
+  'snitt',
+  'minsta',
+  'storsta',
+  'ifyllda',
+  'unika',
+]
+
+export function pivotberakningar(): Berakningspost[] {
+  return BERAKNINGAR.filter((b) => PIVOTBERAKNINGAR.includes(b.typ))
+}
+
+/**
+ * Mätvärden som går att lägga ihop — och därför att visa som andel.
+ *
+ * *Andel av raden* betyder ”hur stor del av radens helhet”. Det är en fråga
+ * med svar bara när delarna summerar till helheten. Snittet i Malmö är ingen
+ * del av snittet i landet, och antalet unika kunder i en cell är ingen del av
+ * antalet unika i raden. Vyn stänger av procentvalet med det skälet skrivet i
+ * klartext i stället för att visa ett tal som ser rimligt ut.
+ */
+export const ADDITIVA: readonly Berakningstyp[] = ['antal', 'summa', 'ifyllda']
+
+export function arAdditiv(matvarde: Berakning): boolean {
+  return ADDITIVA.includes(matvarde.typ)
+}
+
+/** Hur många värden en dimension visar innan resten viks in i Övriga. */
+export const RADTAK = 200
+export const KOLUMNTAK = 25
+export const KOLUMNTAK_VAL = [10, 25, 50] as const
+
+/**
+ * Tak för antalet utskrivna rader, delsummor inräknade.
+ *
+ * Taken per dimension räcker för en dimension men inte för tre: tre nivåer med
+ * tvåhundra värden var kan i teorin ge åtta miljoner rader. Det här är den
+ * sista spärren, och den räknas — foten säger hur många rader som inte fick
+ * plats, och fliken får dem allihop.
+ */
+export const MAXRADER = 2000
+
+/**
+ * Id för ett mätvärde.
+ *
+ * En löpande räknare, inte en tidsstämpel: id:t är bara en nyckel för listan
+ * och för `key=` i vyn, och ett id som beror på klockan gör två annars lika
+ * körningar olika. Samma val som filterreglerna gör.
+ */
+let matvardesraknare = 0
+export function nyttMatvardeId(): string {
+  matvardesraknare += 1
+  return `m${matvardesraknare.toString(36)}`
+}
+
+export type Underlag = 'hela' | 'vyn'
+
+export interface Pivotplan {
+  /** Raddimensionerna, utifrån och in. Tom lista ger bara Totalt-raden. */
+  rader: ColumnId[]
+  /** Kolumndimensionen. `null` ger en lista med bara Totalt-kolumnen. */
+  kolumn: ColumnId | null
+  /** Ett eller flera mätvärden, sida vid sida under varje kolumnvärde. */
+  matvarden: readonly Berakning[]
+  strunta: Normalisering
+  /** Ge tomma värden en egen rubrik i stället för att lämna raderna utanför. */
+  tommaMed: boolean
+  underlag: Underlag
+  radtak: number
+  kolumntak: number
+  format: Talformat
+  decimaler: number | null
+}
+
+export interface Pivotrubrik {
+  /** Värdet så som det står i filen — gruppens första rad, som i grupperingen. */
+  etikett: string
+  /** Källrader bakom rubriken. */
+  rader: number
+  /** Samlingsposten som bär det som inte fick plats under taket. */
+  ovriga: boolean
+  /** Rubriken för tomt värde, när `tommaMed` är på. */
+  tom: boolean
+  /** Hur många värden som viks ihop här. Bara satt på Övriga. */
+  varden: number
+}
+
+export interface Pivotrad {
+  /** Ett värde per raddimension, tomma strängar under den nivå raden gäller. */
+  etiketter: string[]
+  /** 0 är översta nivån. Lövrader har `niva === plan.rader.length - 1`. */
+  niva: number
+  /** Stigen genom trädet, `"3/7"`. Nyckel för hopfällning och för `key=`. */
+  stig: string
+  /** Källrader bakom raden. */
+  antal: number
+  ovriga: boolean
+  tom: boolean
+}
+
+export interface Pivotresultat {
+  /** Kolumndimensionens värden. Totalt-kolumnen ligger sist i matrisen. */
+  kolumner: Pivotrubrik[]
+  /** Raderna med delsummor. Totalt-raden ligger sist i matrisen. */
+  rader: Pivotrad[]
+  /** `kolumner.length + 1` — den sista är Totalt. */
+  bredd: number
+  /** `rader.length + 1` — den sista är Totalt. */
+  hojd: number
+  /**
+   * Cellernas text, `null` för tom cell.
+   *
+   * Index: `(rad * bredd + kolumn) * matvarden.length + matvarde`.
+   */
+  text: (string | null)[]
+  /** Samma index som `text`. `NaN` när cellen saknar ett tal att räkna med. */
+  tal: Float64Array
+  /** Källrader som kom med. */
+  antalKallrader: number
+  /** Rader som lämnades utanför för att någon dimension var tom. */
+  utanNyckel: number
+  doldaRadvarden: number
+  doldaKolumnvarden: number
+  /** Sant när taket slog i och utskriften avbröts. */
+  kapat: boolean
+  lasbarhet: Lasbarhet[]
+}
+
+/** Raden ligger utanför pivoten — någon dimension saknar värde. */
+const UTANFOR = 0xffffffff
+
+interface Dimension {
+  col: Column
+  /** Visningsindex per fysisk rad, eller `UTANFOR`. */
+  hink: Uint32Array
+  rubriker: Pivotrubrik[]
+  dolda: number
+}
+
+/**
+ * En dimensions rubriker, i den ordning de ska visas.
+ *
+ * Två olika frågor besvaras med två olika ordningar, och det är avsiktligt.
+ * **Vilka värden som får plats** avgörs av storleken: det sällsynta är det man
+ * kan avvara. **I vilken ordning de står** avgörs av kolumnens egen rang —
+ * samma som sorteringen använder — så att månader hamnar i månadsordning och
+ * tal i talordning i stället för i popularitetsordning. Att välja på det ena
+ * och visa efter det andra är det som gör en kapad tabell läsbar.
+ */
+function byggDimension(
+  col: Column,
+  radkalla: Uint32Array,
+  normalisera: (v: string) => string,
+  tak: number,
+  tommaMed: boolean,
+): Dimension {
+  const ider = gruppIder(col, normalisera)
+  let maxId = 0
+  for (let kod = 1; kod < ider.length; kod++) {
+    const id = ider[kod]!
+    if (id > maxId) maxId = id
+  }
+
+  const antalPerId = new Uint32Array(maxId + 1)
+  const forstaKod = new Uint32Array(maxId + 1)
+  for (let i = 0; i < radkalla.length; i++) {
+    const kod = col.codes[radkalla[i]!]!
+    const id = ider[kod]!
+    antalPerId[id]! += 1
+    // Etiketten är gruppens första rad, inte det normaliserade värdet. Har man
+    // struntat i skiftläget står det ”Malmö” om det var stavningen som kom
+    // först — i alla fall ett av de värden som faktiskt fanns i filen.
+    if (id !== 0 && forstaKod[id] === 0) forstaKod[id] = kod
+  }
+
+  const { rang } = kolumnrang(col)
+  const minRang = new Float64Array(maxId + 1).fill(Infinity)
+  for (let kod = 1; kod < ider.length; kod++) {
+    const id = ider[kod]!
+    if (id === 0) continue
+    const r = rang[kod]!
+    if (r !== TOM_RANG && r < minRang[id]!) minRang[id] = r
+  }
+
+  const narvarande: number[] = []
+  for (let id = 1; id <= maxId; id++) if (antalPerId[id]! > 0) narvarande.push(id)
+
+  const behallna = [...narvarande]
+    .sort((a, b) => antalPerId[b]! - antalPerId[a]! || a - b)
+    .slice(0, Math.max(1, tak))
+  const dolda = narvarande.length - behallna.length
+
+  // Otolkbara värden saknar rang och hamnar sist, som i sorteringen.
+  const efterRang = (a: number, b: number): number => {
+    const ra = minRang[a]!
+    const rb = minRang[b]!
+    if (ra !== rb) {
+      if (!Number.isFinite(ra)) return 1
+      if (!Number.isFinite(rb)) return -1
+      return ra - rb
+    }
+    return antalPerId[b]! - antalPerId[a]! || a - b
+  }
+  behallna.sort(efterRang)
+
+  const rubriker: Pivotrubrik[] = []
+  const idTillIndex = new Int32Array(maxId + 1).fill(-1)
+  for (const id of behallna) {
+    idTillIndex[id] = rubriker.length
+    rubriker.push({
+      etikett: col.dict[forstaKod[id]!] ?? '',
+      rader: antalPerId[id]!,
+      ovriga: false,
+      tom: false,
+      varden: 0,
+    })
+  }
+
+  let tomIndex = -1
+  if (tommaMed && antalPerId[0]! > 0) {
+    tomIndex = rubriker.length
+    rubriker.push({ etikett: '', rader: antalPerId[0]!, ovriga: false, tom: true, varden: 0 })
+  }
+
+  let ovrigaIndex = -1
+  if (dolda > 0) {
+    let rader = 0
+    for (const id of narvarande) if (idTillIndex[id] === -1) rader += antalPerId[id]!
+    ovrigaIndex = rubriker.length
+    rubriker.push({ etikett: '', rader, ovriga: true, tom: false, varden: dolda })
+  }
+
+  const hink = new Uint32Array(col.codes.length).fill(UTANFOR)
+  for (let i = 0; i < radkalla.length; i++) {
+    const r = radkalla[i]!
+    const id = ider[col.codes[r]!]!
+    if (id === 0) {
+      if (tomIndex >= 0) hink[r] = tomIndex
+      continue
+    }
+    const plats = idTillIndex[id]!
+    hink[r] = plats >= 0 ? plats : ovrigaIndex >= 0 ? ovrigaIndex : UTANFOR
+  }
+
+  return { col, hink, rubriker, dolda }
+}
+
+export function pivotera(frame: Frame, plan: Pivotplan): Pivotresultat {
+  const normalisera = byggNormaliserare(plan.strunta)
+  const radkalla = plan.underlag === 'vyn' ? frame.view : identityView(frame.rowCount)
+
+  const raddim = plan.rader
+    .map((id) => findColumn(frame, id))
+    .filter((c): c is Column => c !== undefined)
+    .map((col) => byggDimension(col, radkalla, normalisera, plan.radtak, plan.tommaMed))
+
+  const kolCol = plan.kolumn === null ? undefined : findColumn(frame, plan.kolumn)
+  const koldim = kolCol
+    ? byggDimension(kolCol, radkalla, normalisera, plan.kolumntak, plan.tommaMed)
+    : null
+
+  const kolumner = koldim ? koldim.rubriker : []
+  const bredd = kolumner.length + 1
+  const totalKol = bredd - 1
+  const steg = Math.max(1, plan.matvarden.length)
+
+  /*
+   * Rader som saknar värde i någon dimension lämnas utanför.
+   *
+   * Grupperingen har den mildare regeln — den lämnar bara ut raden när *hela*
+   * nyckeln är tom — men den skriver också ut nyckeln som en kolumn, där ett
+   * tomt värde blir en tom cell man ser. En pivot har ingen sådan plats: en
+   * rad utan ort har ingen radrubrik att stå på. Antingen får tomt vara ett
+   * eget värde (`tommaMed`) eller så räknas raden inte, och då står det i
+   * foten hur många det gällde.
+   */
+  const kvar: number[] = []
+  let utanNyckel = 0
+  for (let i = 0; i < radkalla.length; i++) {
+    const r = radkalla[i]!
+    let inne = koldim === null || koldim.hink[r]! !== UTANFOR
+    if (inne) {
+      for (const d of raddim) {
+        if (d.hink[r]! === UTANFOR) {
+          inne = false
+          break
+        }
+      }
+    }
+    if (inne) kvar.push(r)
+    else utanNyckel += 1
+  }
+
+  /*
+   * Sorteringen: kolumnhinken först, sedan raddimensionerna bakifrån.
+   *
+   * Räknesorteringen är stabil, så den sist körda nivån blir den yttersta.
+   * Efter svepen ligger raderna grupperade på första raddimensionen, inom den
+   * på den andra, och innerst på kolumnvärdet — vilket är precis den ordning
+   * som gör varje (radband × kolumn) till ett sammanhängande intervall.
+   */
+  let rader: Uint32Array = Uint32Array.from(kvar)
+  if (koldim) rader = sorteraNiva(rader, koldim.hink, koldim.rubriker.length)
+  for (let i = raddim.length - 1; i >= 0; i--) {
+    rader = sorteraNiva(rader, raddim[i]!.hink, raddim[i]!.rubriker.length)
+  }
+
+  const radlista: Pivotrad[] = []
+  const celltext: (string | null)[] = []
+  const celltal: number[] = []
+  const lasbarhet: Lasbarhet[] = plan.matvarden.map((m) => ({ id: m.id, lasta: 0, ifyllda: 0 }))
+
+  // Ackumulatorer per kolumn, återanvända över alla rader och mätvärden.
+  const summa = new Float64Array(bredd)
+  const raknade = new Uint32Array(bredd)
+  const ifylldaPerKol = new Uint32Array(bredd)
+  const bastKod = new Uint32Array(bredd)
+  const bastRang = new Float64Array(bredd)
+
+  /*
+   * Stämpelfälten för `unika`, ett par per mätvärde och hela körningen igenom.
+   *
+   * Fältet nollställs genom att stämpeln räknas upp, aldrig genom att fältet
+   * skrivs om — en ny mängd per cell hade kostat cellantalet gånger ordboken.
+   * Två fält behövs eftersom en kod ska kunna vara sedd i sin kolumn och ändå
+   * oräknad i totalen: samma kund i Malmö och i Lund är en kund, inte två.
+   */
+  const seddKol: (Uint32Array | null)[] = []
+  const seddTot: (Uint32Array | null)[] = []
+  for (const m of plan.matvarden) {
+    const kall = m.typ === 'unika' && m.colId !== null ? findColumn(frame, m.colId) : undefined
+    seddKol.push(kall ? new Uint32Array(kall.dict.length) : null)
+    seddTot.push(kall ? new Uint32Array(kall.dict.length) : null)
+  }
+  let stampel = 0
+
+  const skriv = (n: number): string => skrivTal(n, plan.format, plan.decimaler)
+
+  /**
+   * Ett mätvärdes celler för ett band av rader — inklusive Totalt-kolumnen.
+   *
+   * Totalt-kolumnen räknas i samma svep som de andra, inte som en summa av
+   * dem. För `snitt` och `unika` är det skillnaden mellan rätt och fel svar.
+   *
+   * `bokfor` är sann bara för Totalt-raden, som täcker varje källrad exakt en
+   * gång. Läsbarheten — ”3 av 16 gick att läsa som tal” — är ett påstående om
+   * filen, inte om en cell, och skulle bli fel så många gånger om som det
+   * finns rader om varje band fick räkna upp den.
+   */
+  const raknaBand = (
+    mIndex: number,
+    start: number,
+    slut: number,
+    bokfor: boolean,
+    ut: (kol: number, text: string | null, tal: number) => void,
+  ): void => {
+    const m = plan.matvarden[mIndex]!
+    const kall = m.colId === null ? undefined : findColumn(frame, m.colId)
+    const las = lasbarhet[mIndex]!
+
+    summa.fill(0)
+    raknade.fill(0)
+    ifylldaPerKol.fill(0)
+
+    if (m.typ === 'antal') {
+      for (let k = start; k < slut; k++) {
+        const kol = koldim ? koldim.hink[rader[k]!]! : totalKol
+        raknade[kol]! += 1
+        if (kol !== totalKol) raknade[totalKol]! += 1
+      }
+      for (let kol = 0; kol < bredd; kol++) {
+        const n = raknade[kol]!
+        ut(kol, n === 0 ? null : skriv(n), n === 0 ? Number.NaN : n)
+      }
+      return
+    }
+
+    // Ett mätvärde vars kolumn tagits bort ger tomma celler i stället för att
+    // kasta — samma val som sorteringen gör för en borttagen nivå.
+    if (!kall) {
+      for (let kol = 0; kol < bredd; kol++) ut(kol, null, Number.NaN)
+      return
+    }
+
+    switch (m.typ) {
+      case 'summa':
+      case 'snitt': {
+        const tal = talnycklar(kall)
+        for (let k = start; k < slut; k++) {
+          const rad = rader[k]!
+          const kod = kall.codes[rad]!
+          if (kod === 0) continue
+          const kol = koldim ? koldim.hink[rad]! : totalKol
+          ifylldaPerKol[kol]! += 1
+          if (kol !== totalKol) ifylldaPerKol[totalKol]! += 1
+          const v = tal[kod]!
+          if (Number.isNaN(v)) continue
+          summa[kol]! += v
+          raknade[kol]! += 1
+          if (kol !== totalKol) {
+            summa[totalKol]! += v
+            raknade[totalKol]! += 1
+          }
+        }
+        for (let kol = 0; kol < bredd; kol++) {
+          const n = raknade[kol]!
+          // Noll läsbara värden ger tom cell, aldrig 0. En nolla man inte kan
+          // skilja från ”inget att räkna på” är det fel som inte syns förrän
+          // någon jämför mot facit.
+          if (n === 0) {
+            ut(kol, null, Number.NaN)
+            continue
+          }
+          const v = m.typ === 'summa' ? summa[kol]! : summa[kol]! / n
+          ut(kol, skriv(v), v)
+        }
+        break
+      }
+
+      case 'minsta':
+      case 'storsta': {
+        const { rang } = kolumnrang(kall)
+        const talvarden = kall.type === 'number' ? talnycklar(kall) : null
+        const minsta = m.typ === 'minsta'
+        bastKod.fill(0)
+        bastRang.fill(0)
+        const prova = (kol: number, kod: number, rg: number): void => {
+          if (bastKod[kol] === 0 || (minsta ? rg < bastRang[kol]! : rg > bastRang[kol]!)) {
+            bastKod[kol] = kod
+            bastRang[kol] = rg
+          }
+        }
+        for (let k = start; k < slut; k++) {
+          const rad = rader[k]!
+          const kod = kall.codes[rad]!
+          if (kod === 0) continue
+          const kol = koldim ? koldim.hink[rad]! : totalKol
+          ifylldaPerKol[kol]! += 1
+          if (kol !== totalKol) ifylldaPerKol[totalKol]! += 1
+          const rg = rang[kod]!
+          if (rg === TOM_RANG) continue
+          raknade[kol]! += 1
+          prova(kol, kod, rg)
+          if (kol !== totalKol) {
+            raknade[totalKol]! += 1
+            prova(totalKol, kod, rg)
+          }
+        }
+        for (let kol = 0; kol < bredd; kol++) {
+          const kod = bastKod[kol]!
+          if (kod === 0) {
+            ut(kol, null, Number.NaN)
+            continue
+          }
+          // Talet finns bara när värdet går att läsa som tal. Annars sorterar
+          // och räknar vyn inte på cellen, och det är rätt: ett ortnamn är
+          // ingen storhet.
+          ut(kol, kall.dict[kod]!, talvarden ? talvarden[kod]! : Number.NaN)
+        }
+        break
+      }
+
+      case 'ifyllda':
+      case 'unika': {
+        const kolfalt = seddKol[mIndex] ?? null
+        const totfalt = seddTot[mIndex] ?? null
+        const bas = stampel + 1
+        stampel += bredd
+        for (let k = start; k < slut; k++) {
+          const rad = rader[k]!
+          const kod = kall.codes[rad]!
+          if (kod === 0) continue
+          const kol = koldim ? koldim.hink[rad]! : totalKol
+          ifylldaPerKol[kol]! += 1
+          if (kol !== totalKol) ifylldaPerKol[totalKol]! += 1
+          if (kolfalt === null || totfalt === null) {
+            raknade[kol]! += 1
+            if (kol !== totalKol) raknade[totalKol]! += 1
+            continue
+          }
+          if (kolfalt[kod] !== bas + kol) {
+            kolfalt[kod] = bas + kol
+            raknade[kol]! += 1
+          }
+          if (kol !== totalKol && totfalt[kod] !== bas) {
+            totfalt[kod] = bas
+            raknade[totalKol]! += 1
+          }
+        }
+        for (let kol = 0; kol < bredd; kol++) {
+          ut(kol, skriv(raknade[kol]!), raknade[kol]!)
+        }
+        break
+      }
+    }
+
+    if (bokfor) {
+      las.ifyllda = ifylldaPerKol[totalKol]!
+      las.lasta = raknade[totalKol]!
+    }
+  }
+
+  const raknaRad = (start: number, slut: number, bokfor: boolean): void => {
+    for (let kol = 0; kol < bredd; kol++) {
+      for (let m = 0; m < steg; m++) {
+        celltext.push(null)
+        celltal.push(Number.NaN)
+      }
+    }
+    const bas = celltext.length - bredd * steg
+    for (let m = 0; m < plan.matvarden.length; m++) {
+      raknaBand(m, start, slut, bokfor, (kol, text, tal) => {
+        celltext[bas + kol * steg + m] = text
+        celltal[bas + kol * steg + m] = tal
+      })
+    }
+  }
+
+  const sista = raddim.length - 1
+  let kapat = false
+
+  const emitera = (niva: number, start: number, slut: number, stig: number[]): void => {
+    if (radlista.length >= MAXRADER) {
+      kapat = true
+      return
+    }
+    const etiketter: string[] = []
+    for (let n = 0; n < raddim.length; n++) {
+      const rubrik = n <= niva ? raddim[n]!.rubriker[stig[n]!] : undefined
+      etiketter.push(rubrik ? rubrik.etikett : '')
+    }
+    const egen = raddim[niva]!.rubriker[stig[niva]!]!
+    radlista.push({
+      etiketter,
+      niva,
+      stig: stig.join('/'),
+      antal: slut - start,
+      ovriga: egen.ovriga,
+      tom: egen.tom,
+    })
+    raknaRad(start, slut, false)
+
+    if (niva === sista) return
+    const nasta = raddim[niva + 1]!
+    let i = start
+    while (i < slut) {
+      const h = nasta.hink[rader[i]!]!
+      let j = i + 1
+      while (j < slut && nasta.hink[rader[j]!]! === h) j += 1
+      emitera(niva + 1, i, j, [...stig, h])
+      i = j
+    }
+  }
+
+  if (raddim.length > 0) {
+    const forsta = raddim[0]!
+    let i = 0
+    while (i < rader.length) {
+      const h = forsta.hink[rader[i]!]!
+      let j = i + 1
+      while (j < rader.length && forsta.hink[rader[j]!]! === h) j += 1
+      emitera(0, i, j, [h])
+      i = j
+    }
+  }
+
+  // Totalt-raden sist i matrisen, räknad över allt som kom med. Det är också
+  // det enda svep som bokför läsbarheten, eftersom det ser varje rad en gång.
+  raknaRad(0, rader.length, true)
+
+  return {
+    kolumner,
+    rader: radlista,
+    bredd,
+    hojd: radlista.length + 1,
+    text: celltext,
+    tal: Float64Array.from(celltal),
+    antalKallrader: rader.length,
+    utanNyckel,
+    doldaRadvarden: raddim.reduce((s, d) => s + d.dolda, 0),
+    doldaKolumnvarden: koldim?.dolda ?? 0,
+    kapat,
+    lasbarhet,
+  }
+}
+
+/**
+ * En pivot som säger något direkt, utan att man fyllt i ett formulär.
+ *
+ * Kandidaterna är kolumner med mellan två och femtio olika värden — färre än
+ * två säger ingenting, fler än femtio är en identifierare och inte en
+ * kategori. Den med *minst* antal värden blir raddimension, eftersom en kort
+ * tabell är lättare att läsa än en lång, och nästa blir kolumndimension.
+ * Mätvärdet blir antal rader: det behöver ingen kolumn och kan aldrig bli tomt.
+ */
+export function foreslagenPlan(frame: Frame, startkolumn: ColumnId | null = null): Pivotplan {
+  const synliga = frame.columns.filter((c) => !c.hidden)
+  const unika = new Map<ColumnId, number>()
+  for (const col of synliga) {
+    const sedd = new Uint8Array(col.dict.length)
+    let antal = 0
+    for (let i = 0; i < frame.view.length; i++) {
+      const kod = col.codes[frame.view[i]!]!
+      if (kod === 0 || sedd[kod] === 1) continue
+      sedd[kod] = 1
+      antal += 1
+    }
+    unika.set(col.id, antal)
+  }
+
+  /*
+   * Vad som duger som dimension.
+   *
+   * Tre regler, och alla tre kommer av samma sak: en dimension är en
+   * *kategori*, inte en storhet och inte en identifierare.
+   *
+   * **Inga talkolumner.** Ett belopp är något man summerar, inte något man
+   * grupperar på. Fjorton beloppsrubriker i sidled är ingen överblick, och
+   * kolumnen gör mycket mer nytta som mätvärde.
+   *
+   * **Högst femtio värden**, för att femhundra rubriker inte är en överblick.
+   *
+   * **Minst två rader per värde i snitt.** En kolumn där nästan varje rad har
+   * sitt eget värde är en identifierare, och en pivot på ett kundnummer är
+   * exakt lika lång som filen.
+   *
+   * Hittas ingen kategori alls föreslås ingen kolumndimension. En ärlig
+   * lista är bättre än en korstabell byggd på fel kolumn — och det är ett
+   * klick att välja själv.
+   */
+  const kandidater = synliga
+    .filter((c) => {
+      if (c.type === 'number') return false
+      const n = unika.get(c.id) ?? 0
+      return n >= 2 && n <= 50 && n * 2 <= frame.view.length
+    })
+    .sort((a, b) => (unika.get(a.id) ?? 0) - (unika.get(b.id) ?? 0))
+
+  /*
+   * En utpekad kolumn väger tyngre än allt ovan.
+   *
+   * Reglerna finns för att välja åt den som inte har valt. Har man högerklickat
+   * på Ort och bett om en pivot är frågan redan ställd, och ett verktyg som
+   * svarar på en annan fråga än den man ställde är värre än ett som gissar
+   * illa. Därför skickar knappen i verktygsfältet och paletten `null` — där är
+   * ingen kolumn utpekad — och kolumnmenyn skickar sin.
+   */
+  const start = startkolumn === null ? undefined : findColumn(frame, startkolumn)
+  const rad = start ?? kandidater[0] ?? synliga[0]
+  const kolumn = kandidater.find((c) => c.id !== rad?.id)
+
+  return {
+    rader: rad ? [rad.id] : [],
+    kolumn: kolumn?.id ?? null,
+    matvarden: [{ id: nyttMatvardeId(), typ: 'antal', colId: null, namn: '' }],
+    strunta: { skiftlage: false, blanksteg: true, diakriter: false },
+    tommaMed: false,
+    underlag: 'hela',
+    radtak: RADTAK,
+    kolumntak: KOLUMNTAK,
+    format: 'komma',
+    decimaler: null,
+  }
+}
+
+/** Rubriken en pivotkolumn får i en flik. */
+export function kolumnrubrik(rubrik: Pivotrubrik, tomtext: string, ovrigatext: string): string {
+  if (rubrik.ovriga) return ovrigatext
+  if (rubrik.tom) return tomtext
+  return rubrik.etikett
+}
+
+/**
+ * Pivoten som en vanlig flik.
+ *
+ * Bara lövraderna följer med, inte delsummorna, och ingen Totalt-rad. En
+ * summarad i en datatabell är en fälla: nästa gång någon sorterar hamnar den
+ * mitt i materialet, och nästa gång någon summerar räknas den två gånger.
+ * Den som vill ha totalerna har dem i vyn, där de inte kan flytta på sig.
+ */
+export function pivotTillFrame(
+  resultat: Pivotresultat,
+  plan: Pivotplan,
+  frame: Frame,
+  namn: string,
+  texter: { totalt: string; tomt: string; ovriga: string },
+): Frame {
+  const raddim = plan.rader
+    .map((id) => findColumn(frame, id))
+    .filter((c): c is Column => c !== undefined)
+  const sista = raddim.length - 1
+  const lov = resultat.rader
+    .map((rad, i) => ({ rad, i }))
+    .filter(({ rad }) => rad.niva === sista)
+  const antalRader = lov.length
+
+  const kolumner: Column[] = []
+  const tagna: string[] = []
+  const ny = (rubrik: string): Column => {
+    const n = uniqueColumnName(tagna, rubrik)
+    tagna.push(n)
+    return createColumn(n, antalRader)
+  }
+
+  for (let n = 0; n < raddim.length; n++) {
+    const col = ny(raddim[n]!.name)
+    for (let r = 0; r < antalRader; r++) {
+      col.codes[r] = intern(col, lov[r]!.rad.etiketter[n] ?? '')
+    }
+    col.type = raddim[n]!.type
+    col.typeLocked = raddim[n]!.typeLocked
+    kolumner.push(col)
+  }
+
+  const enda = plan.matvarden.length === 1
+  const steg = Math.max(1, plan.matvarden.length)
+  for (let kol = 0; kol < resultat.bredd; kol++) {
+    const rubrik = resultat.kolumner[kol]
+    const kolnamn =
+      rubrik === undefined
+        ? texter.totalt
+        : kolumnrubrik(rubrik, texter.tomt, texter.ovriga)
+    for (let m = 0; m < plan.matvarden.length; m++) {
+      const matnamn = berakningsnamn(plan.matvarden[m]!, frame)
+      const col = ny(enda ? kolnamn : `${kolnamn} · ${matnamn}`)
+      for (let r = 0; r < antalRader; r++) {
+        const bas = (lov[r]!.i * resultat.bredd + kol) * steg + m
+        col.codes[r] = intern(col, resultat.text[bas] ?? '')
+      }
+      kolumner.push(col)
+    }
+  }
+
+  inferAllTypes(kolumner)
+
+  return {
+    id: newFrameId(),
+    name: namn,
+    columns: kolumner,
+    rowCount: antalRader,
+    view: identityView(antalRader),
+    // Radnummer 0 betyder ”fanns inte i filen”, och det stämmer: en pivotrad
+    // är många rader och ingen av dem.
+    sourceRow: new Uint32Array(antalRader),
+    meta: { warnings: [] },
+  }
+}
+
+/** Förslag på namn för fliken pivoten skapar. */
+export function pivotnamn(frame: Frame, plan: Pivotplan): string {
+  const rad = plan.rader
+    .map((id) => findColumn(frame, id)?.name)
+    .filter((n): n is string => n !== undefined)
+  const kol = plan.kolumn === null ? undefined : findColumn(frame, plan.kolumn)?.name
+  if (rad.length === 0 && !kol) return `${frame.name} – pivot`
+  if (!kol) return `${frame.name} per ${rad.join(', ')}`
+  if (rad.length === 0) return `${frame.name} per ${kol}`
+  return `${frame.name} per ${rad.join(', ')} × ${kol}`
+}
