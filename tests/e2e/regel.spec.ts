@@ -73,6 +73,43 @@ test('mallkolumnen säger till när källan ändrats, och står kvar tills man k
   await expect(page.locator('.mallbricka--inaktuell')).toHaveCount(1)
 })
 
+test('den senast använda mallen ligger kvar, även efter en omladdning', async ({ page }) => {
+  await oppnaExempel(page)
+  await byggMallkolumn(page)
+
+  // En annan kolumn: fältet är förifyllt med den mall som just kördes, inte
+  // med kolumnens eget namn.
+  await oppnaUrKolumnmenyn(page, 'Ort', 'Bygg kolumn ur mall…')
+  const mallfalt = page.locator('.verktyg .falt', { hasText: 'Mall' }).locator('input').first()
+  await expect(mallfalt).toHaveValue("('{Namn}'),")
+  await page.getByRole('button', { name: 'Avbryt' }).click()
+
+  // Och den överlever att sidan laddas om.
+  await page.reload()
+  await expect(page.locator('.statusrad')).toContainText('16 rader')
+  await oppnaUrKolumnmenyn(page, 'Ort', 'Bygg kolumn ur mall…')
+  await expect(mallfalt).toHaveValue("('{Namn}'),")
+})
+
+test('ett chip fyller fältet med en tidigare mall', async ({ page }) => {
+  await oppnaExempel(page)
+  await byggMallkolumn(page)
+
+  await oppnaUrKolumnmenyn(page, 'Ort', 'Bygg kolumn ur mall…')
+  const mallfalt = page.locator('.verktyg .falt', { hasText: 'Mall' }).locator('input').first()
+
+  // Kör en andra, annorlunda mall — nu finns det något att välja mellan.
+  await mallfalt.fill('{Ort} ({Namn})')
+  await page.getByRole('button', { name: 'Skapa kolumnen' }).click()
+
+  await oppnaUrKolumnmenyn(page, 'Postnr', 'Bygg kolumn ur mall…')
+  const senaste = page.locator('.verktyg .falt', { hasText: 'Senast använda' })
+  // Den som redan står i fältet erbjuds inte — bara den föregående.
+  await expect(senaste.locator('.val__knapp')).toHaveCount(1)
+  await senaste.locator('.val__knapp').click()
+  await expect(mallfalt).toHaveValue("('{Namn}'),")
+})
+
 test('en omdöpt källkolumn tar mallen med sig', async ({ page }) => {
   await oppnaExempel(page)
   await byggMallkolumn(page)

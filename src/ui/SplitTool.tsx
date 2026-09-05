@@ -16,6 +16,7 @@ import {
   type Delningssatt,
 } from '../core/ops/columns.js'
 import { beraknaForhandsvisning, type Forhandsvisning } from '../state/preview.js'
+import { anvandeMall, mallarAvSort } from '../state/mallar.js'
 import { formatCount } from '../core/locale/sv.js'
 import { celler, sprak, t, tf, tj } from './sprak.js'
 
@@ -50,7 +51,9 @@ export function SplitTool(props: {
   const [position, setPosition] = useState(3)
   const [antal, setAntal] = useState(2)
   const [namn, setNamn] = useState<(string | undefined)[]>([])
-  const [monster, setMonster] = useState('{Namn} <{E-post}>')
+  // Ett mönster nämner kolumner som *ska skapas*, inte som måste finnas, så
+  // det går alltid att fylla i — till skillnad från mallen i MergeTool.
+  const [monster, setMonster] = useState(mallarAvSort('monster')[0]?.text ?? '{Namn} <{E-post}>')
 
   const armonster = satt === 'monster'
   const avgransare = avgransarval === 'eget' ? egen : avgransarval
@@ -65,6 +68,9 @@ export function SplitTool(props: {
   const monsterdelar = useMemo(() => delaMall(monster), [monster])
   const monsternamn = useMemo(() => monsterkolumner(monsterdelar), [monsterdelar])
   const fel = armonster ? monsterfel(monsterdelar) : null
+  const monsterforslag = armonster
+    ? mallarAvSort('monster').filter((m) => m.text !== monster)
+    : []
 
   const faktisktAntal = armonster ? Math.max(1, monsternamn.length) : antal
   const inst: Delning = {
@@ -165,7 +171,10 @@ export function SplitTool(props: {
                   ? t('Delningen ger inga värden.')
                   : undefined
             }
-            onClick={() => props.onTillampa([forh])}
+            onClick={() => {
+              if (armonster) anvandeMall({ sort: 'monster', text: monster })
+              props.onTillampa([forh])
+            }}
           >
             {tf('Skapa {0} kolumner', formatCount(faktisktAntal))}
           </button>
@@ -195,6 +204,15 @@ export function SplitTool(props: {
             )}
           </p>
           {fel !== null && <Notis ton="fara">{t(fel)}</Notis>}
+          {monsterforslag.length > 0 && (
+            <div class="val" role="group" aria-label={t('Senast använda')}>
+              {monsterforslag.map((m, i) => (
+                <button key={i} class="val__knapp" title={m.text} onClick={() => setMonster(m.text)}>
+                  {m.text.length > 28 ? `${m.text.slice(0, 27)}…` : m.text}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       ) : satt === 'position' ? (
         <div class="falt">
