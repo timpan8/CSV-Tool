@@ -3,6 +3,7 @@ import type { ColumnId, Frame } from '../core/types.js'
 import { computeView, harBegransning, TOM_VY, utanBegransning, type ViewSpec } from './view.js'
 import type { Forhandsvisning } from './preview.js'
 import { synkaOrdning, type Ordning } from './ordning.js'
+import { glomPlan } from './pivot.js'
 import type { Sorteringsniva } from '../core/ops/sort.js'
 import { aktivaRegler, TOMT_FILTER, type Filter } from '../core/ops/filter.js'
 import type { Dubblettnyckel } from '../core/ops/duplicates.js'
@@ -548,6 +549,8 @@ export function closeTab(id: string): void {
   // de flikar som finns nu som säger att något ska tas bort ur lagringen.
   const remaining = tabs.value.filter((t) => t.id !== id)
   tabs.value = remaining
+  // Flikens pivotplan har inget id att vänta på längre.
+  glomPlan(id)
   if (activeTabId.value === id) {
     activeTabId.value = remaining[remaining.length - 1]?.id ?? null
   }

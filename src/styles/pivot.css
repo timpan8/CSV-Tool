@@ -65,11 +65,6 @@
   gap: 4px;
 }
 
-.pivot__falt--brett {
-  flex: 1 1 260px;
-  min-width: 0;
-}
-
 .pivot__falt--kryss {
   gap: 3px;
   font-size: 12px;
@@ -80,23 +75,6 @@
   padding: 6px 9px;
   font-size: 14px;
   line-height: 1;
-}
-
-.pivot__matvarden {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.pivot__matvarde {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 4px 3px 6px;
-  border: 1px solid var(--linje);
-  border-radius: var(--radie);
-  background: var(--yta);
 }
 
 .pivot__allarader {
@@ -137,11 +115,19 @@
 }
 
 .pivot__tomt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
   margin: 0;
   padding: 24px 0;
   text-align: center;
   color: var(--text-svag);
   font-size: 13px;
+}
+
+.pivot__tomt p {
+  margin: 0;
 }
 
 .pivot__vaxlar {
@@ -526,6 +512,18 @@
 
 /* ---------- Spaltlayouten ---------- */
 
+/* Flera radrubriker per rad, och `left: 0` på alla hade staplat dem på
+   varandra i vänsterkanten vid rullning. Den första fäster, resten följer med. */
+.pivottab--spalter .pivottab__radrubrik:not(:first-child),
+.pivottab--spalter .pivottab__horn:not(:first-child) {
+  position: static;
+}
+
+.pivottab--spalter thead .pivottab__horn:not(:first-child) {
+  position: sticky;
+  left: auto;
+}
+
 /* Delsummeraderna är fetare än sina löv. I den indragna listan gjorde indraget
    det jobbet; här står allt i samma vänsterkant och behöver en annan skillnad. */
 .pivottab__rad--delsumma .pivottab__radrubrik {
@@ -551,12 +549,15 @@
   background: transparent;
 }
 
+/* `overflow: clip` och inte `hidden`: hidden gör blocket till en egen rullyta,
+   och då fäster rubrikerna inuti mot den i stället för mot omslaget som
+   faktiskt rullar. clip klipper hörnen lika bra utan den bieffekten. */
 .pivottab__block {
   flex: none;
   border: 1px solid var(--linje);
   border-radius: var(--radie);
   background: var(--yta);
-  overflow: hidden;
+  overflow: clip;
 }
 
 .pivottab__blockrubrik {
@@ -589,6 +590,10 @@
  * fönsterkanten, och rutorna är det man ska se — listan är bara förrådet man
  * hämtar ur.
  */
+.pivotpanel__stang {
+  margin-left: auto;
+}
+
 .pivotpanel__falt {
   display: flex;
   flex-wrap: wrap;
@@ -597,6 +602,25 @@
   overflow-y: auto;
   padding: 0 8px 8px;
   border-bottom: 1px solid var(--linje);
+  border-top: 2px solid transparent;
+}
+
+/* Ett chip på väg ut ur pivoten: listan är släppzonen, och linjen säger det. */
+.pivotpanel__falt--slappmal {
+  border-top-color: var(--fara);
+}
+
+/* Ett fält som redan ligger i någon ruta. Punkten säger det utan att listan
+   behöver bli kortare — samma fält får ligga i Värden två gånger. */
+.pivotruta__chip--anvand .pivotruta__namn::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: middle;
 }
 
 .pivotpanel__rutor {
@@ -611,6 +635,31 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.pivotruta__lista {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pivotruta__pil {
+  display: inline-block;
+  width: 10px;
+  margin-right: 2px;
+  font-size: 10px;
+  color: var(--text-svag);
+}
+
+button.pivotruta__namn:hover .pivotruta__pil,
+button.pivotruta__namn:focus-visible .pivotruta__pil {
+  color: var(--text);
+}
+
+.pivotruta__antal {
+  align-self: flex-start;
+  padding: 2px 6px;
+  font-size: 11.5px;
 }
 
 .pivotruta__rubrik {
@@ -688,14 +737,25 @@ button.pivotruta__namn {
   color: var(--text);
 }
 
-/* En tom ruta säger vad den vill ha. En tom ruta utan text ser ut som en bugg. */
+/*
+ * Rutans botten är alltid släppzon men syns bara när den behövs: när rutan är
+ * tom, så att den säger vad den vill ha, och under en dragning, så att man
+ * ser var *sist* är. En streckad remsa under varje fylld ruta hade sett ut som
+ * en extra tom plats.
+ */
 .pivotruta__botten {
-  min-height: 26px;
-  border: 1px dashed var(--linje);
+  min-height: 8px;
+  border: 1px dashed transparent;
   border-top-width: 2px;
   border-top-style: solid;
-  border-top-color: transparent;
   border-radius: var(--radie);
+  padding: 0 6px;
+}
+
+.pivotruta__botten--synlig {
+  min-height: 26px;
+  border-color: var(--linje);
+  border-top-color: transparent;
   padding: 4px 6px;
 }
 
@@ -713,4 +773,14 @@ button.pivotruta__namn {
   flex-direction: column;
   gap: 4px;
   padding: 4px 0 6px 18px;
+}
+
+/* ---------- Felgränsen ---------- */
+
+.felgrans {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 24px;
 }

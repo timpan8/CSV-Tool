@@ -2,7 +2,7 @@ import { useMemo, useState } from 'preact/hooks'
 import type { Column, Frame } from '../core/types.js'
 import { valueCounts } from '../core/frame/column.js'
 import { formatCount } from '../core/locale/sv.js'
-import { rader as raderText, t, tf } from './sprak.js'
+import { t, tf } from './sprak.js'
 
 /** Hur många värden listan visar innan den ber om en sökning i stället. */
 const LISTTAK = 200
@@ -67,7 +67,11 @@ export function Vardelista(props: {
         ))}
         {synliga.length > LISTTAK && (
           <p class="verktyg__sammanfattning">
-            {tf('Visar de 200 vanligaste av {0}. Sök för att hitta fler.', raderText(synliga.length))}
+            {tf(
+              'Visar de {0} vanligaste av {1} värden. Sök för att hitta fler.',
+              formatCount(LISTTAK),
+              formatCount(synliga.length),
+            )}
           </p>
         )}
         {synliga.length === 0 && <p class="verktyg__sammanfattning">{t('Inga värden matchar.')}</p>}

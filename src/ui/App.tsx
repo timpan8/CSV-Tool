@@ -138,7 +138,7 @@ import {
 } from '../core/ops/duplicates.js'
 import { beskrivSortering } from '../core/ops/sort.js'
 import type { Riktning } from '../core/ops/sort.js'
-import { Meny, Toastar, type MenyPost } from './parts.jsx'
+import { Felgrans, Meny, Toastar, type MenyPost } from './parts.jsx'
 import { EXEMPELFIL, EXEMPELFIL_MALL, EXEMPELFIL_ORDER } from './exempel.js'
 
 const TYPCYKEL: ColumnType[] = ['text', 'number', 'date', 'email', 'bool']
@@ -1903,19 +1903,22 @@ export function App() {
          * på kolumn-id ur en annan fil hade gett en tom tabell utan att säga
          * varför. Med nyckeln får den nya filen sitt eget förslag i stället.
          */
-        <Pivot
-          key={tab?.id}
-          frame={frame}
-          revision={rev}
-          onNyFlik={(resultat, text) => {
-            openFrame(resultat)
-            // Stäng vyn: fliken är hela poängen med knappen, och att bli kvar
-            // i pivoten hade sett ut som att ingenting hände.
-            stangPivot()
-            notify(text)
-          }}
-          onStang={stangPivot}
-        />
+        <Felgrans onStang={stangPivot}>
+          <Pivot
+            key={tab?.id}
+            tabId={tab?.id ?? ''}
+            frame={frame}
+            revision={rev}
+            onNyFlik={(resultat, text) => {
+              openFrame(resultat)
+              // Stäng vyn: fliken är hela poängen med knappen, och att bli kvar
+              // i pivoten hade sett ut som att ingenting hände.
+              stangPivot()
+              notify(text)
+            }}
+            onStang={stangPivot}
+          />
+        </Felgrans>
       ) : iVerkstaden ? (
         <Verkstad
           onSlaIhop={(resultat, text) => {

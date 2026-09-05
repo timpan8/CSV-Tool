@@ -4,7 +4,6 @@ import { createFrame } from '../../src/core/frame/frame.js'
 import {
   ADDITIVA,
   arAdditiv,
-  foreslagenPlan,
   KOLUMNLOVTAK,
   PIVOTBERAKNINGAR,
   pivotberakningar,
@@ -467,61 +466,6 @@ describe('mätvärdena en pivot tar', () => {
     expect(arAdditiv(matvarde({ typ: 'snitt' }))).toBe(false)
     expect(arAdditiv(matvarde({ typ: 'unika' }))).toBe(false)
     expect([...ADDITIVA]).toEqual(['antal', 'summa', 'ifyllda'])
-  })
-})
-
-describe('foreslagenPlan', () => {
-  it('väljer kategorikolumner så att vyn säger något direkt', () => {
-    const p = foreslagenPlan(ORTER)
-    // Status har två värden, Ort tre — den kortare blir rader.
-    expect(p.rader).toEqual([kol(ORTER, 'Status')])
-    expect(p.kolumner).toEqual([kol(ORTER, 'Ort')])
-    expect(p.matvarden[0]!.typ).toBe('antal')
-  })
-
-  it('börjar på kolumnen man kom från', () => {
-    const p = foreslagenPlan(ORTER, kol(ORTER, 'Ort'))
-    expect(p.rader).toEqual([kol(ORTER, 'Ort')])
-    expect(p.kolumner).not.toContain(kol(ORTER, 'Ort'))
-  })
-
-  it('klarar en fil där ingen kolumn är en kategori', () => {
-    const f = frameOf(['Nr'], [['1'], ['2']])
-    const p = foreslagenPlan(f)
-    expect(p.rader).toEqual([kol(f, 'Nr')])
-    expect(p.kolumner).toEqual([])
-  })
-
-  it('föreslår aldrig en talkolumn som dimension', () => {
-    // Fjorton beloppsrubriker i sidled är ingen överblick, och kolumnen gör
-    // mer nytta som mätvärde.
-    const f = frameOf(
-      ['Belopp', 'Status'],
-      [
-        ['100', 'Aktiv'],
-        ['200', 'Aktiv'],
-        ['300', 'Avslutad'],
-        ['400', 'Avslutad'],
-      ],
-    )
-    const p = foreslagenPlan(f)
-    expect(p.rader).toEqual([kol(f, 'Status')])
-    expect(p.kolumner).toEqual([])
-  })
-
-  it('väljer inte en kolumn där nästan varje rad har sitt eget värde', () => {
-    const f = frameOf(
-      ['Ort', 'Status'],
-      [
-        ['Malmö', 'Aktiv'],
-        ['Lund', 'Aktiv'],
-        ['Kiruna', 'Avslutad'],
-        ['Boden', 'Avslutad'],
-      ],
-    )
-    const p = foreslagenPlan(f)
-    expect(p.rader).toEqual([kol(f, 'Status')])
-    expect(p.kolumner).toEqual([])
   })
 })
 

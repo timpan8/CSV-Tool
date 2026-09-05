@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { satt } from './pivothjalp.js'
+import { antalRader, satt } from './pivothjalp.js'
 
 /*
  * Diagrammet.
@@ -17,6 +17,10 @@ async function oppnaDiagram(page: Page) {
   await expect(page.locator('.statusrad')).toContainText('16 rader')
   await page.getByRole('button', { name: 'Pivot', exact: true }).click()
   await expect(page.locator('.pivot')).toBeVisible()
+  // Rutorna är tomma från början. Ett radfält och ett mätvärde är minsta
+  // uppställningen som ger något att rita.
+  await antalRader(page)
+  await satt(page, 'Rader', 'Status')
 }
 
 const form = (page: Page, namn: string) =>

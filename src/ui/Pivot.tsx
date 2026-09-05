@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'preact/hooks'
 import type { Frame } from '../core/types.js'
-import { formatCount, rader as raderText } from '../core/locale/sv.js'
-import { berakningsnamn } from '../core/ops/gruppera.js'
+import { formatCount } from '../core/locale/sv.js'
+import { findColumn } from '../core/frame/frame.js'
+import { hamtaPlan, sparaPlan } from '../state/pivot.js'
+import { matvardenamn } from './matvarde.js'
 import {
   diagramdata,
   linjeArTveksam,
@@ -13,7 +15,6 @@ import { Diagram, Diagramforklaring, type Punktinfo } from './Diagram.js'
 import { ordnaRader } from './pivotordning.js'
 import {
   arAdditiv,
-  foreslagenPlan,
   KOLUMNTAK_VAL,
   pivotera,
   pivotnamn,
@@ -23,18 +24,19 @@ import {
 import { Notis, Val } from './parts.js'
 import { Pivotpanel } from './Pivotpanel.js'
 import { Pivottabell, type Radlayout, type Sortering, type Visning } from './Pivottabell.js'
-import { t, tf } from './sprak.js'
+import { rader as raderText, t, tf } from './sprak.js'
 
 /** Vilken av de två läsningarna som visas. Samma tal, två former. */
 type Yta = 'tabell' | 'diagram'
 
-const RADLAYOUTER: { varde: Radlayout; etikett: string; hjalp: string }[] = [
+/** Exporterad så att ordboksvakten når orden — de går genom `t()` som variabler. */
+export const RADLAYOUTER: { varde: Radlayout; etikett: string; hjalp: string }[] = [
   { varde: 'indragen', etikett: 'Indragen', hjalp: 'En lista med nivåer och delsummor att fälla ihop.' },
   { varde: 'kolumner', etikett: 'Egna spalter', hjalp: 'Ett radfält per spalt, med hela vägen på varje rad.' },
   { varde: 'block', etikett: 'Block', hjalp: 'Det översta radfältets värden bredvid varandra, var och en med sin egen lista.' },
 ]
 
-const DIAGRAMTYPER: { typ: Diagramtyp; etikett: string; hjalp: string }[] = [
+export const DIAGRAMTYPER: { typ: Diagramtyp; etikett: string; hjalp: string }[] = [
   { typ: 'staplar', etikett: 'Staplar', hjalp: 'En stapel per rad, stående.' },
   {
     typ: 'liggande',
@@ -66,13 +68,15 @@ const DIAGRAMTYPER: { typ: Diagramtyp; etikett: string; hjalp: string }[] = [
  */
 export function Pivot(props: {
   frame: Frame
+  /** Flikens id: nyckeln planen sparas under, så att den överlever att vyn stängs. */
+  tabId: string
   revision: number
   onNyFlik: (resultat: Frame, text: string) => void
   onStang: () => void
 }) {
   const { frame } = props
 
-  const [plan, setPlan] = useState<Pivotplan>(() => foreslagenPlan(frame))
+  const [plan, setPlan] = useState<Pivotplan>(() => hamtaPlan(props.tabId))
   const [layout, setLayout] = useState<Radlayout>('indragen')
   /** Panelen går att fälla in: en bred korstabell ska kunna få hela fönstret. */
   const [panel, setPanel] = useState(true)
@@ -87,11 +91,26 @@ export function Pivot(props: {
   })
   const [punkt, setPunkt] = useState<Punktinfo | null>(null)
 
+  /** Radfälten som faktiskt finns i filen — ett borttaget fält står kvar i planen men inte i tabellen. */
+  const radfalt = plan.rader.filter((id) => findColumn(frame, id) !== undefined).length
+
   const andra = (delta: Partial<Pivotplan>) => {
-    setPlan({ ...plan, ...delta })
+    const ny = { ...plan, ...delta }
+    setPlan(ny)
+    sparaPlan(props.tabId, ny)
     // En ändrad plan är en ny tabell. Att behålla sorteringen på ett
     // kolumnindex som nu betyder en annan kolumn vore värre än att släppa den.
     setSortering(null)
+    if (delta.rader !== undefined || delta.kolumner !== undefined) {
+      // Hopfällningen är stigar av index — "0/2" — och pekar på andra rader
+      // så fort fälten byts. Samma sak med punkten under pekaren.
+      setHopfallda(new Set())
+      setPunkt(null)
+    }
+    // Block behöver två radfält. Faller de under två visar tabellen den
+    // indragna listan, och då ska valet säga det också.
+    const nyaRadfalt = ny.rader.filter((id) => findColumn(frame, id) !== undefined).length
+    if (layout === 'block' && nyaRadfalt < 2) setLayout('indragen')
   }
 
   /*
@@ -106,6 +125,13 @@ export function Pivot(props: {
   )
 
   const additiv = plan.matvarden.length > 0 && plan.matvarden.every(arAdditiv)
+  /** Varför andelarna inte går att välja just nu — eller `undefined` när de går. */
+  const andelskal =
+    plan.matvarden.length === 0
+      ? t('Lägg ett fält i Värden först.')
+      : additiv
+        ? undefined
+        : t('Andel går bara att räkna på mätvärden som kan läggas ihop.')
   const filtrerat = frame.view.length !== frame.rowCount
 
   /*
@@ -130,12 +156,16 @@ export function Pivot(props: {
       return ny
     })
 
+  /** Sant när fliken hade blivit tom: varken rader att skriva eller tal att skriva i dem. */
+  const ingetAttTaMed = radfalt === 0 && plan.matvarden.length === 0
+
   const gorFlik = () => {
-    const namn = pivotnamn(frame, plan)
+    const namn = pivotnamn(frame, plan, { per: t('per'), pivot: t('pivot') })
     const ut = pivotTillFrame(resultat, plan, frame, namn, {
       totalt: t('Totalt'),
       tomt: t('(tomt)'),
       ovriga: t('Övriga'),
+      matnamn: (m) => matvardenamn(m, frame),
     })
     props.onNyFlik(ut, tf('{0} ur {1}', raderText(ut.rowCount), frame.name))
   }
@@ -166,11 +196,12 @@ export function Pivot(props: {
    * svaret. Att kalla den "(tomt)" vore fel: det är inget tomt värde, det är
    * frånvaron av en uppdelning. Mätvärdets namn säger vad man tittar på.
    */
-  const matvardenamn = berakningsnamn(plan.matvarden[diagramplan.matvarde] ?? plan.matvarden[0]!, frame)
-  const serienamn = (etikett: string) => (etikett === '' ? matvardenamn : etikett)
+  const valtMatvarde = plan.matvarden[diagramplan.matvarde] ?? plan.matvarden[0]
+  const matnamn = valtMatvarde ? matvardenamn(valtMatvarde, frame) : ''
+  const serienamn = (etikett: string) => (etikett === '' ? matnamn : etikett)
   const diagramrubrik = tf(
     '{0} per {1}',
-    matvardenamn,
+    matnamn,
     plan.rader
       .map((id) => frame.columns.find((c) => c.id === id)?.name)
       .filter((n): n is string => n !== undefined)
@@ -190,6 +221,7 @@ export function Pivot(props: {
         </div>
         <div class="pivot__vaxlar">
           <Val<Yta>
+            etikett={t('Tabell eller diagram')}
             varden={[
               { varde: 'tabell', etikett: 'Tabell', titel: 'Talen, rad för rad.' },
               {
@@ -228,6 +260,7 @@ export function Pivot(props: {
         <div class="pivot__falt">
           <span class="falt__etikett">{t('Radfälten')}</span>
           <Val<Radlayout>
+            etikett={t('Radfälten')}
             varden={RADLAYOUTER.map((r) => ({
               varde: r.varde,
               etikett: r.etikett,
@@ -235,7 +268,7 @@ export function Pivot(props: {
               // Block delar upp på det översta radfältet och listar resten
               // under det. Med ett enda fält finns inget att lista.
               inaktiv:
-                r.varde === 'block' && plan.rader.length < 2
+                r.varde === 'block' && radfalt < 2
                   ? t('Block behöver minst två fält i Rader.')
                   : undefined,
             }))}
@@ -247,17 +280,20 @@ export function Pivot(props: {
         <div class="pivot__falt">
           <span class="falt__etikett">{t('Visa')}</span>
           <Val<Visning>
+            etikett={t('Visa')}
             varden={[
               { varde: 'tal', etikett: 'Tal' },
               {
                 varde: 'andelRad',
                 etikett: '% av rad',
                 titel: 'Cellens del av radens Totalt.',
+                inaktiv: andelskal,
               },
               {
                 varde: 'andelKolumn',
                 etikett: '% av kolumn',
                 titel: 'Cellens del av kolumnens Totalt.',
+                inaktiv: andelskal,
               },
             ]}
             valt={additiv ? visning : 'tal'}
@@ -278,8 +314,9 @@ export function Pivot(props: {
                 }
               />
               {tf(
-                'Bara de {0} som visas nu',
-                `${formatCount(frame.view.length)} av ${formatCount(frame.rowCount)}`,
+                'Bara de {0} av {1} som visas nu',
+                formatCount(frame.view.length),
+                formatCount(frame.rowCount),
               )}
             </label>
           )}
@@ -329,6 +366,7 @@ export function Pivot(props: {
             <div class="pivot__falt">
               <span class="falt__etikett">{t('Staplarna')}</span>
               <Val<Stapellage>
+                etikett={t('Staplarna')}
                 varden={[
                   { varde: 'grupperade', etikett: 'Bredvid varandra' },
                   { varde: 'staplade', etikett: 'På varandra' },
@@ -353,7 +391,7 @@ export function Pivot(props: {
               >
                 {plan.matvarden.map((m, i) => (
                   <option key={m.id} value={String(i)}>
-                    {berakningsnamn(m, frame)}
+                    {matvardenamn(m, frame)}
                   </option>
                 ))}
               </select>
@@ -364,10 +402,15 @@ export function Pivot(props: {
 
       <div class={`pivot__kropp${panel ? ' pivot__kropp--panel' : ''}`}>
         <div class="pivot__yta">
-        {plan.rader.length === 0 && plan.kolumner.length === 0 ? (
-          <p class="pivot__tomt">
-            {t('Dra ett fält till Rader eller Kolumner, så räknar pivoten resten.')}
-          </p>
+        {plan.rader.length === 0 && plan.kolumner.length === 0 && plan.matvarden.length === 0 ? (
+          <div class="pivot__tomt">
+            <p>{t('Dra ett fält till Rader, Kolumner eller Värden, så räknar pivoten resten.')}</p>
+            {!panel && (
+              <button class="knapp" onClick={() => setPanel(true)}>
+                {t('Visa fältpanelen')}
+              </button>
+            )}
+          </div>
         ) : yta === 'tabell' ? (
           <Pivottabell
             frame={frame}
@@ -380,6 +423,8 @@ export function Pivot(props: {
             hopfallda={hopfallda}
             onVaxlaNod={vaxlaNod}
           />
+        ) : plan.matvarden.length === 0 ? (
+          <p class="pivot__tomt">{t('Dra ett fält till Värden, så finns det något att rita.')}</p>
         ) : hindrad !== undefined ? (
           /*
            * Formen kan bli omöjlig medan man tittar på den — lägger man till
@@ -435,11 +480,9 @@ export function Pivot(props: {
 
       <div class="pivot__fot">
         <div class="pivot__notiser">
-          {!additiv && visning !== 'tal' && (
+          {plan.matvarden.length === 0 && (plan.rader.length > 0 || plan.kolumner.length > 0) && (
             <Notis ton="info">
-              {t(
-                'Andel går bara att räkna på mätvärden som kan läggas ihop. Ett snitt är ingen del av ett annat snitt, och unika värden i en cell är inga delar av de unika i raden.',
-              )}
+              {t('Inget mätvärde än. Dra ett fält till Värden, eller välj ＋ Antal rader.')}
             </Notis>
           )}
           {yta === 'diagram' && diagramplan.typ === 'linje' && linjeArTveksam(frame, plan) && (
@@ -517,7 +560,12 @@ export function Pivot(props: {
               </select>
             </label>
           )}
-          <button class="knapp" onClick={gorFlik}>
+          <button
+            class="knapp"
+            disabled={ingetAttTaMed}
+            title={ingetAttTaMed ? t('Lägg ett fält i Rader eller Värden först.') : undefined}
+            onClick={gorFlik}
+          >
             {t('Gör till ny flik')}
           </button>
           <button class="knapp knapp--primar" onClick={props.onStang}>

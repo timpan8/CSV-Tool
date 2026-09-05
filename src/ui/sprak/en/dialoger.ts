@@ -302,11 +302,34 @@ export const DIALOGER: Record<string, string> = {
 
   /* ---------- Pivotvyn ---------- */
   'Pivot…': 'Pivot table…',
+  'Dra fält till Filter, Kolumner, Rader och Värden i en egen vy, och se summorna växa fram. Datat rörs inte.':
+    'Drag fields to Filters, Columns, Rows and Values in a view of its own, and watch the totals take shape. The data is left alone.',
   'Gruppera åt två håll i en egen vy. Datat rörs inte.':
     'Group in two directions in a view of its own. The data is left alone.',
-  'Dra fält mellan Filter, Kolumner, Rader och Värden i en egen vy, och se summorna direkt. Datat rörs inte.':
-    'Drag fields between Filters, Columns, Rows and Values in a view of its own, and see the totals at once. The data is left alone.',
   'Byt plats på rader och kolumner': 'Swap rows and columns',
+  'Tabell eller diagram': 'Table or chart',
+  'Bara de {0} av {1} som visas nu': 'Only the {0} of {1} shown right now',
+  'Andel går bara att räkna på mätvärden som kan läggas ihop.':
+    'A share can only be worked out for measures that add up.',
+  'Lägg ett fält i Värden först.': 'Put a field in Values first.',
+  'Lägg ett fält i Rader eller Värden först.': 'Put a field in Rows or Values first.',
+  'Dra ett fält till Rader, Kolumner eller Värden, så räknar pivoten resten.':
+    'Drag a field to Rows, Columns or Values, and the pivot works out the rest.',
+  'Dra ett fält till Värden, så finns det något att rita.':
+    'Drag a field to Values, and there is something to draw.',
+  'Inget mätvärde än. Dra ett fält till Värden, eller välj ＋ Antal rader.':
+    'No measure yet. Drag a field to Values, or pick ＋ Number of rows.',
+  'Visa fältpanelen': 'Show the field panel',
+  per: 'by',
+  pivot: 'pivot table',
+  'Sortera raderna efter {0}, nu fallande': 'Sort the rows by {0}, now descending',
+  'Sortera raderna efter {0}, nu stigande': 'Sort the rows by {0}, now ascending',
+  'Fältet ligger redan i {0}.': 'The field is already in {0}.',
+  'Ligger redan här.': 'Already here.',
+  'Inställningar för {0}': 'Settings for {0}',
+  '{0}, {1} av {2}': '{0}, {1} of {2}',
+  'Visar de {0} vanligaste av {1} värden. Sök för att hitta fler.':
+    'Showing the {0} most common of {1} values. Search to find more.',
 
   /* Fältpanelen och de tre radlayouterna. */
   Fält: 'Fields',
@@ -352,18 +375,13 @@ export const DIALOGER: Record<string, string> = {
   '% av kolumn': '% of column',
   'Cellens del av kolumnens Totalt.': "The cell's share of the column's Total.",
   'Ta med rader utan värde': 'Include rows with no value',
-  'Bara de {0} som visas nu': 'Only the {0} shown right now',
   Totalt: 'Total',
   Övriga: 'Other',
   '{0} värden': '{0} values',
   '{0} kombinationer': '{0} combinations',
   'Sortera raderna efter {0}': 'Sort the rows by {0}',
   'Visa eller dölj raderna under {0}': 'Show or hide the rows under {0}',
-  'Dra ett fält till Rader eller Kolumner, så räknar pivoten resten.':
-    'Drag a field to Rows or Columns, and the pivot works out the rest.',
   '{0} utan värde står utanför': '{0} with no value are left out',
-  'Andel går bara att räkna på mätvärden som kan läggas ihop. Ett snitt är ingen del av ett annat snitt, och unika värden i en cell är inga delar av de unika i raden.':
-    'A share can only be worked out for measures that add up. One average is no part of another, and the distinct values in a cell are no part of the distinct values in the row.',
   'Kolumnen har fler värden än som får plats. De {0} vanligaste har egna spalter, resten ligger i Övriga — summorna stämmer fortfarande.':
     'The column has more values than fit. The {0} most common get columns of their own, the rest sit in Other — the totals still add up.',
   '{0} radvärden fick inte plats och ligger i Övriga.':

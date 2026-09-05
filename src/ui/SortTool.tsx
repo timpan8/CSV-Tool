@@ -6,6 +6,7 @@ import { visibleColumns } from '../core/frame/frame.js'
 import { TYPE_LABELS } from '../core/infer.js'
 import type { Riktning, Sorteringsniva } from '../core/ops/sort.js'
 import { formatCount } from '../core/locale/sv.js'
+import { startaDrag } from './drag.js'
 import { t, tf } from './sprak.js'
 
 /**
@@ -97,7 +98,10 @@ export function SortTool(props: {
                 class={`kolrad nivarad${drar === i ? ' kolrad--slappmal' : ''}`}
                 key={`${niva.colId}-${i}`}
                 draggable
-                onDragStart={() => setDrar(i)}
+                onDragStart={(e) => {
+                  startaDrag(e)
+                  setDrar(i)
+                }}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => {
                   if (drar !== null) flytta(drar, i)
