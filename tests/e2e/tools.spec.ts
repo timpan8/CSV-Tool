@@ -104,6 +104,42 @@ test('varnar när ett värde delas i fler delar än det finns kolumner', async (
   await expect(spokceller(page).nth(2)).toHaveText('se')
 })
 
+test('plockar ut namn och adress ur ett mönster', async ({ page }) => {
+  await oppnaExempel(page)
+  await oppna(page, 'E-post', 'Dela kolumnen…')
+
+  await page.getByRole('radio', { name: 'Efter ett mönster' }).click()
+  const monsterfalt = page.locator('.verktyg .falt', { hasText: 'Mönster' }).locator('input').first()
+
+  // Exempelfilens adresser är `fornamn.efternamn@domän`, så mönstret plockar
+  // isär dem utan att man behöver skriva ett reguljärt uttryck.
+  await monsterfalt.fill('{Förnamn}.{Efternamn}@{Domän}')
+
+  // Kolumnnamnen kommer ur klamrarna, inte ur källkolumnens namn.
+  await expect(page.locator('.rubrik--spoke')).toHaveCount(3)
+  await expect(spokceller(page).nth(0)).toHaveText('anna')
+  await expect(spokceller(page).nth(1)).toHaveText('karlsson')
+  await expect(spokceller(page).nth(2)).toHaveText('nordbygg.se')
+
+  // `info@angstrom.se` har ingen punkt före krullalfa och matchar inte.
+  await expect(page.locator('.verktyg .verktyg__problem')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Skapa 3 kolumner' }).click()
+  await expect(cell(page, 'nordbygg.se').first()).toBeVisible()
+})
+
+test('vägrar ett mönster med två klamrar i rad', async ({ page }) => {
+  await oppnaExempel(page)
+  await oppna(page, 'E-post', 'Dela kolumnen…')
+
+  await page.getByRole('radio', { name: 'Efter ett mönster' }).click()
+  const monsterfalt = page.locator('.verktyg .falt', { hasText: 'Mönster' }).locator('input').first()
+  await monsterfalt.fill('{Ett}{Tva}')
+
+  await expect(page.locator('.verktyg .notis--fara')).toContainText('Två klamrar i rad')
+  await expect(page.getByRole('button', { name: /Skapa \d+ kolumner/ })).toBeDisabled()
+})
+
 /* ---------- Bygg kolumn ur mall ---------- */
 
 test('slår ihop kolumner efter en mall', async ({ page }) => {

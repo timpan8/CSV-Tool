@@ -4,8 +4,12 @@ import { createFrame } from '../../src/core/frame/frame.js'
 import type { Frame } from '../../src/core/types.js'
 import {
   STANDARDDELNING,
+  byggDelare,
   delaVarde,
   inventeraDelning,
+  inventeraMonster,
+  monsterfel,
+  monsterkolumner,
   delaMall,
   korMall,
   korMallar,
@@ -259,5 +263,96 @@ describe('mallar med undantag för första och sista raden', () => {
     expect(korMallar(frame, 0, m)).toBe('anna:')
     expect(korMallar(frame, 1, m)).toBe('- bosse')
     expect(korMallar(frame, 3, m)).toBe('- david')
+  })
+})
+
+describe('plocka ut med mönster', () => {
+  const monster = (m: string, trimma = true): Delning => ({
+    ...STANDARDDELNING,
+    satt: 'monster',
+    monster: m,
+    trimma,
+  })
+  const plocka = (varde: string, m: string, trimma = true) =>
+    byggDelare(monster(m, trimma))(varde)
+
+  it('plockar isär en Outlook-adress och städar bort klamrarna', () => {
+    expect(plocka('last1 first1 <last1.first1@exempel.com>', '{Namn} <{E-post}>')).toEqual([
+      'last1 first1',
+      'last1.first1@exempel.com',
+    ])
+  })
+
+  it('ger null när avgränsaren saknas i värdet', () => {
+    expect(plocka('bara ett namn', '{Namn} <{E-post}>')).toBeNull()
+  })
+
+  it('ger null när den avslutande texten inte sitter sist', () => {
+    // `>` mitt i värdet får inte kapa uttaget — då hade E-post blivit fel.
+    expect(plocka('a <b@c> efterhängande', '{Namn} <{E-post}>')).toBeNull()
+  })
+
+  it('kräver att den inledande texten sitter först', () => {
+    expect(plocka('Namn: Anna', 'Namn: {Namn}')).toEqual(['Anna'])
+    expect(plocka('Anna', 'Namn: {Namn}')).toBeNull()
+  })
+
+  it('låter sista klammern ta resten när inget står efter den', () => {
+    expect(plocka('a - b - c', '{Ett} - {Resten}')).toEqual(['a', 'b - c'])
+  })
+
+  it('söker avgränsaren från vänster, som Vid första', () => {
+    expect(plocka('Anna Maria Karlsson <a@b.se>', '{Förnamn} {Resten} <{E-post}>')).toEqual([
+      'Anna',
+      'Maria Karlsson',
+      'a@b.se',
+    ])
+  })
+
+  it('kan lämna blanksteg kvar', () => {
+    expect(plocka('a ; b', '{Ett};{Tva}', false)).toEqual(['a ', ' b'])
+    expect(plocka('a ; b', '{Ett};{Tva}', true)).toEqual(['a', 'b'])
+  })
+
+  it('ger null för ett tomt värde mot ett mönster med text', () => {
+    expect(plocka('', '{Namn} <{E-post}>')).toBeNull()
+  })
+
+  it('namnger kolumnerna efter klamrarna', () => {
+    expect(monsterkolumner(delaMall('{Namn} <{E-post}>'))).toEqual(['Namn', 'E-post'])
+  })
+
+  it('säger ifrån om mönster som inte går att köra', () => {
+    expect(monsterfel(delaMall('{A}{B}'))).toContain('Två klamrar i rad')
+    expect(monsterfel(delaMall('bara text'))).toContain('ingen klammer')
+    expect(monsterfel(delaMall('{} <{E-post}>'))).toContain('saknar namn')
+    expect(monsterfel(delaMall('{Namn} <{E-post}>'))).toBeNull()
+  })
+
+  it('räknar träffar och missar före körningen', () => {
+    const inv = inventeraMonster(
+      ['', 'a <x@y>', 'b <z@w>', 'utan klamrar'],
+      monster('{Namn} <{E-post}>'),
+    )
+    expect(inv.traffar).toBe(2)
+    expect(inv.omatchade).toBe(1)
+    expect(inv.exempel).toEqual({ fore: 'a <x@y>', efter: ['a', 'x@y'] })
+  })
+
+  it('väger träffarna med hur många rader varje värde har', () => {
+    const inv = inventeraMonster(
+      ['a <x@y>', 'trasig'],
+      monster('{Namn} <{E-post}>'),
+      [5, 3],
+    )
+    expect(inv.traffar).toBe(5)
+    expect(inv.omatchade).toBe(3)
+  })
+
+  it('lämnar de gamla lägena orörda', () => {
+    expect(byggDelare({ ...STANDARDDELNING, satt: 'forsta' })('Anna Karlsson')).toEqual([
+      'Anna',
+      'Karlsson',
+    ])
   })
 })

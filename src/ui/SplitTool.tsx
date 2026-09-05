@@ -6,8 +6,12 @@ import { codeCounts } from '../core/frame/column.js'
 import {
   DELNINGSSATT,
   STANDARDDELNING,
-  delaVarde,
+  byggDelare,
+  delaMall,
   inventeraDelning,
+  inventeraMonster,
+  monsterfel,
+  monsterkolumner,
   type Delning,
   type Delningssatt,
 } from '../core/ops/columns.js'
@@ -45,45 +49,98 @@ export function SplitTool(props: {
   const [egen, setEgen] = useState('|')
   const [position, setPosition] = useState(3)
   const [antal, setAntal] = useState(2)
-  const [namn, setNamn] = useState<string[]>([`${col.name} 1`, `${col.name} 2`])
+  const [namn, setNamn] = useState<(string | undefined)[]>([])
+  const [monster, setMonster] = useState('{Namn} <{E-post}>')
 
+  const armonster = satt === 'monster'
   const avgransare = avgransarval === 'eget' ? egen : avgransarval
-  const inst: Delning = { satt, avgransare, position, antal, trimma: true }
+
+  /*
+   * Mönstrets klamrar bestämmer både antalet kolumner och deras namn.
+   *
+   * Att fråga om antalet igen vore att fråga om något som redan står i
+   * mönstret, och att döpa dem `Namn 1` och `Namn 2` vore att kasta bort de
+   * namn användaren just skrivit.
+   */
+  const monsterdelar = useMemo(() => delaMall(monster), [monster])
+  const monsternamn = useMemo(() => monsterkolumner(monsterdelar), [monsterdelar])
+  const fel = armonster ? monsterfel(monsterdelar) : null
+
+  const faktisktAntal = armonster ? Math.max(1, monsternamn.length) : antal
+  const inst: Delning = {
+    satt,
+    avgransare,
+    position,
+    antal: faktisktAntal,
+    trimma: true,
+    monster,
+  }
 
   const koder = useMemo(() => codeCounts(col), [col, props.dataRevision])
   const inv = useMemo(
     () => inventeraDelning(col.dict, inst, koder),
-    [col, props.dataRevision, koder, satt, avgransare, position, antal],
+    [col, props.dataRevision, koder, satt, avgransare, position, faktisktAntal],
   )
+  const monsterinv = useMemo(
+    () => (armonster ? inventeraMonster(col.dict, inst, koder) : null),
+    [col, props.dataRevision, koder, armonster, monster],
+  )
+
+  /*
+   * Namnen är standard tills användaren skriver ett eget.
+   *
+   * Läget bär bara det som skrivits in, inte de synliga namnen. Ett förvalt
+   * `Namn 1` som sparats i läget hade annars vunnit över klammerns namn så
+   * fort man bytte till mönsterläget, och det namn användaren just skrev i
+   * mönstret hade tappats bort.
+   */
+  const exempel = armonster ? (monsterinv?.exempel ?? null) : inv.exempel
 
   const malnamn = useMemo(
-    () => Array.from({ length: antal }, (_, i) => namn[i] ?? `${col.name} ${i + 1}`),
-    [antal, namn, col.name],
+    () =>
+      Array.from(
+        { length: faktisktAntal },
+        (_, i) => namn[i] ?? (armonster ? monsternamn[i] : undefined) ?? `${col.name} ${i + 1}`,
+      ),
+    [armonster, monsternamn, faktisktAntal, namn, col.name],
   )
 
-  const forh = useMemo(
-    () =>
-      beraknaForhandsvisning(col, {
-        etikett: tf('Delade ”{0}” i {1} kolumner', col.name, formatCount(antal)),
-        kind: 'split',
-        profil: { typ: 'dela', kolumn: col.name, delning: inst, namn: malnamn },
-        delar: (v) => delaVarde(v, inst),
-        arProblem: (v) => delaVarde(v, inst).filter((d) => d !== '').length < 2,
-        nyaKolumner: malnamn,
-      }),
-    [col, props.dataRevision, satt, avgransare, position, antal, malnamn, sprak.value],
-  )
+  const forh = useMemo(() => {
+    // Delaren byggs en gång, inte en gång per unikt värde: mönstret ska
+    // tolkas en gång även när kolumnen har hundratusen olika adresser.
+    const dela = byggDelare(inst)
+    const tomma = new Array<string>(faktisktAntal).fill('')
+    return beraknaForhandsvisning(col, {
+      etikett: armonster
+        ? tf('Plockade ur ”{0}” med ett mönster', col.name)
+        : tf('Delade ”{0}” i {1} kolumner', col.name, formatCount(faktisktAntal)),
+      kind: 'split',
+      profil: { typ: 'dela', kolumn: col.name, delning: inst, namn: malnamn },
+      delar: (v) => dela(v) ?? tomma,
+      arProblem: armonster
+        ? (v) => dela(v) === null
+        : (v) => (dela(v) ?? []).filter((d) => d !== '').length < 2,
+      nyaKolumner: malnamn,
+    })
+  }, [
+    col,
+    props.dataRevision,
+    satt,
+    avgransare,
+    position,
+    faktisktAntal,
+    monster,
+    malnamn,
+    sprak.value,
+  ])
 
   useEffect(() => {
     props.onForhandsvisning([forh])
   }, [forh])
   useEffect(() => () => props.onForhandsvisning(null), [])
 
-  // Namnlistan utgår från de synliga namnen, inte från det som råkar ligga i
-  // läget: har antalet kolumner just höjts finns det ännu inget sparat namn
-  // för de nya platserna.
   const sattNamn = (i: number, v: string) => {
-    const kopia = [...malnamn]
+    const kopia = [...namn]
     kopia[i] = v
     setNamn(kopia)
   }
@@ -100,11 +157,17 @@ export function SplitTool(props: {
           </button>
           <button
             class="knapp knapp--primar"
-            disabled={forh.andrade === 0}
-            title={forh.andrade === 0 ? t('Delningen ger inga värden.') : undefined}
+            disabled={forh.andrade === 0 || fel !== null}
+            title={
+              fel !== null
+                ? t(fel)
+                : forh.andrade === 0
+                  ? t('Delningen ger inga värden.')
+                  : undefined
+            }
             onClick={() => props.onTillampa([forh])}
           >
-            {tf('Skapa {0} kolumner', formatCount(antal))}
+            {tf('Skapa {0} kolumner', formatCount(faktisktAntal))}
           </button>
         </>
       }
@@ -118,7 +181,22 @@ export function SplitTool(props: {
         />
       </div>
 
-      {satt === 'position' ? (
+      {armonster ? (
+        <div class="falt">
+          <span class="falt__etikett">{t('Mönster')}</span>
+          <input
+            value={monster}
+            onInput={(e) => setMonster((e.currentTarget as HTMLInputElement).value)}
+          />
+          <p class="verktyg__sammanfattning">
+            {tj(
+              'Skriv värdet som det ser ut och sätt {0} runt det du vill plocka ut. Texten emellan är avgränsarna, och varje klammer blir en kolumn.',
+              <code>{'{Namn}'}</code>,
+            )}
+          </p>
+          {fel !== null && <Notis ton="fara">{t(fel)}</Notis>}
+        </div>
+      ) : satt === 'position' ? (
         <div class="falt">
           <span class="falt__etikett">{t('Efter hur många tecken')}</span>
           <input
@@ -143,6 +221,7 @@ export function SplitTool(props: {
         </div>
       )}
 
+      {!armonster && (
       <div class="falt">
         <span class="falt__etikett">{t('Antal nya kolumner')}</span>
         <Val
@@ -159,6 +238,7 @@ export function SplitTool(props: {
           </Notis>
         )}
       </div>
+      )}
 
       <div class="falt">
         <span class="falt__etikett">{t('Namn på de nya kolumnerna')}</span>
@@ -171,13 +251,13 @@ export function SplitTool(props: {
         ))}
       </div>
 
-      {inv.exempel && (
+      {exempel && (
         <p class="verktyg__sammanfattning">
           {tj(
             '{0} blir {1}',
-            <code>{inv.exempel.fore}</code>,
+            <code>{exempel.fore}</code>,
             <>
-              {inv.exempel.efter.map((d, i) => (
+              {exempel.efter.map((d, i) => (
                 <span key={i}>
                   {i > 0 && ' · '}
                   <strong>{d === '' ? t('(tomt)') : d}</strong>
@@ -188,26 +268,48 @@ export function SplitTool(props: {
         </p>
       )}
 
+      {/*
+        Räknarna säger olika saker i de två lägena, eftersom orden betyder
+        olika saker: en delning som inte hittar sin avgränsare ger ändå ett
+        värde i första kolumnen, medan ett värde som inte matchar mönstret inte
+        ger något alls. Att låna den ena meningen till det andra fallet hade
+        varit att påstå något som inte stämde.
+      */}
       <Resultat
         visaBara={props.visaBara}
         onVisaBara={props.onVisaBara}
         andrade={forh.andrade}
         problem={forh.problem}
         etikettAndrade="Bara ifyllda"
-        etikettProblem="Bara odelade"
+        etikettProblem={armonster ? 'Bara omatchade' : 'Bara odelade'}
       >
         {tj(
           '{0} av {1} ger värden',
           <strong>{formatCount(forh.andrade)}</strong>,
           celler(forh.ifyllda),
         )}
-        {inv.utanAvgransare > 0 &&
-          tj(
-            ' · {0} saknar avgränsare',
-            <strong class="verktyg__problem">{formatCount(inv.utanAvgransare)}</strong>,
-          )}
+        {armonster
+          ? monsterinv !== null &&
+            monsterinv.omatchade > 0 &&
+            tj(
+              ' · {0} matchar inte mönstret och får tomma celler',
+              <strong class="verktyg__problem">{formatCount(monsterinv.omatchade)}</strong>,
+            )
+          : inv.utanAvgransare > 0 &&
+            tj(
+              ' · {0} saknar avgränsare',
+              <strong class="verktyg__problem">{formatCount(inv.utanAvgransare)}</strong>,
+            )}
         .
       </Resultat>
+
+      {armonster && (
+        <Notis ton="info">
+          {t(
+            'Källkolumnen står kvar orörd. Ett värde som inte matchar tappas alltså aldrig — det ligger kvar där det stod.',
+          )}
+        </Notis>
+      )}
     </Verktygspanel>
   )
 }

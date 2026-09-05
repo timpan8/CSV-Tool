@@ -14,7 +14,7 @@ import { normalizeAlways } from '../locale/sv.js'
 
 /* ---------- Dela ---------- */
 
-export type Delningssatt = 'avgransare' | 'forsta' | 'sista' | 'position'
+export type Delningssatt = 'avgransare' | 'forsta' | 'sista' | 'position' | 'monster'
 
 export const DELNINGSSATT: { varde: Delningssatt; etikett: string; titel: string }[] = [
   {
@@ -37,6 +37,12 @@ export const DELNINGSSATT: { varde: Delningssatt; etikett: string; titel: string
     etikett: 'Efter antal tecken',
     titel: 'Delar på en fast position. Användbart för koder med fast längd.',
   },
+  {
+    varde: 'monster',
+    etikett: 'Efter ett mönster',
+    titel:
+      'Skriv värdet som det ser ut och sätt klammer runt det du vill plocka ut: {Namn} <{E-post}>. Texten emellan är avgränsarna, och varje klammer blir en kolumn med sitt namn.',
+  },
 ]
 
 export interface Delning {
@@ -49,6 +55,12 @@ export interface Delning {
   antal: number
   /** Trimma blanksteg runt varje del. */
   trimma: boolean
+  /**
+   * Mönstret för `monster`-läget, med mallens egen syntax.
+   *
+   * Valfritt, så att `Delning` i sparade profiler läses oförändrat.
+   */
+  monster?: string
 }
 
 export const STANDARDDELNING: Delning = {
@@ -259,4 +271,159 @@ export function korMallar(
   val: Mallval = { stadaLuckor: true },
 ): string {
   return korMall(frame, row, valjMall(frame, row, mallar), val)
+}
+
+/* ---------- Plocka ut med mönster ---------- */
+
+/**
+ * Uttag är delning uttryckt med mallens syntax, och det är med flit.
+ *
+ * `{Namn} <{E-post}>` bygger en text i mallverktyget och plockar isär samma
+ * text här. En egen syntax för uttaget hade varit ett andra språk att lära
+ * sig för samma tanke — och ett reguljärt uttryck hade varit ett tredje.
+ *
+ * Texten mellan klamrarna är avgränsarna. Att den avslutande texten måste
+ * sitta i slutet är det som gör att `<>` städas bort på köpet: `>` i
+ * mönstret betyder *värdet slutar här*, inte *dela vid första bästa `>`*.
+ */
+
+/** Namnen på de kolumner ett mönster ger, i ordning. */
+export function monsterkolumner(delar: readonly Malldel[]): string[] {
+  return delar.filter((d): d is { typ: 'kolumn'; namn: string } => d.typ === 'kolumn').map((d) => d.namn)
+}
+
+/**
+ * Varför mönstret inte går att köra, eller null när det gör det.
+ *
+ * Meningarna är konstanta och går därför att slå upp i ordboken, till
+ * skillnad från formelmotorns fel som byggs kring ett tecken.
+ */
+export function monsterfel(delar: readonly Malldel[]): string | null {
+  const kolumner = delar.filter((d) => d.typ === 'kolumn')
+  if (kolumner.length === 0) {
+    return 'Mönstret har ingen klammer att plocka ut. Skriv {Namn} där ett värde står.'
+  }
+  if (kolumner.some((d) => d.typ === 'kolumn' && d.namn === '')) {
+    return 'En klammer saknar namn. Kolumnen skulle bli namnlös.'
+  }
+  for (let i = 0; i + 1 < delar.length; i++) {
+    if (delar[i]!.typ === 'kolumn' && delar[i + 1]!.typ === 'kolumn') {
+      return 'Två klamrar i rad går inte att skilja åt. Sätt tecknet som står emellan i mönstret.'
+    }
+  }
+  return null
+}
+
+/**
+ * Plockar ut ett värde per klammer, eller null när värdet inte matchar.
+ *
+ * Aldrig ett halvt uttag: matchar inte mönstret får raden tomma celler och
+ * räknas som ett problem, medan källkolumnen står kvar orörd. Att skriva
+ * `last1 first1` i en kolumn som heter *E-post* vore ett påstående som inte
+ * stämmer, och det är värre än en tom cell.
+ *
+ * Avgränsaren söks från vänster, precis som *Vid första* redan gör. Ett
+ * mönster som `{Förnamn} {Efternamn} <{E-post}>` delar därför `Anna Maria
+ * Karlsson` som *Anna* + *Maria Karlsson*, inte tvärtom.
+ */
+export function plockaUr(
+  rawValue: string,
+  delar: readonly Malldel[],
+  trimma: boolean,
+): string[] | null {
+  const value = normalizeAlways(rawValue)
+  const ut: string[] = []
+  let pos = 0
+
+  for (let i = 0; i < delar.length; i++) {
+    const del = delar[i]!
+    if (del.typ === 'text') {
+      // En textdel efter en klammer konsumeras av klammerns egen gren, så den
+      // här kan bara vara den inledande. Den måste sitta först.
+      if (!value.startsWith(del.varde, pos)) return null
+      pos += del.varde.length
+      continue
+    }
+
+    const nasta = delar[i + 1]
+    if (nasta === undefined) {
+      // Sista klammern utan text efter sig tar resten.
+      ut.push(value.slice(pos))
+      pos = value.length
+      continue
+    }
+    if (nasta.typ === 'kolumn') return null
+
+    if (i + 2 === delar.length) {
+      // Den avslutande texten måste sitta i slutet. Annars hade `>` mitt i en
+      // adress kapat värdet på fel ställe.
+      const slut = value.length - nasta.varde.length
+      if (slut < pos || !value.endsWith(nasta.varde)) return null
+      ut.push(value.slice(pos, slut))
+      pos = value.length
+      i += 1
+      continue
+    }
+
+    const traff = value.indexOf(nasta.varde, pos)
+    if (traff === -1) return null
+    ut.push(value.slice(pos, traff))
+    pos = traff + nasta.varde.length
+    i += 1
+  }
+
+  if (pos !== value.length) return null
+  return trimma ? ut.map((d) => d.trim()) : ut
+}
+
+/**
+ * Delaren för en inställning, byggd en gång.
+ *
+ * Mönstret tolkas här och inte per värde: en kolumn med hundratusen unika
+ * adresser hade annars kostat hundratusen tolkningar av samma sträng. Samma
+ * grepp som `byggErsattare` i `replace.ts`, och av samma skäl.
+ *
+ * Null ur delaren betyder *matchade inte*; de tre gamla lägena kan inte
+ * misslyckas och returnerar aldrig null.
+ */
+export function byggDelare(inst: Delning): (varde: string) => string[] | null {
+  if (inst.satt === 'monster') {
+    const delar = delaMall(inst.monster ?? '')
+    return (varde) => plockaUr(varde, delar, inst.trimma)
+  }
+  return (varde) => delaVarde(varde, inst)
+}
+
+/**
+ * Hur många värden mönstret träffar, så panelen kan säga det före körningen.
+ *
+ * Egen funktion i stället för `inventeraDelning`, eftersom `flest` och
+ * `utanAvgransare` inte betyder någonting för ett mönster. En panel som
+ * återanvänt dem hade sagt något som inte stämde.
+ */
+export function inventeraMonster(
+  varden: readonly string[],
+  inst: Delning,
+  vikter?: ArrayLike<number>,
+): { traffar: number; omatchade: number; exempel: { fore: string; efter: string[] } | null } {
+  const plocka = byggDelare(inst)
+  let traffar = 0
+  let omatchade = 0
+  let exempel: { fore: string; efter: string[] } | null = null
+
+  for (let i = 0; i < varden.length; i++) {
+    const value = varden[i]!
+    if (value.trim() === '') continue
+    const vikt = vikter ? (vikter[i] ?? 0) : 1
+    if (vikt === 0) continue
+
+    const delar = plocka(value)
+    if (delar === null) {
+      omatchade += vikt
+    } else {
+      traffar += vikt
+      exempel ??= { fore: value, efter: delar }
+    }
+  }
+  return { traffar, omatchade, exempel }
 }

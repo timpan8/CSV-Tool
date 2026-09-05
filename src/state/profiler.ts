@@ -3,7 +3,7 @@ import type { Column, Frame } from '../core/types.js'
 import { visibleColumns } from '../core/frame/frame.js'
 import { rubriknyckel } from '../core/ops/rubriker.js'
 import { stadningarEfterId } from '../core/ops/clean.js'
-import { delaVarde } from '../core/ops/columns.js'
+import { byggDelare } from '../core/ops/columns.js'
 import { korMallar, tolkaMall, type Mallar } from '../core/ops/columns.js'
 import { datumTransform, tolkaDatum } from '../core/ops/dates.js'
 import { epostNamndelar, epostTransform } from '../core/ops/email.js'
@@ -254,14 +254,20 @@ function spec(steg: Profilsteg): Forhandsspec | null {
       if (!ersattare.fn) return null
       return { etikett, kind: 'replace', profil: steg, fn: ersattare.fn }
     }
-    case 'dela':
+    case 'dela': {
+      // Samma delare som panelen bygger, så ett mönster tolkas en gång och
+      // uppförandet inte kan glida isär mellan handgreppet och profilen.
+      const dela = byggDelare(steg.delning)
+      const tomma = new Array<string>(steg.namn.length).fill('')
       return {
         etikett,
         kind: 'split',
         profil: steg,
-        delar: (v) => delaVarde(v, steg.delning),
+        delar: (v) => dela(v) ?? tomma,
+        arProblem: steg.delning.satt === 'monster' ? (v) => dela(v) === null : undefined,
         nyaKolumner: steg.namn,
       }
+    }
     default:
       return null
   }
