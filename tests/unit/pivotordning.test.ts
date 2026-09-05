@@ -32,7 +32,15 @@ function resultatMed(rader: Pivotrad[], tal: (number | null)[]): Pivotresultat {
     text.push(Number.isNaN(celler[i]!) ? null : String(celler[i]))
   }
   return {
-    kolumner: [{ etikett: 'A', rader: 1, ovriga: false, tom: false, varden: 0 }],
+    kolumner: [
+      {
+        stig: [0],
+        nivaer: [{ etikett: 'A', rader: 1, ovriga: false, tom: false, varden: 0 }],
+        rader: 1,
+        ovriga: false,
+      },
+    ],
+    kolumnnivaer: 1,
     rader,
     bredd,
     hojd: rader.length + 1,
@@ -42,6 +50,7 @@ function resultatMed(rader: Pivotrad[], tal: (number | null)[]): Pivotresultat {
     utanNyckel: 0,
     doldaRadvarden: 0,
     doldaKolumnvarden: 0,
+    doldaKolumnlov: 0,
     kapat: false,
     lasbarhet: [],
   }

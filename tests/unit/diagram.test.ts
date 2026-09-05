@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createColumn, intern, resetColumnIds } from '../../src/core/frame/column.js'
 import { createFrame } from '../../src/core/frame/frame.js'
 import { pivotera, type Pivotplan } from '../../src/core/ops/pivot.js'
+import { TOMT_FILTER } from '../../src/core/ops/filter.js'
 import type { Berakning } from '../../src/core/ops/gruppera.js'
 import {
   diagramdata,
@@ -34,8 +35,9 @@ function matvarde(over: Partial<Berakning> = {}): Berakning {
 function plan(frame: Frame, over: Partial<Pivotplan> = {}): Pivotplan {
   return {
     rader: [frame.columns[0]!.id],
-    kolumn: frame.columns[1]?.id ?? null,
+    kolumner: frame.columns[1] ? [frame.columns[1].id] : [],
     matvarden: [matvarde()],
+    filter: TOMT_FILTER,
     strunta: STRUNTA,
     tommaMed: false,
     underlag: 'hela',
@@ -52,10 +54,16 @@ function dplan(over: Partial<Diagramplan> = {}): Diagramplan {
 }
 
 /** Kör pivoten och ge diagrammet dess rader i kärnans egen ordning. */
-function rita(frame: Frame, p: Pivotplan, d: Diagramplan, visning?: 'tal' | 'andelRad' | 'andelKolumn') {
+function rita(
+  frame: Frame,
+  p: Pivotplan,
+  d: Diagramplan,
+  visning?: 'tal' | 'andelRad' | 'andelKolumn',
+  texter?: { tomt: string; ovriga: string },
+) {
   const res = pivotera(frame, p)
   const ordning = res.rader.map((_, i) => i)
-  return diagramdata(res, p, d, ordning, visning)
+  return diagramdata(res, p, d, ordning, visning, texter)
 }
 
 const ORTER = frameOf(
@@ -80,8 +88,25 @@ describe('diagramdata', () => {
     expect(d.serier[1]!.varden).toEqual([null, 1, 1])
   })
 
+  it('en serie per kolumnlöv, namngiven med hela vägen', () => {
+    const d = rita(
+      ORTER,
+      plan(ORTER, { rader: [kol(ORTER, 'Belopp')], kolumner: [kol(ORTER, 'Status'), kol(ORTER, 'Ort')] }),
+      dplan(),
+      'tal',
+      { tomt: '(tomt)', ovriga: 'Övriga' },
+    )
+    expect(d.serier.map((s) => s.etikett)).toEqual([
+      'Aktiv · Kiruna',
+      'Aktiv · Lund',
+      'Aktiv · Malmö',
+      'Avslutad · Lund',
+      'Avslutad · Malmö',
+    ])
+  })
+
   it('utan kolumndimension finns en enda serie', () => {
-    const d = rita(ORTER, plan(ORTER, { kolumn: null }), dplan())
+    const d = rita(ORTER, plan(ORTER, { kolumner: [] }), dplan())
     expect(d.serier).toHaveLength(1)
     expect(d.serier[0]!.varden).toEqual([1, 2, 3])
   })
@@ -92,7 +117,7 @@ describe('diagramdata', () => {
      * y-axlar, och då kan samma tal fås att korsa varandra var som helst.
      */
     const p = plan(ORTER, {
-      kolumn: null,
+      kolumner: [],
       matvarden: [
         matvarde({ id: 'a' }),
         matvarde({ id: 'b', typ: 'summa', colId: kol(ORTER, 'Belopp') }),
@@ -107,7 +132,7 @@ describe('diagramdata', () => {
     // gånger, och stapeln blir dubbelt så hög som sina egna delar.
     const p = plan(ORTER, {
       rader: [kol(ORTER, 'Status'), kol(ORTER, 'Ort')],
-      kolumn: null,
+      kolumner: [],
     })
     const res = pivotera(ORTER, p)
     expect(res.rader.length).toBe(7) // 2 delsummor + 5 löv
@@ -117,7 +142,7 @@ describe('diagramdata', () => {
   })
 
   it('följer tabellens ordning, även när den är sorterad', () => {
-    const p = plan(ORTER, { kolumn: null })
+    const p = plan(ORTER, { kolumner: [] })
     const res = pivotera(ORTER, p)
     // Baklänges, som om man klickat sig till fallande ordning.
     const bakvant = res.rader.map((_, i) => res.rader.length - 1 - i)
@@ -203,7 +228,7 @@ describe('skalan', () => {
     const d = rita(
       tom,
       plan(tom, {
-        kolumn: null,
+        kolumner: [],
         matvarden: [matvarde({ typ: 'summa', colId: kol(tom, 'Belopp') })],
       }),
       dplan(),
@@ -226,7 +251,7 @@ describe('andelar', () => {
 
 describe('hinder', () => {
   it('släpper fram cirkeln när den har en helhet att dela upp', () => {
-    const d = rita(ORTER, plan(ORTER, { kolumn: null }), dplan({ typ: 'cirkel' }))
+    const d = rita(ORTER, plan(ORTER, { kolumner: [] }), dplan({ typ: 'cirkel' }))
     expect(d.hinder.cirkel).toBeUndefined()
   })
 
@@ -239,7 +264,7 @@ describe('hinder', () => {
     const d = rita(
       ORTER,
       plan(ORTER, {
-        kolumn: null,
+        kolumner: [],
         matvarden: [matvarde({ typ: 'snitt', colId: kol(ORTER, 'Belopp') })],
       }),
       dplan({ typ: 'cirkel' }),
@@ -252,13 +277,13 @@ describe('hinder', () => {
       ['Ort', 'Kol'],
       Array.from({ length: 7 }, (_, i) => [`ort${i}`, 'A']),
     )
-    const d = rita(manga, plan(manga, { kolumn: null }), dplan({ typ: 'cirkel' }))
+    const d = rita(manga, plan(manga, { kolumner: [] }), dplan({ typ: 'cirkel' }))
     expect(d.hinder.cirkel).toContain('sex')
   })
 
   it('stoppar cirkeln när det bara finns en del', () => {
     const en = frameOf(['Ort', 'Kol'], [['Malmö', 'A']])
-    const d = rita(en, plan(en, { kolumn: null }), dplan({ typ: 'cirkel' }))
+    const d = rita(en, plan(en, { kolumner: [] }), dplan({ typ: 'cirkel' }))
     expect(d.hinder.cirkel).toContain('ingen helhet')
   })
 
