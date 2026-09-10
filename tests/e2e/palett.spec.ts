@@ -99,6 +99,53 @@ test('pilarna flyttar valet och rutnätet rör sig inte bakom', async ({ page })
   await expect(forst).toHaveClass(/rutnat__cell--fokus/)
 })
 
+/*
+ * Musen får inte kapa tangentbordet.
+ *
+ * Posterna tar över valet när pekaren förs över dem, och det ska de. Men
+ * `mouseenter` fyras också när pekaren ligger *stilla* och listan ritas om
+ * under den: piltangenten flyttade valet, omritningen lade en annan post
+ * under pekaren, och den skickade tillbaka valet dit. Utifrån såg det ut som
+ * att piltangenten inte fungerade — och bara ibland, eftersom det berodde på
+ * var muspekaren råkade ligga.
+ *
+ * Testet lägger pekaren mitt på första posten och rör den inte igen.
+ */
+test('piltangenten vinner över en muspekare som ligger stilla på listan', async ({ page }) => {
+  await oppnaExempel(page)
+  await page.keyboard.press('Control+k')
+  await falt(page).fill('rad')
+
+  const poster = page.locator('.palett__post')
+  await expect(poster.first()).toHaveClass(/palett__post--vald/)
+
+  await page.keyboard.press('ArrowDown')
+  await expect(poster.nth(1)).toHaveClass(/palett__post--vald/)
+
+  // Precis det webbläsaren skickar när listan rullar eller ritas om under en
+  // pekare som ligger stilla: en `mouseenter` utan att musen rört sig. Den
+  // får inte flytta valet — gjorde den det hoppade valet tillbaka till posten
+  // under pekaren, och piltangenten såg ut att inte fungera.
+  await poster.first().dispatchEvent('mouseenter')
+  await expect(poster.nth(1)).toHaveClass(/palett__post--vald/)
+  await expect(poster.first()).not.toHaveClass(/palett__post--vald/)
+})
+
+test('musen tar över valet när den faktiskt rör sig', async ({ page }) => {
+  await oppnaExempel(page)
+  await page.keyboard.press('Control+k')
+  await falt(page).fill('rad')
+  const poster = page.locator('.palett__post')
+  await expect(poster.first()).toHaveClass(/palett__post--vald/)
+
+  // Rättningen ovan får inte ha gjort listan död för musen: en riktig
+  // musrörelse ska fortfarande ta över valet.
+  await poster.nth(2).dispatchEvent('mousemove')
+  await expect(poster.nth(2)).toHaveClass(/palett__post--vald/)
+  await poster.nth(4).hover()
+  await expect(poster.nth(4)).toHaveClass(/palett__post--vald/)
+})
+
 test('Escape stänger paletten även när effekterna släpar efter', async ({ page }) => {
   /*
    * Fönstrets tangenthanterare registreras i en effekt, och Preact spolar

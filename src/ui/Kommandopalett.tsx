@@ -100,7 +100,23 @@ export function Kommandopalett(props: { kommandon: readonly Kommando[]; onStang:
                   class={`palett__post${i === aktiv ? ' palett__post--vald' : ''}`}
                   role="option"
                   aria-selected={i === aktiv}
-                  onMouseEnter={() => setVald(i)}
+                  /*
+                   * `mousemove` och inte `mouseenter`.
+                   *
+                   * `mouseenter` fyras även när pekaren ligger *stilla* och
+                   * listan ritas om under den — och då kapade musen
+                   * tangentbordet: ett tryck på piltangenten flyttade valet,
+                   * omritningen lade en annan post under pekaren, och den
+                   * skickade tillbaka valet dit. Utifrån såg det ut som att
+                   * piltangenten inte fungerade, och bara ibland, eftersom
+                   * det berodde på var muspekaren råkade ligga.
+                   *
+                   * `mousemove` fyras bara när pekaren faktiskt rör sig, så
+                   * musen tar över valet när användaren använder den och inte
+                   * annars. Att den fyras ofta kostar ingenting: `setVald`
+                   * med samma värde ritar inte om.
+                   */
+                  onMouseMove={() => setVald(i)}
                   onClick={() => kor(k)}
                 >
                   <span class="palett__etikett">{k.etikett}</span>
