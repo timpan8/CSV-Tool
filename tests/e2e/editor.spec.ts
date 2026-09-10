@@ -10,6 +10,29 @@ async function oppnaExempel(page: Page) {
 
 const cell = (page: Page, text: string) => page.getByRole('gridcell', { name: text, exact: true })
 
+/*
+ * Rutnätet tar emot fokus när man klickar i det, så att `aria-activedescendant`
+ * har någon mening för en skärmläsare. Det betyder att ett klick i en annan
+ * cell numera flyttar DOM-fokus ur redigeringsfältet — och fältets `onBlur`
+ * är det som skriver in värdet. Kedjan är alltså värd ett eget test.
+ */
+test('ett klick i en annan cell avslutar redigeringen och skriver värdet', async ({ page }) => {
+  await oppnaExempel(page)
+
+  await cell(page, 'Anna Karlsson').first().dblclick()
+  const falt = page.locator('.rutnat__redigering')
+  await expect(falt).toBeVisible()
+  await falt.fill('Anna Berg')
+
+  await cell(page, 'Erik Öberg').click()
+
+  await expect(page.locator('.rutnat__redigering')).toHaveCount(0)
+  await expect(cell(page, 'Anna Berg')).toBeVisible()
+  // Fokus hamnade på rutnätet, inte på `body` — annars vore markeringen
+  // osynlig för en skärmläsare igen.
+  await expect(page.getByRole('grid')).toBeFocused()
+})
+
 test('redigerar en cell, ångrar och gör om', async ({ page }) => {
   await oppnaExempel(page)
 

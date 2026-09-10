@@ -199,9 +199,10 @@ test('slår ihop till en ny flik där omatchade rader finns kvar tomma', async (
   await expect(page.locator('.statusrad')).toContainText('16 rader')
 
   // Kundfilens kolumner först, orderkolumnerna efter.
-  // Radnummerrutan är ingen kolumnrubrik, så den första är Kundnr.
+  // Radnummerrutan är rutnätets kolumn 1 — den rubricerar radnumren — så
+  // filens första egna kolumn ligger på index 1.
   const rubriker = page.getByRole('columnheader')
-  await expect(rubriker.nth(0)).toContainText('Kundnr')
+  await expect(rubriker.nth(1)).toContainText('Kundnr')
   await expect(page.getByRole('columnheader', { name: /Summa/ })).toBeVisible()
 
   // Anna fick sin ordersumma. Hon står två gånger i kundfilen, så samma

@@ -494,6 +494,20 @@
   opacity: 0.42;
 }
 
+/*
+ * Raden om kastade steg är en upplysning, inte en knapp: det finns ingenting
+ * att klicka på, och den ska inte se ut som om det fanns.
+ */
+.steg--glomda {
+  font-style: italic;
+  cursor: default;
+}
+
+.steg--glomda:hover {
+  background: transparent;
+  color: var(--text-svag);
+}
+
 .steg__nr {
   color: var(--text-svagast);
   font-variant-numeric: tabular-nums;

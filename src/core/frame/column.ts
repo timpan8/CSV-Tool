@@ -155,6 +155,32 @@ export function snapshotColumn(col: Column): ColumnSnapshot {
 }
 
 /**
+ * Ungefär hur många byte en kolumn eller en ögonblicksbild håller kvar.
+ *
+ * Historikens minnestak i `store.ts` behöver kunna skilja ett steg som väger
+ * ingenting från ett som väger tiotals megabyte. Måttet behöver därför inte
+ * vara exakt — men det måste räkna **ordboken**, som ofta väger mer än
+ * koderna: en kolumn med ett unikt värde per rad har hela sitt innehåll där.
+ *
+ * Tolv byte per sträng utöver innehållet är en medveten underskattning av
+ * V8:s objekthuvud. Ett tak som underskattar släpper igenom några steg för
+ * mycket; ett som överskattar kastar steg som hade fått plats, och det är det
+ * dyrare felet.
+ *
+ * Formen är strukturell så att både `Column` och `ColumnSnapshot` går in —
+ * de delar de tre fält som väger något.
+ */
+export function columnBytes(col: {
+  dict: readonly string[]
+  codes: Uint32Array
+  flags: Uint8Array
+}): number {
+  let bytes = col.codes.byteLength + col.flags.byteLength
+  for (const varde of col.dict) bytes += varde.length * 2 + 12
+  return bytes
+}
+
+/**
  * Återställer en kolumn från en ögonblicksbild.
  *
  * Kopierar ur bilden i stället för att ta över den, så att samma bild kan

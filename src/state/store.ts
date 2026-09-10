@@ -37,6 +37,21 @@ export interface AppliedStep {
   apply: () => void
   revert: () => void
   /**
+   * Ungefär hur många byte `revert` håller kvar, eller utelämnad för de steg
+   * som inte håller kvar något som märks.
+   *
+   * Ett ångra-steg är en stängning över det som fanns *innan*, och det är
+   * det som kostar. `redigeraCell` behåller två tal; ett verktyg som skrivit
+   * om tolv kolumner behåller tolv kolumner. Historikens minnestak nedan kan
+   * inte se skillnaden själv — en stängning går inte att väga utifrån — så
+   * den som skapar steget får säga det. Se `columnBytes`.
+   *
+   * Utelämnad vikt betyder noll, alltså *kastas aldrig*. Det är rätt förval:
+   * de tunga stegen är få och kända, och att glömma vikten på ett lätt steg
+   * ska inte kunna göra historiken kortare.
+   */
+  vikt?: number
+  /**
    * Steget uttryckt som data, för profiler.
    *
    * `apply` och `revert` är stängningar över den här filens kolumner och går
@@ -54,6 +69,15 @@ export interface Tab {
   history: AppliedStep[]
   /** Antal steg i `history` som är tillämpade. Ångra flyttar den bakåt. */
   cursor: number
+  /**
+   * Antal steg som kastats ur historikens början för att spara minne.
+   *
+   * Noll så gott som alltid — se `HISTORIKTAK`. Räknaren finns för att
+   * steglistan ska kunna numrera rätt och säga vad som hänt: ett steg som
+   * försvinner ur listan och tar numreringen med sig vore precis den sortens
+   * tysta ändring verktyget annars aldrig gör.
+   */
+  bortglomda: number
   /**
    * Räknare som bara stegas när cellinnehållet faktiskt ändrats.
    *
@@ -532,6 +556,7 @@ export function nyTab(frame: Frame): Tab {
     frame,
     history: [],
     cursor: 0,
+    bortglomda: 0,
     dataRevision: 0,
     activeColumnId: frame.columns[0]?.id ?? null,
     smutsig: false,
@@ -577,6 +602,60 @@ export function setActiveColumn(id: ColumnId | null): void {
 }
 
 /**
+ * Minnestaket för ångra-historiken, i byte.
+ *
+ * Ett steg som skriver om en kolumn håller kvar kolumnen som den såg ut
+ * innan. Det är vad som *gör* ångra möjligt, och det är inte gratis: på en
+ * fil med en halv miljon rader väger en bild över hela ramen ett par tiotal
+ * megabyte, och femtio sådana steg är mer minne än fliken har. Utan tak
+ * märks det inte förrän webbläsaren dödar fliken — och en kraschad flik är
+ * den enda återkoppling det här verktyget annars aldrig ger.
+ *
+ * Taket är avsiktligt högt. På en vanlig fil väger hela historiken mindre än
+ * en enda ögonblicksbild på en stor, och då ska ingenting kastas: den som
+ * arbetar i en fil på tiotusen rader ska kunna ångra hur långt tillbaka som
+ * helst. Det är bara på de riktigt tunga filerna taket slår till, och där är
+ * valet inte mellan lång och kort historik utan mellan kort historik och
+ * ingen flik.
+ */
+export const HISTORIKTAK = 256 * 1024 * 1024
+
+/** Vad historiken väger just nu, i byte. */
+export function historikvikt(tab: Tab): number {
+  let vikt = 0
+  for (const step of tab.history) vikt += step.vikt ?? 0
+  return vikt
+}
+
+/**
+ * Kastar de äldsta stegen när historiken väger mer än taket.
+ *
+ * Anropas bara direkt efter att ett steg lagts till. Då står markören sist i
+ * listan och det finns ingenting att göra om — att kasta ur början medan
+ * markören stod mitt i listan hade tagit gör om med sig, och en gör
+ * om-tangent som ibland gör om vore värre än ingen.
+ *
+ * **Det sist tillagda steget kastas aldrig**, hur tungt det än är. Att kunna
+ * ångra det man just gjorde är den viktigaste ångringen av alla, och ett tak
+ * som tog den vore sämre än inget tak. Ett enda steg som ensamt spränger
+ * taket får alltså ligga kvar — minnet är ändå redan taget, av kolumnerna
+ * steget håller kvar.
+ */
+function glomForTunga(tab: Tab): void {
+  let vikt = historikvikt(tab)
+  if (vikt <= HISTORIKTAK) return
+  let glomda = 0
+  while (vikt > HISTORIKTAK && glomda < tab.history.length - 1) {
+    vikt -= tab.history[glomda]!.vikt ?? 0
+    glomda += 1
+  }
+  if (glomda === 0) return
+  tab.history = tab.history.slice(glomda)
+  tab.cursor -= glomda
+  tab.bortglomda += glomda
+}
+
+/**
  * Kör en ändring och lägger den i historiken.
  *
  * Steg efter markören kastas när en ny ändring görs — standardbeteendet för
@@ -593,6 +672,7 @@ export function runStep(
   trimmed.push({ ...step, id: (seq += 1) })
   tab.history = trimmed
   tab.cursor = trimmed.length
+  glomForTunga(tab)
   tab.smutsig = true
   tab.redigerar = null
   // En dataändring kan mycket väl få raden att falla ur en pågående sökning.

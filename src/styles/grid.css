@@ -11,6 +11,17 @@
   user-select: none;
 }
 
+/*
+ * Fokusringen ritas innanför kanten.
+ *
+ * Rutnätet är rullningsytan, och den globala regelns `outline-offset: 1px`
+ * lägger ringen utanför — där föräldern klipper den. En ring man bara ser tre
+ * sidor av är sämre än ingen, eftersom den ser ut som ett ritfel.
+ */
+.rutnat:focus-visible {
+  outline-offset: -2px;
+}
+
 .rutnat__redigering {
   user-select: text;
 }

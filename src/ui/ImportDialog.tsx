@@ -35,6 +35,49 @@ export interface ImportSettings {
   decimal: ',' | '.'
 }
 
+/**
+ * Hur många gånger sin filstorlek en fil behöver i minne medan den öppnas.
+ *
+ * Mätt på verktygets egen parser: en CSV på 34 MB med en halv miljon rader
+ * lämnar en ram på ungefär 72 MB, alltså drygt två gånger filen. Toppen
+ * under själva importen är högre — filens byte, den avkodade texten och
+ * parserns mellanrader finns samtidigt — och det är toppen som avgör om
+ * fliken överlever. Därför fyra, inte två.
+ *
+ * En arbetsbok är dessutom komprimerad. Samma data vägde 16 MB som `.xlsx`
+ * mot 34 MB som CSV, så en xlsx-fil expanderar ungefär dubbelt så mycket per
+ * byte — och betydligt mer än så när innehållet upprepar sig, vilket det ofta
+ * gör i just de filer som är stora. Siffran är alltså en storleksordning och
+ * inte ett löfte, och texten säger *ungefär*.
+ */
+const RAMFAKTOR = 4
+const RAMFAKTOR_XLSX = 8
+
+/**
+ * Var vi börjar säga ifrån, i byte minne.
+ *
+ * Under det här är det ingen idé att oroa någon. Över det är det ingen idé
+ * att låta bli: en flik som dör tar hela arbetsgången med sig, och det enda
+ * verktyget kan göra åt saken är att säga det innan man väntat i en minut på
+ * en import som ändå inte går igenom.
+ */
+const VARNA_VID = 512 * 1024 * 1024
+
+/**
+ * Ungefär hur mycket arbetsminne filen behöver medan den öppnas, i byte.
+ *
+ * Exporterad för att räknesättet ska gå att pröva utan att någon behöver
+ * lägga en fil på hundra megabyte i testkatalogen.
+ */
+export function minnesbehov(storlek: number, arExcel: boolean): number {
+  return storlek * (arExcel ? RAMFAKTOR_XLSX : RAMFAKTOR)
+}
+
+/** Sant när filen är stor nog att det är värt att säga något. */
+export function varnarForStorlek(storlek: number, arExcel: boolean): boolean {
+  return minnesbehov(storlek, arExcel) >= VARNA_VID
+}
+
 export function ImportDialog(props: {
   file: File
   onAvbryt: () => void
@@ -183,6 +226,8 @@ export function ImportDialog(props: {
 
       {error && <Notis ton="fara">{tf('Filen kunde inte läsas: {0}', error)}</Notis>}
 
+      <Minnesvarning file={props.file} arExcel={arExcel} />
+
       {preview && <Sjalvkontroll preview={preview} arExcel={arExcel} />}
 
       {preview && (
@@ -224,6 +269,37 @@ export function ImportDialog(props: {
         </div>
       )}
     </Modal>
+  )
+}
+
+/**
+ * Varningen för en fil som troligen inte får plats.
+ *
+ * Den står här och inte bland importvarningarna nedan, eftersom de kommer ur
+ * parsningen — och poängen med den här är att den kommer *före*. Att få veta
+ * att filen var för stor efter att ha väntat på att den skulle läsas är inte
+ * att få veta det.
+ *
+ * Den blockerar inte. Gissningen är en storleksordning, maskinerna är olika,
+ * och den som vet att det brukar fungera ska inte hindras av en siffra som
+ * kan ha fel. Det är samma hållning som resten av importdialogen: säg det
+ * rakt ut, låt användaren bestämma.
+ */
+function Minnesvarning({ file, arExcel }: { file: File; arExcel: boolean }) {
+  if (!varnarForStorlek(file.size, arExcel)) return null
+  const behov = minnesbehov(file.size, arExcel)
+  return (
+    <Notis ton="varning">
+      {tf(
+        'Filen är stor. Den behöver ungefär {0} arbetsminne medan den öppnas, och allt arbete sker i den här fliken — går minnet ut stänger webbläsaren fliken utan att fråga.',
+        formatByte(behov),
+      )}{' '}
+      {arExcel
+        ? t(
+            'En Excel-fil är komprimerad och växer mer än sin storlek antyder. Har du filen som CSV tar den mindre plats.',
+          )
+        : t('Ett sätt runt det är att dela filen i delar och köra dem en i taget.')}
+    </Notis>
   )
 }
 

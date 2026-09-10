@@ -5,6 +5,7 @@ import {
   intern,
   mapColumnValues,
   restoreCell,
+  columnBytes,
   restoreColumn,
   setCell,
   snapshotColumn,
@@ -74,6 +75,23 @@ function selectedColumns(tab: Tab, sel: Selection): Column[] {
  *
  * Därför står `tf(...)` här, i skapandet, och inte `t(...)` vid ritningen.
  */
+/**
+ * Grov vikt per sparad cell, i byte.
+ *
+ * `SavedRow` håller värdena som strängar och flaggorna som tal — alltså inte
+ * ordbokskodat. En kort sträng med sitt objekthuvud, ett tal i en array och
+ * platsen i de två arrayerna landar tillsammans någonstans kring det här.
+ * Siffran ska skilja tusen rader från en miljon, inte vara exakt.
+ */
+const CELLVIKT = 40
+
+/** Vad en uppsättning ögonblicksbilder väger tillsammans, i byte. */
+function bildvikt(bilder: Map<ColumnId, ColumnSnapshot>): number {
+  let vikt = 0
+  for (const bild of bilder.values()) vikt += columnBytes(bild)
+  return vikt
+}
+
 function korOverKolumner(
   tab: Tab,
   label: string,
@@ -88,6 +106,7 @@ function korOverKolumner(
     label,
     kind,
     profil,
+    vikt: bildvikt(bilder),
     apply: utfor,
     revert: () => {
       for (const col of kolumner) {
@@ -243,6 +262,9 @@ export function klistraIn(tab: Tab, sel: Selection, plan: PasteRequest, utoka: b
   runStep(tab, {
     label: tf('Klistrade in {0}', rader(plan.rader.length)),
     kind: 'paste',
+    // Hela ramen, inte bara de berörda kolumnerna: en inklistring kan låta
+    // tabellen växa, och då finns det ingen lista över vad den rörde.
+    vikt: bildvikt(bilder) + sourceRowFore.byteLength,
     apply: () => {
       if (utoka && plan.extraRader > 0) insertRows(frame, frame.rowCount, plan.extraRader)
       if (utoka && plan.extraKolumner > 0) {
@@ -295,6 +317,10 @@ export function taBortRader(
     label: etikett ?? tf('Tog bort {0}', rader(radlista.length)),
     kind: 'deleteRows',
     profil,
+    // De borttagna raderna sparas som strängar, en per cell — inte som koder.
+    // Vikten går därför att räkna i förväg, till skillnad från `sparade`, som
+    // fylls först när `apply` körts.
+    vikt: radlista.length * tab.frame.columns.length * CELLVIKT,
     apply: () => {
       sparade = deleteRows(tab.frame, radlista)
     },
@@ -354,6 +380,10 @@ export function taBortTommaKolumner(tab: Tab): number {
     label: tf('Tog bort {0} som var helt tomma', kolumner(tomma.length)),
     kind: 'dropEmptyColumns',
     profil: { typ: 'tommaKolumner' },
+    // Kolumnerna själva hålls kvar för att kunna läggas tillbaka. En tom
+    // kolumn har visserligen en ordbok med bara tomma strängen, men koderna
+    // och flaggorna är lika många som raderna.
+    vikt: borttagna.reduce((summa, b) => summa + columnBytes(b.col), 0),
     apply: () => {
       tab.frame.columns = tab.frame.columns.filter((c) => !tomma.includes(c.id))
     },
@@ -394,6 +424,9 @@ export function laggTillLopnummer(tab: Tab, onskatNamn = 'Nr'): Column {
     label: tf('Lade till {0} med löpnummer', namn),
     kind: 'lopnummer',
     profil: { typ: 'lopnummer', namn },
+    // Ett löpnummer är ordbokskodningens värsta fall — ett unikt värde per
+    // rad — så kolumnen hålls kvar med hela sitt innehåll i ordboken.
+    vikt: columnBytes(col),
     // Först i filen: numret är radens identitet, och identiteten står först.
     apply: () => {
       tab.frame.columns.unshift(col)
@@ -571,6 +604,9 @@ function skapaKolumnerFran(tab: Tab, kall: Column, forh: Forhandsvisning): numbe
     label: forh.etikett,
     kind: forh.kind,
     profil: forh.profil,
+    // Gör om lägger tillbaka exakt samma kolumnobjekt, så steget håller kvar
+    // dem hela tiden — inte bara medan de är borttagna.
+    vikt: nya.reduce((summa, col) => summa + columnBytes(col), 0),
     apply: () => {
       tab.frame.columns.splice(index, 0, ...nya)
     },
