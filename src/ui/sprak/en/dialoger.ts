@@ -63,6 +63,9 @@ export const DIALOGER: Record<string, string> = {
   Steg: 'Steps',
   'Ångra till och med det här steget': 'Undo up to and including this step',
   'Ångrat — gör om med Ctrl+Y': 'Undone — redo with Ctrl+Y',
+  '{0} äldre steg går inte längre att ångra': '{0} older steps can no longer be undone',
+  'Historiken har ett minnestak. På en stor fil väger varje steg tiotals megabyte, och de äldsta släpps för att fliken ska överleva. Datat är orört — det är bara vägen tillbaka som är kortare.':
+    'The history has a memory ceiling. In a large file every step weighs tens of megabytes, and the oldest are let go so that the tab survives. The data is untouched — it is only the way back that is shorter.',
   'Öppna som ny fil': 'Open as a new file',
   'Klipp av': 'Cut off',
   'Lägg till plats': 'Make room',
@@ -226,6 +229,12 @@ export const DIALOGER: Record<string, string> = {
   'Excels sep=-rad hittades och användes.': 'Excel’s sep= line was found and used.',
   'Filen innehåller bara ASCII-tecken i den del vi läst, så det går inte att avgöra om teckenkodningen är rätt vald. Har filen svenska tecken längre ned kan de behöva en annan kodning.':
     'The part of the file we read holds only ASCII characters, so there is no telling whether the encoding is the right one. If the file has Swedish characters further down, they may need a different encoding.',
+  'Filen är stor. Den behöver ungefär {0} arbetsminne medan den öppnas, och allt arbete sker i den här fliken — går minnet ut stänger webbläsaren fliken utan att fråga.':
+    'The file is large. It needs roughly {0} of working memory while it opens, and all the work happens in this tab — if memory runs out the browser closes the tab without asking.',
+  'En Excel-fil är komprimerad och växer mer än sin storlek antyder. Har du filen som CSV tar den mindre plats.':
+    'An Excel file is compressed and grows more than its size suggests. If you have the file as CSV it takes up less room.',
+  'Ett sätt runt det är att dela filen i delar och köra dem en i taget.':
+    'One way around it is to split the file into parts and run them one at a time.',
   'Teckenkodningen ser trasig ut. Exempel ur filen: {0}. Prova en annan teckenkodning ovan.':
     'The character encoding looks broken. Examples from the file: {0}. Try a different encoding above.',
 
@@ -409,6 +418,7 @@ export const DIALOGER: Record<string, string> = {
   'Visa de {0} bakom {1}': 'Show the {0} behind {1}',
   'Visa raderna bakom {0}': 'Show the rows behind {0}',
   'Dölj raderna bakom': 'Hide the rows behind',
+  'Raderna bakom den valda cellen': 'The rows behind the selected cell',
   'Inga rader bakom den cellen.': 'No rows behind that cell.',
   'Gör flik av urvalet': 'Make a tab of the selection',
   'Kopiera raderna som TSV — klistra in direkt i Excel.':

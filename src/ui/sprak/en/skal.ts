@@ -132,6 +132,7 @@ export const SKAL: Record<string, string> = {
   'Raden är identisk med de andra i sin grupp i varje kolumn.':
     'The row is identical to the others in its group in every column.',
   'Tillagd rad — fanns inte i filen': 'Added row — was not in the file',
+  'Tabellen {0}': 'The {0} table',
   'Rad {0} i filen': 'Row {0} in the file',
   '. Identisk med de andra i sin dubblettgrupp.': '. Identical to the others in its duplicate group.',
   '. Klicka för att markera raden.': '. Click to select the row.',

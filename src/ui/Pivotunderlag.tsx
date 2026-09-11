@@ -119,6 +119,9 @@ export function Pivotunderlag(props: {
       ) : (
         <VirtualGrid
           frame={vy}
+          // Två rutnät ligger på skärmen samtidigt när panelen är öppen, och
+          // båda heter annars samma sak för en skärmläsare.
+          etikett={t('Raderna bakom den valda cellen')}
           revision={props.revision}
           activeColumnId={null}
           viewSpec={TOM_VY}

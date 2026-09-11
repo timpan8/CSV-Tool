@@ -61,10 +61,11 @@ test('skapar kolumnen intill e-postkolumnen och går att ångra', async ({ page 
   await expect(page.locator('.statusrad')).toContainText('9 kolumner')
   await expect(cell(page, 'Anna').first()).toBeVisible()
 
-  // Kolumnen hamnade direkt efter sin källa.
+  // Kolumnen hamnade direkt efter sin källa. Radnummerrutan är rutnätets
+  // första kolumnrubrik, så filens egna kolumner börjar på index 1.
   const rubriker = page.getByRole('columnheader')
-  await expect(rubriker.nth(2)).toContainText('E-post')
-  await expect(rubriker.nth(3)).toContainText('Förnamn')
+  await expect(rubriker.nth(3)).toContainText('E-post')
+  await expect(rubriker.nth(4)).toContainText('Förnamn')
 
   await page.keyboard.press('Control+z')
   await expect(page.locator('.statusrad')).toContainText('8 kolumner')
@@ -86,7 +87,8 @@ test('byter fält och namn på kolumnen', async ({ page }) => {
   await expect(page.locator('.rubrik--spoke')).toContainText('Kontaktperson')
 
   await page.getByRole('button', { name: 'Skapa kolumnen' }).click()
-  await expect(page.getByRole('columnheader').nth(3)).toContainText('Kontaktperson')
+  // Index 4: radnummerrutan, Kundnr, Namn, E-post, och så den nya.
+  await expect(page.getByRole('columnheader').nth(4)).toContainText('Kontaktperson')
 })
 
 test('gör inte en funktionsadress till en person', async ({ page }) => {

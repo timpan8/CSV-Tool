@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Column, ColumnId, Frame } from '../../core/types.js'
 import { Flag } from '../../core/types.js'
 import { t, tf } from '../sprak.js'
@@ -36,6 +36,14 @@ export type Flytt = 'ned' | 'hoger' | 'ingen'
 
 export interface GridProps {
   frame: Frame
+  /**
+   * Rutnätets namn för en skärmläsare.
+   *
+   * Två rutnät kan ligga på skärmen samtidigt — fliken och pivotens
+   * underlagspanel — och ”tabell med 500 000 rader” två gånger säger inte
+   * vilken som är vilken. Utelämnad blir det filens namn.
+   */
+  etikett?: string
   /** Bumpas när ramen muterats, så komponenten vet att rita om. */
   revision: number
   activeColumnId: ColumnId | null
@@ -162,6 +170,56 @@ export function VirtualGrid(props: GridProps) {
   const last = Math.min(total, first + visibleCount)
   const markerat = markering ? rect(markering) : null
 
+  /*
+   * Kolumnernas nummer för skärmläsaren, i DOM-ordning.
+   *
+   * `aria-colindex` måste växa i den ordning cellerna står i märkspråket, och
+   * spökkolumnerna står *mellan* de riktiga. Att numrera bara de riktiga
+   * kolumnerna hade alltså gett en ordning som hoppar bakåt vid varje
+   * förhandsvisning av en ny kolumn.
+   *
+   * Ruta 1 är radnummerkolumnen, så datat börjar på 2.
+   */
+  const kolindex: number[] = []
+  let kolraknare = 2
+  for (const col of columns) {
+    kolindex.push(kolraknare)
+    kolraknare += 1 + (spoke(col)?.nyaKolumner.length ?? 0)
+  }
+  const kolumnantal = kolraknare - 1
+
+  /*
+   * Fokuscellens id, för `aria-activedescendant`.
+   *
+   * Markeringen är rutnätets egen, ritad med en ram — den flyttar inte
+   * DOM-fokus, eftersom cellen under markören när som helst kan virtualiseras
+   * bort och fokus då hade fallit till `body`. `aria-activedescendant` är
+   * svaret på just det: fokus ligger stilla på rutnätet, och attributet pekar
+   * ut vilken cell som är den aktiva.
+   *
+   * `useId` och inte en fast sträng: pivotens underlagspanel ritar ett eget
+   * rutnät, och två element med samma id är inget id alls.
+   */
+  const gridId = useId()
+  const fokuscellId = `${gridId}-fokus`
+  const fokusSynlig =
+    markering !== null && markering.fokusRad >= first && markering.fokusRad < last
+
+  /**
+   * Låter rutnätet ta emot tangentbordet när man klickat i det.
+   *
+   * `aria-activedescendant` betyder ingenting om inte elementet som bär det
+   * faktiskt har fokus. Tangentgenvägarna ligger på fönstret och fungerade
+   * redan utan fokus — det här handlar om vad skärmläsaren får veta.
+   *
+   * `preventScroll` för att rutnätet *är* rullningsytan: utan den hoppar
+   * vyn till det fokuserade elementet varje gång man klickar i en cell.
+   */
+  const taFokus = () => {
+    const el = scrollerRef.current
+    if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true })
+  }
+
   const valj = (rad: number, kol: number, utoka: boolean) => {
     if (utoka && markering) props.onSelect({ ...markering, fokusRad: rad, fokusKol: kol })
     else props.onSelect({ ankareRad: rad, ankareKol: kol, fokusRad: rad, fokusKol: kol })
@@ -210,12 +268,17 @@ export function VirtualGrid(props: GridProps) {
         }`}
         key={physical}
         role="row"
+        // Ett-baserat, och rubrikraden är rad 1. Utan det här skulle en
+        // skärmläsare läsa radens plats bland de ~40 som råkar vara ritade.
+        aria-rowindex={i + 2}
         style={{ height: `${rowHeight}px` }}
       >
         <div
           class={`rutnat__radnr rutnat__radnr--valjbar${
             source === 0 ? ' rutnat__radnr--tillagd' : ''
           }`}
+          role="rowheader"
+          aria-colindex={1}
           title={
             (source === 0 ? t('Tillagd rad — fanns inte i filen') : tf('Rad {0} i filen', source)) +
             (heltLika ? t('. Identisk med de andra i sin dubblettgrupp.') : '') +
@@ -264,6 +327,8 @@ export function VirtualGrid(props: GridProps) {
             key={col.id}
             col={col}
             row={physical}
+            kolindex={kolindex[kol]!}
+            id={markering?.fokusRad === i && markering.fokusKol === kol ? fokuscellId : undefined}
             markerad={markering !== null && innehaller(markering, i, kol)}
             fokus={markering?.fokusRad === i && markering.fokusKol === kol}
             redigeras={redigerar?.rad === i && redigerar.kol === kol}
@@ -271,6 +336,7 @@ export function VirtualGrid(props: GridProps) {
             forhandsvisning={forKolumn(props.forhandsvisning, col.id)}
             onPointerDown={(utoka) => {
               drarMarkering.current = true
+              taFokus()
               valj(i, kol, utoka)
             }}
             onPointerEnter={() => {
@@ -292,6 +358,7 @@ export function VirtualGrid(props: GridProps) {
               kall={col}
               row={physical}
               mal={mal}
+              kolindex={kolindex[kol]! + 1 + mal}
               forh={spoke(col)!}
             />
           )) ?? []),
@@ -305,8 +372,23 @@ export function VirtualGrid(props: GridProps) {
       class="rutnat"
       ref={scrollerRef}
       role="grid"
+      aria-label={props.etikett ?? tf('Tabellen {0}', frame.name)}
       aria-rowcount={total + 1}
-      aria-colcount={columns.length + 1}
+      aria-colcount={kolumnantal}
+      /*
+       * Rutnätet går att nå med tabb.
+       *
+       * Utan det gick tangentbordet till rutnätet ändå — genvägarna ligger på
+       * fönstret — men det fanns inget sätt att *ta sig dit*, och ingenting
+       * som talade om för en skärmläsare att tabellen var det man stod i.
+       */
+      tabIndex={0}
+      /*
+       * Bara när fokuscellen verkligen är ritad. Rullar man med hjulet långt
+       * från markeringen virtualiseras den bort, och ett attribut som pekar
+       * på ett id som inte finns är sämre än inget attribut.
+       */
+      aria-activedescendant={fokusSynlig ? fokuscellId : undefined}
       onScroll={(e) => setScrollTop((e.currentTarget as HTMLDivElement).scrollTop)}
       onPointerUp={() => {
         drarMarkering.current = false
@@ -328,9 +410,11 @@ export function VirtualGrid(props: GridProps) {
         props.onOpenTomrumMenu(e.clientX, e.clientY)
       }}
     >
-      <div class="rutnat__rubrikrad" role="row">
+      <div class="rutnat__rubrikrad" role="row" aria-rowindex={1}>
         <div
           class="rutnat__radnr"
+          role="columnheader"
+          aria-colindex={1}
           title={t('Radens nummer i källfilen. Ändras inte av sortering eller filtrering.')}
         >
           #
@@ -339,6 +423,7 @@ export function VirtualGrid(props: GridProps) {
           <Header
             key={col.id}
             col={col}
+            kolindex={kolindex[index]!}
             aktiv={col.id === activeColumnId}
             markerad={markerat !== null && index >= markerat.k1 && index <= markerat.k2}
             kvalitet={quality.get(col.id)!}
@@ -388,6 +473,7 @@ export function VirtualGrid(props: GridProps) {
               class="rubrik rubrik--spoke"
               style={{ width: `${col.width ?? DEFAULT_WIDTH}px` }}
               role="columnheader"
+              aria-colindex={kolindex[index]! + 1 + mal}
             >
               <span class="rubrik__namn">{namn}</span>
               <span class="rubrik__spoke">{t('ny kolumn')}</span>
@@ -416,7 +502,13 @@ export function VirtualGrid(props: GridProps) {
  * inte markerbar och går inte att redigera. Kolumnen finns inte i ramen förrän
  * någon klickat Tillämpa.
  */
-function SpokCell(props: { kall: Column; row: number; mal: number; forh: Forhandsvisning }) {
+function SpokCell(props: {
+  kall: Column
+  row: number
+  mal: number
+  kolindex: number
+  forh: Forhandsvisning
+}) {
   const value = spokvarde(props.forh, props.kall, props.row, props.mal)
   const problem =
     ((props.forh.status[uppslag(props.forh, props.kall, props.row)] ?? 0) & PROBLEM) !== 0
@@ -427,6 +519,7 @@ function SpokCell(props: { kall: Column; row: number; mal: number; forh: Forhand
       }`}
       role="gridcell"
       aria-readonly="true"
+      aria-colindex={props.kolindex}
       style={{ width: `${props.kall.width ?? DEFAULT_WIDTH}px` }}
       title={value}
     >
@@ -438,6 +531,10 @@ function SpokCell(props: { kall: Column; row: number; mal: number; forh: Forhand
 interface CellProps {
   col: Column
   row: number
+  /** Ett-baserat kolumnnummer för skärmläsaren, radnummerkolumnen inräknad. */
+  kolindex: number
+  /** Sätts bara på fokuscellen, som rutnätets `aria-activedescendant` pekar på. */
+  id: string | undefined
   markerad: boolean
   fokus: boolean
   redigeras: boolean
@@ -477,8 +574,10 @@ function Cell(props: CellProps) {
   return (
     <div
       class={classes.join(' ')}
+      id={props.id}
       role="gridcell"
       aria-selected={props.markerad}
+      aria-colindex={props.kolindex}
       style={{ width: `${col.width ?? DEFAULT_WIDTH}px` }}
       title={
         forh?.andrad
@@ -582,6 +681,8 @@ function CellEditor(props: {
 
 interface HeaderProps {
   col: Column
+  /** Ett-baserat kolumnnummer för skärmläsaren, radnummerkolumnen inräknad. */
+  kolindex: number
   aktiv: boolean
   markerad: boolean
   kvalitet: Quality
@@ -636,6 +737,7 @@ function Header(props: HeaderProps) {
     <div
       class={classes.join(' ')}
       role="columnheader"
+      aria-colindex={props.kolindex}
       style={{ width: `${width}px`, '--typfarg': TYPE_COLOR[col.type] } as never}
       title={col.name}
       draggable

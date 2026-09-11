@@ -150,16 +150,34 @@ function TypMarke({ col }: { col: Column }) {
  * precis före det.
  */
 function StegLista(props: { tab: Tab; onUndoThrough: (index: number) => void }) {
-  const { history, cursor } = props.tab
+  const { history, cursor, bortglomda } = props.tab
   if (history.length === 0) return null
 
   return (
     <>
       <div class="panel__rubrik" style={{ borderTop: '1px solid var(--linje)' }}>
         {t('Steg')}
-        <span class="panel__rubrik__antal">{formatCount(cursor)}</span>
+        <span class="panel__rubrik__antal">{formatCount(bortglomda + cursor)}</span>
       </div>
       <div class="panel__innehall" style={{ flex: '0 1 auto', maxHeight: '30%' }}>
+        {/*
+         * Att steg kastats sägs rakt ut, i listan där de skulle ha stått.
+         * Alternativet vore att numreringen tyst började om på 1 och att den
+         * som letade efter sitt tionde steg trodde att det aldrig hänt.
+         */}
+        {bortglomda > 0 && (
+          <div
+            class="steg steg--glomda"
+            title={t(
+              'Historiken har ett minnestak. På en stor fil väger varje steg tiotals megabyte, och de äldsta släpps för att fliken ska överleva. Datat är orört — det är bara vägen tillbaka som är kortare.',
+            )}
+          >
+            <span class="steg__nr">⋯</span>
+            <span>
+              {tf('{0} äldre steg går inte längre att ångra', formatCount(bortglomda))}
+            </span>
+          </div>
+        )}
         {history.map((step: AppliedStep, i) => (
           <button
             key={step.id}
@@ -169,7 +187,7 @@ function StegLista(props: { tab: Tab; onUndoThrough: (index: number) => void }) 
             )}
             onClick={() => i < cursor && props.onUndoThrough(i)}
           >
-            <span class="steg__nr">{i + 1}</span>
+            <span class="steg__nr">{bortglomda + i + 1}</span>
             <span>{step.label}</span>
           </button>
         ))}
