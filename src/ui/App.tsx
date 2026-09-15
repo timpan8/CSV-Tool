@@ -297,6 +297,12 @@ export function App() {
           message: tf('Innehållet är identiskt med den redan öppna fliken ”{0}”.', dubblett.frame.name),
         })
       }
+      if (inklistrade.current.has(file)) {
+        parsed.name = unikFilnamn(
+          tabs.value.map((t) => t.frame.name),
+          parsed.name,
+        )
+      }
       const flik = openFrame(parsed)
       // Filen öppnades från kombineringsvyns "Öppna mallfil…". Den gick samma
       // väg som alla andra filer, genom importdialogen — en mall som lästs med
@@ -353,10 +359,23 @@ export function App() {
     setKö((current) => [...current, exempelfil(EXEMPELFIL_MALL, 'exempel-mall.csv')])
   }
 
+  /**
+   * Filerna som kom ur urklippet, så att inläsningen känner igen dem.
+   *
+   * Namnet räknas ut när texten klistras in, men fliken från förra
+   * inklistringen finns inte i fliklistan förrän filen lästs klart — så två
+   * snabba inklistringar fick båda `Inklistrat 1`. Inläsningen räknar därför
+   * om namnet i öppningsögonblicket, och bara för de här filerna: en riktig
+   * fil som öppnas två gånger ska fortfarande heta vad den heter.
+   */
+  const inklistrade = useRef(new WeakSet<File>())
+
   /** Öppnar text från urklipp som en ny flik. */
   const oppnaText = (text: string, namn: string) => {
     const blob = new Blob([text], { type: 'text/csv' })
-    setKö((current) => [...current, new File([blob], namn, { type: 'text/csv' })])
+    const fil = new File([blob], namn, { type: 'text/csv' })
+    inklistrade.current.add(fil)
+    setKö((current) => [...current, fil])
   }
 
   /* ---------- Kolumnåtgärder ---------- */
