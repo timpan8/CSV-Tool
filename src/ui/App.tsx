@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'preact/hooks'
 import type { Column, ColumnId, ColumnType, Frame } from '../core/types.js'
+import { fargToken } from '../core/frame/farg.js'
+import { FARGER, fargetikett } from './fargetikett.js'
+import { fargaCeller, sattKolumnfarg } from '../state/farg.js'
 import {
   columnIndex,
   duplicateColumn,
@@ -1129,8 +1132,49 @@ export function App() {
     ]
   }
 
+  /**
+   * Färgar markeringen — eller hela raderna, när `helaRaden` är satt.
+   *
+   * Cellmenyn färgar de celler man markerat; radmenyn färgar raderna tvärs
+   * över alla synliga kolumner. Samma steg, samma Ångra i notisen.
+   */
+  const fargaMarkeringen = (farg: number, helaRaden = false) => {
+    const nu = nuLage()
+    if (!nu?.sel) return
+    const r = rect(nu.sel)
+    const kolumner = helaRaden ? nu.kolumner : nu.kolumner.slice(r.k1, r.k2 + 1)
+    const andrade = fargaCeller(nu.tab, kolumner, selectedRows(nu.tab, nu.sel), farg)
+    if (andrade === 0) {
+      notify(t(farg === 0 ? 'Cellerna hade ingen färg.' : 'Cellerna hade redan den färgen.'))
+      return
+    }
+    notify(
+      farg === 0
+        ? tf('Tog bort färgen från {0}.', celler(andrade))
+        : tf('Färgade {0}.', celler(andrade)),
+      { atgard: { etikett: t('Ångra'), kor: () => undo(nu.tab) } },
+    )
+  }
+
+  /** Färgar varje cell i kolumnen. */
+  const fargaKolumn = (id: ColumnId, farg: number) => {
+    if (!frame || !tab) return
+    const col = findColumn(frame, id)
+    if (!col) return
+    const alla = Array.from({ length: frame.rowCount }, (_, i) => i)
+    const andrade = fargaCeller(tab, [col], alla, farg)
+    if (andrade === 0) return
+    notify(
+      farg === 0
+        ? tf('Tog bort färgen från {0}.', celler(andrade))
+        : tf('Färgade {0}.', celler(andrade)),
+      { atgard: { etikett: t('Ångra'), kor: () => undo(tab) } },
+    )
+  }
+
   const radmenyposter = (): (MenyPost | 'avdelare')[] =>
     radMeny({
+      farga: (farg) => fargaMarkeringen(farg, true),
       infogaFore: () => {
         const nu = nuLage()
         if (nu?.sel) infogaRader(nu.tab, nu.sel.fokusRad, 1, false)
@@ -1160,6 +1204,12 @@ export function App() {
       flyttaForst: (i) => flyttaKolumn(i, 0),
       flyttaSist: (i) => flyttaKolumn(i, frame.columns.length - 1),
       anpassaBredd: (i) => anpassaKolumnbredd(i),
+      kolumnfarg: (i, farg) => {
+        const c = findColumn(frame, i)
+        if (c) sattKolumnfarg(tab, c, farg)
+      },
+      fargaAlla: fargaKolumn,
+      farg: col.farg ?? 0,
       visaOgiltiga,
       verktyg: verktygsposter([col]),
       regel: regelposter(col),
@@ -1222,6 +1272,7 @@ export function App() {
         }
       } },
       { etikett: t('Töm'), genvag: 'Delete', kor: tomMarkering },
+      { etikett: t('Färg'), undermeny: fargmeny((f) => fargaMarkeringen(f)) },
       'avdelare',
       {
         etikett: tf('Filtrera på ”{0}”', kort(varde)),
@@ -2322,6 +2373,10 @@ export function App() {
               dopOmFil: () => tab && setDopOmFlikId(tab.id),
               duplicera: () => palettKolumn && dupliceraKolumn(palettKolumn.id),
               vaxlaDold: () => palettKolumn && vaxlaDold(palettKolumn.id),
+              fargaMarkering: (farg) => fargaMarkeringen(farg),
+              kolumnfarg: (farg) => {
+                if (tab && palettKolumn) sattKolumnfarg(tab, palettKolumn, farg)
+              },
               taBortKolumn: () => palettKolumn && taBortKolumn(palettKolumn.id),
               infogaKolumn: () => infogaKolumn(),
               lopnummer: laggTillNummerkolumn,
@@ -2523,16 +2578,38 @@ function flerfilsmeny(handlers: {
   ]
 }
 
+/**
+ * Färgmenyn: paletten som poster, med en ruta i färgen före namnet, och
+ * *Ta bort färg* sist. `aktiv` markerar den färg som gäller nu, där det
+ * finns en — kolumnfärgen har en, en markering har många.
+ */
+function fargmeny(valj: (farg: number) => void, aktiv?: number): (MenyPost | 'avdelare')[] {
+  return [
+    ...FARGER.map(
+      (f): MenyPost => ({
+        etikett: fargetikett(f.farg),
+        farg: fargToken(f.farg),
+        ...(aktiv !== undefined ? { aktiv: aktiv === f.farg } : {}),
+        kor: () => valj(f.farg),
+      }),
+    ),
+    'avdelare',
+    { etikett: t('Ta bort färg'), kor: () => valj(0) },
+  ]
+}
+
 function radMeny(handlers: {
   infogaFore: () => void
   infogaEfter: () => void
   duplicera: () => void
+  farga: (farg: number) => void
   taBort: () => void
 }): (MenyPost | 'avdelare')[] {
   return [
     { etikett: t('Infoga rad ovanför'), kor: handlers.infogaFore },
     { etikett: t('Infoga rad nedanför'), kor: handlers.infogaEfter },
     { etikett: t('Dubblera markerade rader'), kor: handlers.duplicera },
+    { etikett: t('Färga raden'), undermeny: fargmeny(handlers.farga) },
     'avdelare',
     { etikett: t('Ta bort markerade rader'), fara: true, kor: handlers.taBort },
   ]
@@ -2550,6 +2627,10 @@ function kolumnMeny(
     flyttaForst: (id: ColumnId) => void
     flyttaSist: (id: ColumnId) => void
     anpassaBredd: (id: ColumnId) => void
+    kolumnfarg: (id: ColumnId, farg: number) => void
+    fargaAlla: (id: ColumnId, farg: number) => void
+    /** Kolumnens nuvarande etikettfärg, 0 för ingen. */
+    farg: number
     visaOgiltiga: (id: ColumnId) => void
     /** Verktygen, färdigsorterade efter vad kolumnen innehåller. */
     verktyg: (MenyPost | 'avdelare')[]
@@ -2590,18 +2671,52 @@ function kolumnMeny(
     { etikett: t('Flytta först'), kor: () => handlers.flyttaForst(id) },
     { etikett: t('Flytta sist'), kor: () => handlers.flyttaSist(id) },
     { etikett: t('Anpassa bredden efter innehållet'), kor: () => handlers.anpassaBredd(id) },
+    {
+      /*
+       * En post och inte två, för menyn är redan hög: en rad till och
+       * undermenyerna når under fönsterkanten på en vanlig skärm. Färgen
+       * på rubriken är det man oftast vill ha; att färga alla celler ligger
+       * ett steg in.
+       */
+      etikett: t('Kolumnfärg'),
+      skal: t('en etikett på rubriken, för att hitta kolumnen'),
+      undermeny: [
+        ...fargmeny((f) => handlers.kolumnfarg(id, f), handlers.farg),
+        'avdelare',
+        {
+          etikett: t('Färga alla celler'),
+          undermeny: fargmeny((f) => handlers.fargaAlla(id, f)),
+        },
+      ],
+    },
     'avdelare',
     {
-      etikett: t('Sortera A→Ö'),
-      aktiv: handlers.sortriktning === 'stigande',
-      kor: () => handlers.sortera(id, 'stigande'),
+      /*
+       * Sorteringen som en undermeny. Menyn nådde under fönsterkanten på en
+       * vanlig skärm när kolumnfärgen kom till, och tre poster om samma sak
+       * är en grupp — de fick bli den.
+       */
+      etikett: t('Sortera'),
+      skal:
+        handlers.sortriktning === 'stigande'
+          ? 'A→Ö'
+          : handlers.sortriktning === 'fallande'
+            ? 'Ö→A'
+            : undefined,
+      undermeny: [
+        {
+          etikett: t('Sortera A→Ö'),
+          aktiv: handlers.sortriktning === 'stigande',
+          kor: () => handlers.sortera(id, 'stigande'),
+        },
+        {
+          etikett: t('Sortera Ö→A'),
+          aktiv: handlers.sortriktning === 'fallande',
+          kor: () => handlers.sortera(id, 'fallande'),
+        },
+        { etikett: t('Lägg till som sorteringsnivå'), kor: () => handlers.laggSortering(id) },
+      ],
     },
-    {
-      etikett: t('Sortera Ö→A'),
-      aktiv: handlers.sortriktning === 'fallande',
-      kor: () => handlers.sortera(id, 'fallande'),
-    },
-    { etikett: t('Lägg till som sorteringsnivå'), kor: () => handlers.laggSortering(id) },
     'avdelare',
     { etikett: t('Filtrera på kolumnen…'), kor: () => handlers.filtrera(id) },
     {

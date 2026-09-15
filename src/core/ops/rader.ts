@@ -129,6 +129,7 @@ export function delaTillRader(
     col.hidden = c.hidden
     col.width = c.width
     if (c.sortordning) col.sortordning = c.sortordning
+    if (c.farg) col.farg = c.farg
     return col
   })
 

@@ -33,6 +33,19 @@ export const Flag = {
 export type FlagBit = (typeof Flag)[keyof typeof Flag]
 
 /**
+ * Cellfärgen bor i flaggbytens tre översta bitar: 0 är ofärgad, 1–7 är
+ * palettens platser (se `src/core/frame/farg.ts`).
+ *
+ * Inte ett eget fält, med flit. Flaggorna följer redan med genom varje
+ * kodväg som rör rader — ångra, sparning, kopiering vid sammanslagning,
+ * stapling och dela till rader — och en färg som bor där följer med gratis.
+ * Ett eget fält hade behövt läggas till på vart och ett av de ställena, och
+ * det första som glömdes hade tappat färgen tyst.
+ */
+export const FARGMASK = 0b1110_0000
+export const FARGSKIFT = 5
+
+/**
  * En kolumn, ordbokskodad.
  *
  * `dict[0]` är alltid tomma strängen, så en oskriven cell är kod 0.
@@ -49,6 +62,13 @@ export interface Column {
   hidden: boolean
   /** Pixelbredd i rutnätet, eller null för automatisk. */
   width: number | null
+  /**
+   * Kolumnens färg — en etikett på rubriken, 1–7 i paletten.
+   *
+   * Utseende och inte data, som `width`: den hamnar inte i historiken men
+   * sparas. Cellernas egen färg ligger i flaggorna, se `FARGMASK`.
+   */
+  farg?: number
   /** Unika värden. Index 0 är alltid ''. */
   dict: string[]
   /** dict-index per fysisk rad. */

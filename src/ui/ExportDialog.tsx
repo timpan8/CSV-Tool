@@ -9,6 +9,7 @@ import {
   type ExportOptions,
 } from '../core/csv/stringify.js'
 import { formatCount } from '../core/locale/sv.js'
+import { harCellfarg } from '../core/frame/farg.js'
 import { t, tf, tj } from './sprak.js'
 
 const PROFILER = [
@@ -50,6 +51,11 @@ export function ExportDialog(props: {
   )
   const [filnamn, setFilnamn] = useState(() => foreslaFilnamn(props.frame.name))
   const arXlsx = profil === 'xlsx'
+  // Räknas en gång per fil: ett svep över flaggorna, inte över värdena.
+  const harFarg = useMemo(
+    () => props.frame.columns.some((c) => c.farg || harCellfarg(c.flags)),
+    [props.frame],
+  )
 
   const valjProfil = (p: Profil) => {
     setProfil(p)
@@ -272,6 +278,12 @@ export function ExportDialog(props: {
             <strong>01234</strong>,
             <strong>01234</strong>,
           )}
+        </Notis>
+      )}
+
+      {harFarg && !arXlsx && (
+        <Notis ton="info">
+          {t('Färgerna följer inte med i en CSV — formatet har ingen plats för dem. Välj Excel om de ska sparas.')}
         </Notis>
       )}
 

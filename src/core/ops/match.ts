@@ -1007,6 +1007,7 @@ function kopieraColumn(
     // En kopierad Träff-kolumn — en sammanslagning av en sammanslagning —
     // ska sortera likadant som originalet gjorde.
     ...(kalla.sortordning ? { sortordning: kalla.sortordning } : {}),
+    ...(kalla.farg ? { farg: kalla.farg } : {}),
   }
 }
 

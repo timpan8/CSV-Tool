@@ -1,6 +1,7 @@
 import { normalizeAlways, stripDiacritics } from '../core/locale/sv.js'
 import { STADNINGAR } from '../core/ops/clean.js'
 import { VERKTYG, type Verktygsnamn } from './verktyg.js'
+import { FARGER, fargetikettGement } from './fargetikett.js'
 import { t, tf } from './sprak.js'
 
 /**
@@ -68,6 +69,8 @@ export interface Kommandohandlare {
   dopOm: () => void
   duplicera: () => void
   vaxlaDold: () => void
+  fargaMarkering: (farg: number) => void
+  kolumnfarg: (farg: number) => void
   taBortKolumn: () => void
   infogaKolumn: () => void
   filtreraKolumn: () => void
@@ -285,6 +288,43 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
         etikett: tf('Visa ogiltiga värden i {0}', kol),
         ord: 'problem fel',
         kor: h.visaOgiltiga,
+      })
+    }
+
+    if (lage.harMarkering) {
+      for (const f of FARGER) {
+        lagg({
+          id: `farg:${f.farg}`,
+          grupp: t('Färg'),
+          etikett: tf('Färga markeringen {0}', fargetikettGement(f.farg)),
+          ord: 'färg color colour markera',
+          kor: () => h.fargaMarkering(f.farg),
+        })
+      }
+      lagg({
+        id: 'farg:0',
+        grupp: t('Färg'),
+        etikett: t('Ta bort färg från markeringen'),
+        ord: 'färg color colour',
+        kor: () => h.fargaMarkering(0),
+      })
+    }
+    if (kol !== null) {
+      for (const f of FARGER) {
+        lagg({
+          id: `kolfarg:${f.farg}`,
+          grupp: t('Färg'),
+          etikett: tf('Kolumnfärg på {0}: {1}', kol, fargetikettGement(f.farg)),
+          ord: 'färg color colour rubrik etikett',
+          kor: () => h.kolumnfarg(f.farg),
+        })
+      }
+      lagg({
+        id: 'kolfarg:0',
+        grupp: t('Färg'),
+        etikett: tf('Ta bort kolumnfärgen på {0}', kol),
+        ord: 'färg color colour',
+        kor: () => h.kolumnfarg(0),
       })
     }
 

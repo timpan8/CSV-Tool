@@ -35,6 +35,8 @@ function handlare(): { h: Kommandohandlare; korda: string[] } {
     dopOmFil: r('dopOmFil'),
     duplicera: r('duplicera'),
     vaxlaDold: r('vaxlaDold'),
+    fargaMarkering: (f) => korda.push(`fargaMarkering:${f}`),
+    kolumnfarg: (f) => korda.push(`kolumnfarg:${f}`),
     taBortKolumn: r('taBortKolumn'),
     infogaKolumn: r('infogaKolumn'),
     filtreraKolumn: r('filtreraKolumn'),

@@ -30,6 +30,8 @@ export interface SerializedColumn {
   sortordning?: readonly string[]
   /** Mallregeln, om kolumnen byggdes ur en. Valfri av samma skäl som ovan. */
   regel?: Kolumnregel
+  /** Kolumnfärgen, 1–7. Valfri av samma skäl. Cellfärgen ligger i `flags`. */
+  farg?: number
 }
 
 export interface SerializedFrame {
@@ -75,6 +77,7 @@ export function serializeFrame(frame: Frame): SerializedPayload {
       flags,
       ...(col.sortordning ? { sortordning: col.sortordning } : {}),
       ...(col.regel ? { regel: col.regel } : {}),
+      ...(col.farg ? { farg: col.farg } : {}),
     }
   })
   const sourceRow = bufferOf(frame.sourceRow)
@@ -109,6 +112,7 @@ export function deserializeFrame(payload: SerializedFrame): Frame {
       dictIndex,
       ...(c.sortordning ? { sortordning: c.sortordning } : {}),
       ...(c.regel ? { regel: c.regel } : {}),
+      ...(c.farg ? { farg: c.farg } : {}),
     }
   })
   return {

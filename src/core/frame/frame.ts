@@ -155,6 +155,7 @@ export function duplicateColumn(frame: Frame, id: ColumnId): Column | undefined 
   copy.dictIndex = new Map(src.dictIndex)
   copy.codes = src.codes.slice()
   copy.flags = src.flags.slice()
+  if (src.farg) copy.farg = src.farg
   copy.typeLocked = src.typeLocked
   frame.columns.splice(columnIndex(frame, id) + 1, 0, copy)
   return copy

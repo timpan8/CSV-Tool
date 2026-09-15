@@ -6,6 +6,10 @@
  * står kvar på svenska i gränssnittet.
  */
 export const DIALOGER: Record<string, string> = {
+  /* ---------- Färg i exporten ---------- */
+  'Färgerna följer inte med i en CSV — formatet har ingen plats för dem. Välj Excel om de ska sparas.':
+    'Colours do not carry over to a CSV — the format has no room for them. Choose Excel if they should be kept.',
+
 
   /* ---------- Kolumnpanelen till höger ---------- */
   /* `Kolumn`, `Rader`, `Byt namn…`, `Duplicera kolumnen` och `Ta bort kolumnen`

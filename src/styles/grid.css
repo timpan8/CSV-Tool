@@ -265,10 +265,40 @@
   color: var(--text-svag);
 }
 
+/* ---------- Färg ---------- */
+
+/*
+ * Cellfärgen är en svag fyllning av samma nyans som diagrammens serier.
+ * Reglerna står före markeringen med flit: en markerad cell ska se markerad
+ * ut även när den är färgad, och kaskaden avgör det.
+ */
+.rutnat__cell--farg-1 { --cellfarg: var(--serie-1); }
+.rutnat__cell--farg-2 { --cellfarg: var(--serie-2); }
+.rutnat__cell--farg-3 { --cellfarg: var(--serie-3); }
+.rutnat__cell--farg-4 { --cellfarg: var(--serie-4); }
+.rutnat__cell--farg-5 { --cellfarg: var(--serie-5); }
+.rutnat__cell--farg-6 { --cellfarg: var(--serie-7); }
+.rutnat__cell--farg-7 { --cellfarg: var(--serie-8); }
+
+[class*='rutnat__cell--farg-'] {
+  background: color-mix(in srgb, var(--cellfarg) 24%, transparent);
+}
+
+/* Kolumnfärgen är en etikett: en list under namnet och en ton på rubriken. */
+.rubrik--farg {
+  background: color-mix(in srgb, var(--kolfarg) 14%, var(--yta-2));
+  box-shadow: inset 0 -3px 0 var(--kolfarg);
+}
+
 /* ---------- Markering ---------- */
 
 .rutnat__cell--markerad {
   background: var(--accent-svag);
+}
+
+/* Markerad och färgad: markeringen läggs ovanpå färgen så att båda syns. */
+.rutnat__cell--markerad[class*='rutnat__cell--farg-'] {
+  background: color-mix(in srgb, var(--accent) 22%, color-mix(in srgb, var(--cellfarg) 24%, var(--yta)));
 }
 
 .rutnat__rad:hover .rutnat__cell--markerad {

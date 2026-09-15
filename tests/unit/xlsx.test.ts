@@ -15,6 +15,8 @@ import {
   XLSX_STANDARD,
 } from '../../src/core/xlsx/read.js'
 import { Flag, type ColumnType, type Frame } from '../../src/core/types.js'
+import { unzipSync, strFromU8 } from 'fflate'
+import { medFarg } from '../../src/core/frame/farg.js'
 
 function frameOf(spec: { namn: string; typ: ColumnType; varden: string[] }[]): Frame {
   const rowCount = spec[0]!.varden.length
@@ -151,5 +153,49 @@ describe('läsning av Excel-värden', () => {
     expect(getCell(frame.columns[1]!, 0)).toBe('1240,5')
     expect(getCell(frame.columns[2]!, 0)).toBe('2026-08-27')
     expect(frame.meta.warnings.some((w) => w.kind === 'ghost-rows')).toBe(true)
+  })
+})
+
+describe('färg i exporten', () => {
+  const skriv = (frame: Frame): string => {
+    const dir = join(tmpdir(), 'csv-verkstan-test')
+    mkdirSync(dir, { recursive: true })
+    const sokvag = join(dir, 'farg.xlsx')
+    writeFileSync(sokvag, exportXlsx(frame, EXCEL_FRIENDLY))
+    return sokvag
+  }
+
+  it('skriver färgade celler med en fyllning, och kolumnfärgen på rubriken', async () => {
+    const frame = frameOf([
+      { namn: 'Ort', typ: 'text', varden: ['Malmö', 'Växjö', ''] },
+      { namn: 'Datum', typ: 'date', varden: ['2026-08-27', '2026-08-26', '2026-08-25'] },
+    ])
+    const [ort, datum] = frame.columns as [Frame['columns'][0], Frame['columns'][0]]
+    ort.flags[0] = medFarg(ort.flags[0]!, 1)
+    ort.flags[2] = medFarg(ort.flags[2]!, 3)
+    datum.flags[1] = medFarg(datum.flags[1]!, 3)
+    datum.farg = 7
+
+    const zip = unzipSync(exportXlsx(frame, EXCEL_FRIENDLY))
+    const stilar = strFromU8(zip['xl/styles.xml']!)
+    const blad = strFromU8(zip['xl/worksheets/sheet1.xml']!)
+
+    // Två grundfyllningar plus en per palettfärg, och tre stilar per färg.
+    expect(stilar).toContain('<fills count="9">')
+    expect(stilar).toContain('<cellXfs count="24">')
+    expect(stilar).toContain('<fgColor rgb="FFD1E1F6"/>')
+    // Blå text: första färgens vanliga stil. Grön datum: tredje färgens datumstil.
+    expect(blad).toContain('<c r="A2" s="3" t="inlineStr">')
+    expect(blad).toContain('<c r="B3" s="10"><v>')
+    // En tom cell utan färg skrivs inte alls; en tom cell med färg skrivs tom.
+    expect(blad).toContain('<c r="A4" s="9"/>')
+    // Kolumnfärgen hamnar på rubrikcellen, som en rubrikvariant.
+    expect(blad).toContain('<c r="B1" s="23" t="inlineStr">')
+    expect(blad).toContain('<c r="A1" s="2" t="inlineStr">')
+
+    // Och Excel-läsaren läser fortfarande värdena rätt.
+    const rows = (await readXlsxFile(skriv(frame)))[0]!.data
+    expect(rows[1]![0]).toBe('Malmö')
+    expect(formatExcelDate(rows[2]![1] as unknown as Date)).toBe('2026-08-26')
   })
 })
