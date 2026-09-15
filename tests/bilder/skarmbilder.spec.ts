@@ -163,15 +163,50 @@ for (const sprak of SPRAK) {
       await bild(page, modal(page), 'export')
     })
 
+    test('byt namn på en fil', async ({ page }) => {
+      await oppnaExempel(page)
+      await page.locator('.flik__namn').first().dblclick()
+      const falt = page.getByRole('textbox', { name: new RegExp(`^${L('Nytt namn för {0}').split('{0}')[0]}`) })
+      await falt.fill('Kunder 2024')
+      await bild(page, page.locator('.flikrad'), 'flik-byt-namn')
+    })
+
     /* ================= 3. Tabellen ================= */
+
+    /** Färgar en cell via cellmenyn. */
+    async function farga(page: Page, cell: string, farg: string) {
+      await page.getByRole('gridcell', { name: cell, exact: true }).first().click({ button: 'right' })
+      await meny(page).getByRole('menuitem', { name: L('Färg'), exact: true }).hover()
+      await page.locator('.meny--under .meny__post', { hasText: new RegExp(`^${L(farg)}$`) }).click()
+      await expect(page.locator('.toast')).toHaveCount(0, { timeout: 12_000 })
+    }
 
     test('sortering', async ({ page }) => {
       await oppnaExempel(page)
+      // Två nivåer, den andra på färg — så att panelen visar båda grunderna.
+      await farga(page, 'Örebro', 'Röd')
+      await farga(page, 'Boden', 'Grön')
       await page.getByRole('button', { name: L('Sortera'), exact: true }).click()
       await expect(panel(page)).toBeVisible()
       await page.getByRole('button', { name: L('＋ Lägg till nivå') }).click()
-      await panel(page).locator('select').first().selectOption({ label: 'Ort' })
+      await panel(page).locator('select').first().selectOption({ label: 'Status' })
+      await page.getByRole('button', { name: L('＋ Lägg till nivå') }).click()
+      await panel(page).locator('select').nth(1).selectOption({ label: 'Ort' })
+      await panel(page).locator('.nivarad').nth(1).getByRole('radio', { name: L('Färg') }).click()
       await bild(page, panel(page), 'sortera')
+    })
+
+    test('färg', async ({ page }) => {
+      await oppnaExempel(page)
+      // Kolumner som syns utan att rulla i sidled, så färgerna hamnar i bild.
+      await farga(page, 'Erik Öberg', 'Röd')
+      await farga(page, 'Åsa Öhman', 'Grön')
+      await farga(page, 'Ida Ängström', 'Gul')
+      await page.getByRole('button', { name: Lf('Meny för kolumnen {0}', 'E-post') }).click()
+      await meny(page).getByRole('menuitem', { name: new RegExp(`^${L('Kolumnfärg')}`) }).hover()
+      await page.locator('.meny--under .meny__post', { hasText: new RegExp(`^${L('Blå')}$`) }).click()
+      await page.getByRole('gridcell', { name: 'Anna Karlsson', exact: true }).first().click()
+      await bild(page, arbetsyta(page), 'farg')
     })
 
     test('filter', async ({ page }) => {
@@ -291,7 +326,9 @@ for (const sprak of SPRAK) {
 
     test('pivot', async ({ page }) => {
       await oppnaExempel(page)
-      await page.getByRole('button', { name: L('Pivot'), exact: true }).click()
+      // Knappen heter Pivot på båda språken; ordboksposten 'Pivot' är
+      // dialogens rubrik och lyder 'Pivot table'.
+      await page.getByRole('button', { name: 'Pivot', exact: true }).click()
       await expect(page.locator('.pivot')).toBeVisible()
       await bild(page, page, 'pivot')
     })
@@ -336,6 +373,17 @@ for (const sprak of SPRAK) {
       await oppnaFlerfil(page, 'Kombinera…')
       await expect(page.locator('.kombinera')).toBeVisible()
       await bild(page, page, 'kombinera')
+    })
+
+    test('jämför två filer', async ({ page }) => {
+      await oppnaParet(page)
+      await oppnaFlerfil(page, 'Jämför…')
+      await expect(page.locator('.jamfor')).toBeVisible()
+      const par = page.locator('.jamfor__par').first()
+      await par.locator('select').nth(0).selectOption({ label: 'Namn' })
+      await par.locator('select').nth(1).selectOption({ label: 'Name' })
+      await page.getByRole('radio', { name: L('Finns någonstans') }).click()
+      await bild(page, page, 'jamfor')
     })
 
     /* ================= 7. Spara arbetet ================= */

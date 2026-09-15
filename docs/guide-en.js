@@ -114,7 +114,21 @@ window.GUIDE_EN = {
           lead: 'If you copied a whole table from somewhere else, `Ctrl+Shift+V` opens it as a tab of its own instead of writing it into the table you are standing in.',
           notes: [
             '`Ctrl+C` copies the selection as TSV, which is what Excel understands. `Ctrl+V` pastes TSV or CSV.',
-            'If what you pasted is bigger than the selection, the tool asks whether to make room, cut it off, or open it as its own file. It never cuts off silently.'
+            'If what you pasted is bigger than the selection, the tool asks whether to make room, cut it off, or open it as its own file. It never cuts off silently.',
+            'Pasted files are named `Inklistrat 1`, `Inklistrat 2` and so on, so two pasted tabs can be told apart.'
+          ]
+        },
+        {
+          id: 'byt-namn', t: 'Rename a file', img: 'flik-byt-namn.png', imgWidth: 520,
+          cap: 'The tab row with the name field open.',
+          lead: 'The tab\'s name is the file\'s name: the export suggests it, and the Excel sheet is called that.',
+          steps: [
+            'Double-click the tab\'s name, type the new one and press `Enter`. `Escape` cancels.',
+            'Or right-click the tab → **Rename…**, or search for *rename the file* in the command palette.'
+          ],
+          notes: [
+            'If the name clashes with another open tab it gets a running number, like `kunder (2).csv`.',
+            'The name is appearance, not data: it does not enter the undo history, but it is saved for next time.'
           ]
         }
       ]
@@ -124,15 +138,32 @@ window.GUIDE_EN = {
       sections: [
         {
           id: 'sortera', t: 'Sort', img: 'sortera.png',
-          cap: 'The sorting panel with two levels.',
-          lead: 'Multi-level sorting with Swedish collation: `Öberg` after `Zetterlund`, and `Kund 2` before `Kund 10`.',
+          cap: 'The sorting panel with two levels, one of them on colour.',
+          lead: 'Multi-level sorting with Swedish collation: `Öberg` after `Zetterlund`, and `Kund 2` before `Kund 10`. First one column, then another — and a level can go on the colour of the cells instead of their value.',
           steps: [
             'Click the arrow in a column header. Shift-click in the next header to add another level.',
-            'Or open **Sort** in the editing toolbar and build the list there — levels can be dragged into order.'
+            'For more: **Sort** in the editing toolbar, the column menu → **Sort → Sort on several columns…**, or a click on the **Sorted:** chip in the status bar. The panel shows the levels in priority order, with the direction in words — *smallest first*, *oldest first*, *A→Ö*.',
+            'Choose **By: Colour** on a level to sort on the colour of the cells. Move levels with ↑ and ↓, or drag them.'
           ],
           notes: [
-            'Number columns sort numerically and date columns as dates, however they happen to be written. Empty cells always come last, in both directions.',
+            'Rows that tie on level 1 are ordered by level 2, and so on.',
+            'Number columns sort numerically and date columns as dates, however they happen to be written. Empty cells always come last, in both directions; a level on colour puts the uncoloured last for the same reason.',
             'If you fix a cell after sorting, the row stays put under the cursor. The status bar offers **Sort again** when you are done.'
+          ]
+        },
+        {
+          id: 'farg', t: 'Colour', img: 'farg.png',
+          cap: 'The table with coloured cells and a coloured column header.',
+          lead: 'Seven colours to mark with: cells, rows or a whole column. The colour is a mark for the eye — and something to sort on.',
+          steps: [
+            'Select the cells, right-click → **Colour** and pick one. **Remove colour** takes it away.',
+            'Right-click a row number → **Colour the row** for the whole row.',
+            'The column menu → **Column colour** gives the header a colour, as a label for finding the column. **Colour every cell** sits in the same submenu.'
+          ],
+          notes: [
+            'Cell colour is an undo step and carries over to the Excel export as a fill. A CSV has no room for colour, and the export dialog says so.',
+            'The colours are still there when you open the page next time, and follow along when rows are copied into a merge or split into rows.',
+            '**Sort** can order the rows by colour, and **Compare two files** colours the differences for you.'
           ]
         },
         {
@@ -416,7 +447,7 @@ window.GUIDE_EN = {
     },
     {
       id: 'flera-filer', t: 'Multiple files', sub: 'Put data together from several sources',
-      intro: 'The three ways of putting data together from several files sit under **Multiple files ▾** in the editing toolbar. Open the files as separate tabs first.',
+      intro: 'The ways of putting together and comparing data from several files sit under **Multiple files ▾** in the editing toolbar. Open the files as separate tabs first.',
       sections: [
         {
           id: 'slaihop', t: 'Merge two files', img: 'slaihop.png',
@@ -481,6 +512,23 @@ window.GUIDE_EN = {
             'The template decides which columns the result has, what they are called and in which order they come.',
             'Example rows in the template never come along, but are shown as a hint in the map.',
             'Columns that exist in the files but not in the template are not thrown away quietly — you are asked about them.'
+          ]
+        },
+        {
+          id: 'jamfor', t: 'Compare two files', img: 'jamfor.png',
+          cap: 'The compare view with two files, one column pair and the differences.',
+          lead: 'Sets one column against another — in two files, or in the same file — and says per row what is equal, what differs and what is missing. The answer is written as colour in the cells, as a result column, or both.',
+          steps: [
+            '**Multiple files ▾ → Compare…**. Choose the left and right tab; the same tab twice compares two columns in one file.',
+            'Choose **Row by row** (row 1 against row 1, in the order you see the rows) or **Exists anywhere** (every value is looked up anywhere in the other column).',
+            'Set up one or more **column pairs** — each pair is judged on its own — and how they are compared: ordinary, character-exact, without å ä ö, or digits only.',
+            'Tick **Colour the cells** and/or **A result column per pair**, read the counters and the differences, and **Compare**.'
+          ],
+          notes: [
+            'Row by row goes on what you see: sort both tabs on the same key first, and the right rows meet.',
+            'Equal is coloured green, differs red and missing orange. Equal is off by default — it is the differences you are looking for.',
+            'The result column holds `lika`, `skiljer sig`, `saknas` or `båda tomma` (equal, differs, missing, both empty), can be filtered on, and sorts from equal to missing. In lookup mode the number of matches is included.',
+            '`Ctrl+Z` in the tab takes back both the colour and the column. The notice after the run has an **Undo** that reverts all of it.'
           ]
         }
       ]

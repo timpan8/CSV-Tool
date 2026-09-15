@@ -9,11 +9,11 @@ How to use CSV-verkstan, one tool at a time. Each section says what the tool doe
 | Area | Sections |
 | --- | --- |
 | **[1. Getting started](#getting-started)** | [What the screen looks like](#what-the-screen-looks-like) |
-| **[2. Opening and exporting](#opening-and-exporting)** | [Open a file](#open-a-file) · [Export](#export) · [Paste as a new file](#paste-as-a-new-file) |
-| **[3. The table](#the-table)** | [Sort](#sort) · [Filter](#filter) · [Duplicates](#duplicates) · [Search](#search) · [Undo and redo](#undo-and-redo) |
+| **[2. Opening and exporting](#opening-and-exporting)** | [Open a file](#open-a-file) · [Export](#export) · [Paste as a new file](#paste-as-a-new-file) · [Rename a file](#rename-a-file) |
+| **[3. The table](#the-table)** | [Sort](#sort) · [Colour](#colour) · [Filter](#filter) · [Duplicates](#duplicates) · [Search](#search) · [Undo and redo](#undo-and-redo) |
 | **[4. Cleaning and rewriting](#cleaning-and-rewriting)** | [Quick text cleanups](#quick-text-cleanups) · [Dates](#dates) · [Numbers](#numbers) · [Phone numbers](#phone-numbers) · [Email to name](#email-to-name) · [Split a column](#split-a-column) · [Split into rows](#split-into-rows) · [Build column from template](#build-column-from-template) · [Calculate](#calculate) · [Find and replace](#find-and-replace) |
 | **[5. Summarising and analysing](#summarising-and-analysing)** | [Group and summarise](#group-and-summarise) · [Pivot](#pivot) · [Column overview](#column-overview) · [The column inspector](#the-column-inspector) |
-| **[6. Multiple files](#multiple-files)** | [Merge two files](#merge-two-files) · [The matching workbench](#the-matching-workbench) · [Combine files](#combine-files) · [Fill a template with data](#fill-a-template-with-data) |
+| **[6. Multiple files](#multiple-files)** | [Merge two files](#merge-two-files) · [The matching workbench](#the-matching-workbench) · [Combine files](#combine-files) · [Fill a template with data](#fill-a-template-with-data) · [Compare two files](#compare-two-files) |
 | **[7. Keeping your work](#keeping-your-work)** | [Profiles](#profiles) · [Your tabs come back](#your-tabs-come-back) · [Start over](#start-over) |
 | **[8. Shortcuts and settings](#shortcuts-and-settings)** | [The command palette](#the-command-palette) · [Keyboard](#keyboard) · [Language, theme and toolbar](#language-theme-and-toolbar) |
 
@@ -83,6 +83,19 @@ If you copied a whole table from somewhere else, `Ctrl+Shift+V` opens it as a ta
 
 - `Ctrl+C` copies the selection as TSV, which is what Excel understands. `Ctrl+V` pastes TSV or CSV.
 - If what you pasted is bigger than the selection, the tool asks whether to make room, cut it off, or open it as its own file. It never cuts off silently.
+- Pasted files are named `Inklistrat 1`, `Inklistrat 2` and so on, so two pasted tabs can be told apart.
+
+### Rename a file
+
+![The tab row with the name field open](bilder/en/flik-byt-namn.png)
+
+The tab's name is the file's name: the export suggests it, and the Excel sheet is called that.
+
+1. Double-click the tab's name, type the new one and press `Enter`. `Escape` cancels.
+2. Or right-click the tab → **Rename…**, or search for *rename the file* in the command palette.
+
+- If the name clashes with another open tab it gets a running number, like `kunder (2).csv`.
+- The name is appearance, not data: it does not enter the undo history, but it is saved for next time.
 
 ---
 
@@ -90,15 +103,31 @@ If you copied a whole table from somewhere else, `Ctrl+Shift+V` opens it as a ta
 
 ### Sort
 
-![The sorting panel with two levels](bilder/en/sortera.png)
+![The sorting panel with two levels, one of them on colour](bilder/en/sortera.png)
 
-Multi-level sorting with Swedish collation: `Öberg` after `Zetterlund`, and `Kund 2` before `Kund 10`.
+Multi-level sorting with Swedish collation: `Öberg` after `Zetterlund`, and `Kund 2` before `Kund 10`. First one column, then another — and a level can go on the colour of the cells instead of their value.
 
 1. Click the arrow in a column header. Shift-click in the next header to add another level.
-2. Or open **Sort** in the editing toolbar and build the list there — levels can be dragged into order.
+2. For more: **Sort** in the editing toolbar, the column menu → **Sort → Sort on several columns…**, or a click on the **Sorted:** chip in the status bar. The panel shows the levels in priority order, with the direction in words — *smallest first*, *oldest first*, *A→Ö*.
+3. Choose **By: Colour** on a level to sort on the colour of the cells. Move levels with ↑ and ↓, or drag them.
 
-- Number columns sort numerically and date columns as dates, however they happen to be written. Empty cells always come last, in both directions.
+- Rows that tie on level 1 are ordered by level 2, and so on.
+- Number columns sort numerically and date columns as dates, however they happen to be written. Empty cells always come last, in both directions; a level on colour puts the uncoloured last for the same reason.
 - If you fix a cell after sorting, the row stays put under the cursor. The status bar offers **Sort again** when you are done.
+
+### Colour
+
+![The table with coloured cells and a coloured column header](bilder/en/farg.png)
+
+Seven colours to mark with: cells, rows or a whole column. The colour is a mark for the eye — and something to sort on.
+
+1. Select the cells, right-click → **Colour** and pick one. **Remove colour** takes it away.
+2. Right-click a row number → **Colour the row** for the whole row.
+3. The column menu → **Column colour** gives the header a colour, as a label for finding the column. **Colour every cell** sits in the same submenu.
+
+- Cell colour is an undo step and carries over to the Excel export as a fill. A CSV has no room for colour, and the export dialog says so.
+- The colours are still there when you open the page next time, and follow along when rows are copied into a merge or split into rows.
+- **Sort** can order the rows by colour, and **Compare two files** colours the differences for you.
 
 ### Filter
 
@@ -374,7 +403,7 @@ The panel on the right when no tool is open. It shows the column the cursor is i
 
 ## Multiple files
 
-The three ways of putting data together from several files sit under **Multiple files ▾** in the editing toolbar. Open the files as separate tabs first.
+The ways of putting together and comparing data from several files sit under **Multiple files ▾** in the editing toolbar. Open the files as separate tabs first.
 
 ### Merge two files
 
@@ -435,6 +464,22 @@ The same view as **Combine**, but the shape comes from a **template file**: a do
 - The template decides which columns the result has, what they are called and in which order they come.
 - Example rows in the template never come along, but are shown as a hint in the map.
 - Columns that exist in the files but not in the template are not thrown away quietly — you are asked about them.
+
+### Compare two files
+
+![The compare view with two files, one column pair and the differences](bilder/en/jamfor.png)
+
+Sets one column against another — in two files, or in the same file — and says per row what is equal, what differs and what is missing. The answer is written as colour in the cells, as a result column, or both.
+
+1. **Multiple files ▾ → Compare…**. Choose the left and right tab; the same tab twice compares two columns in one file.
+2. Choose **Row by row** (row 1 against row 1, in the order you see the rows) or **Exists anywhere** (every value is looked up anywhere in the other column).
+3. Set up one or more **column pairs** — each pair is judged on its own — and how they are compared: ordinary, character-exact, without å ä ö, or digits only.
+4. Tick **Colour the cells** and/or **A result column per pair**, read the counters and the differences, and **Compare**.
+
+- Row by row goes on what you see: sort both tabs on the same key first, and the right rows meet.
+- Equal is coloured green, differs red and missing orange. Equal is off by default — it is the differences you are looking for.
+- The result column holds `lika`, `skiljer sig`, `saknas` or `båda tomma` (equal, differs, missing, both empty), can be filtered on, and sorts from equal to missing. In lookup mode the number of matches is included.
+- `Ctrl+Z` in the tab takes back both the colour and the column. The notice after the run has an **Undo** that reverts all of it.
 
 ---
 

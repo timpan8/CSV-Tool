@@ -9,11 +9,11 @@ Hur du använder CSV-verkstan, ett verktyg i taget. Varje avsnitt säger vad ver
 | Område | Avsnitt |
 | --- | --- |
 | **[1. Kom igång](#kom-igång)** | [Så ser skärmen ut](#så-ser-skärmen-ut) |
-| **[2. Öppna och exportera](#öppna-och-exportera)** | [Öppna en fil](#öppna-en-fil) · [Exportera](#exportera) · [Klistra in som en ny fil](#klistra-in-som-en-ny-fil) |
-| **[3. Tabellen](#tabellen)** | [Sortera](#sortera) · [Filter](#filter) · [Dubbletter](#dubbletter) · [Sök](#sök) · [Ångra och gör om](#ångra-och-gör-om) |
+| **[2. Öppna och exportera](#öppna-och-exportera)** | [Öppna en fil](#öppna-en-fil) · [Exportera](#exportera) · [Klistra in som en ny fil](#klistra-in-som-en-ny-fil) · [Byt namn på en fil](#byt-namn-på-en-fil) |
+| **[3. Tabellen](#tabellen)** | [Sortera](#sortera) · [Färg](#färg) · [Filter](#filter) · [Dubbletter](#dubbletter) · [Sök](#sök) · [Ångra och gör om](#ångra-och-gör-om) |
 | **[4. Städa och skriva om](#städa-och-skriva-om)** | [Snabbstädning av text](#snabbstädning-av-text) · [Datum](#datum) · [Tal](#tal) · [Telefon](#telefon) · [E-post till namn](#e-post-till-namn) · [Dela en kolumn](#dela-en-kolumn) · [Dela till rader](#dela-till-rader) · [Bygg kolumn ur mall](#bygg-kolumn-ur-mall) · [Räkna](#räkna) · [Sök och ersätt](#sök-och-ersätt) |
 | **[5. Sammanfatta och analysera](#sammanfatta-och-analysera)** | [Gruppera och summera](#gruppera-och-summera) · [Pivot](#pivot) · [Kolumnöversikt](#kolumnöversikt) · [Kolumninspektören](#kolumninspektören) |
-| **[6. Flera filer](#flera-filer)** | [Slå ihop två filer](#slå-ihop-två-filer) · [Matchningsverkstaden](#matchningsverkstaden) · [Kombinera filer](#kombinera-filer) · [Fyll en mall med data](#fyll-en-mall-med-data) |
+| **[6. Flera filer](#flera-filer)** | [Slå ihop två filer](#slå-ihop-två-filer) · [Matchningsverkstaden](#matchningsverkstaden) · [Kombinera filer](#kombinera-filer) · [Fyll en mall med data](#fyll-en-mall-med-data) · [Jämför två filer](#jämför-två-filer) |
 | **[7. Spara arbetet](#spara-arbetet)** | [Profiler](#profiler) · [Flikarna finns kvar](#flikarna-finns-kvar) · [Börja om](#börja-om) |
 | **[8. Genvägar och inställningar](#genvägar-och-inställningar)** | [Kommandopaletten](#kommandopaletten) · [Tangentbord](#tangentbord) · [Språk, tema och verktygsfält](#språk-tema-och-verktygsfält) |
 
@@ -81,6 +81,19 @@ Har du kopierat en hel tabell någon annanstans ifrån öppnar `Ctrl+Skift+V` de
 
 - `Ctrl+C` kopierar markeringen som TSV, alltså det Excel förstår. `Ctrl+V` klistrar in TSV eller CSV.
 - Är det inklistrade större än markeringen frågar verktyget om det ska lägga till plats, klippa av, eller öppna som en egen fil. Det klipper aldrig av i tysthet.
+- Inklistringarna heter `Inklistrat 1`, `Inklistrat 2` och så vidare, så två inklistrade flikar går att skilja åt.
+
+### Byt namn på en fil
+
+![Flikraden med namnfältet öppet](bilder/sv/flik-byt-namn.png)
+
+Namnet på fliken är filens namn: exporten föreslår det, och Excel-bladet heter så.
+
+1. Dubbelklicka på flikens namn, skriv det nya och tryck `Enter`. `Escape` ångrar.
+2. Eller högerklicka på fliken → **Byt namn…**, eller sök *byt namn på filen* i kommandopaletten.
+
+- Krockar namnet med en annan öppen flik får det ett löpnummer, som `kunder (2).csv`.
+- Namnet är utseende, inte data: det hamnar inte i ångra-historiken, men det sparas till nästa gång.
 
 ---
 
@@ -88,15 +101,31 @@ Har du kopierat en hel tabell någon annanstans ifrån öppnar `Ctrl+Skift+V` de
 
 ### Sortera
 
-![Sorteringspanelen med två nivåer](bilder/sv/sortera.png)
+![Sorteringspanelen med två nivåer, varav en på färg](bilder/sv/sortera.png)
 
-Flernivåsortering med svensk ordning: `Öberg` efter `Zetterlund`, och `Kund 2` före `Kund 10`.
+Flernivåsortering med svensk ordning: `Öberg` efter `Zetterlund`, och `Kund 2` före `Kund 10`. I första hand en kolumn, i andra hand en annan — och en nivå kan gå på cellernas färg i stället för deras värde.
 
 1. Klicka på pilen i en kolumnrubrik. Skift-klicka i nästa rubrik för att lägga till en nivå till.
-2. Eller öppna **Sortera** i redigeringsfältet och bygg listan där — nivåerna går att dra om.
+2. För fler val: **Sortera** i redigeringsfältet, kolumnmenyn → **Sortera → Sortera på flera kolumner…**, eller ett klick på **Sorterat:**-chippet i statusraden. Panelen visar nivåerna i prioritetsordning, med riktningen i ord — *minst först*, *äldst först*, *A→Ö*.
+3. Välj **Efter: Färg** på en nivå för att sortera på cellernas färg. Flytta nivåer med ↑ och ↓, eller dra dem.
 
-- Talkolumner sorteras numeriskt och datumkolumner som datum, oavsett hur de är skrivna. Tomma celler hamnar alltid sist, åt båda hållen.
+- Rader som är lika på nivå 1 ordnas efter nivå 2, och så vidare.
+- Talkolumner sorteras numeriskt och datumkolumner som datum, oavsett hur de är skrivna. Tomma celler hamnar alltid sist, åt båda hållen; en nivå på färg lägger de ofärgade sist av samma skäl.
 - Rättar du en cell efter att ha sorterat ligger raden kvar under markören. Statusraden erbjuder **Sortera om** när du är klar.
+
+### Färg
+
+![Tabellen med färgade celler och en färgad kolumnrubrik](bilder/sv/farg.png)
+
+Sju färger att markera med: celler, rader eller en hel kolumn. Färgen är en markering för ögat — och något att sortera på.
+
+1. Markera cellerna, högerklicka → **Färg** och välj en färg. **Ta bort färg** tar bort den.
+2. Högerklicka på ett radnummer → **Färga raden** för hela raden.
+3. Kolumnmenyn → **Kolumnfärg** ger rubriken en färg, som en etikett för att hitta kolumnen. **Färga alla celler** ligger i samma undermeny.
+
+- Cellfärgen är ett ångra-steg och följer med i Excel-exporten som en fyllning. En CSV har ingen plats för färg, och exportdialogen säger det.
+- Färgerna finns kvar när du öppnar sidan nästa gång, och följer med när rader kopieras till en sammanslagning eller delas till rader.
+- **Sortera** kan ordna raderna efter färg, och **Jämför två filer** färgar skillnaderna åt dig.
 
 ### Filter
 
@@ -372,7 +401,7 @@ Panelen till höger när inget verktyg är öppet. Visar den kolumn markören st
 
 ## Flera filer
 
-De tre sätten att sätta ihop data ur flera filer ligger under **Flera filer ▾** i redigeringsfältet. Öppna filerna som var sin flik först.
+Sätten att sätta ihop och jämföra data ur flera filer ligger under **Flera filer ▾** i redigeringsfältet. Öppna filerna som var sin flik först.
 
 ### Slå ihop två filer
 
@@ -433,6 +462,22 @@ Samma vy som **Kombinera**, men formen kommer ur en **mallfil**: ett dokument me
 - Mallen bestämmer vilka kolumner resultatet har, vad de heter och i vilken ordning de kommer.
 - Exempelrader i mallen följer aldrig med, men visas som ledtråd i kartan.
 - Kolumner som finns i filerna men inte i mallen kastas inte i tysthet — de frågas om.
+
+### Jämför två filer
+
+![Jämförelsevyn med två filer, ett kolumnpar och skillnaderna](bilder/sv/jamfor.png)
+
+Ställer en kolumn mot en annan — i två filer, eller i samma fil — och säger per rad vad som är lika, vad som skiljer sig och vad som saknas. Svaret skrivs som färg i cellerna, som en resultatkolumn, eller båda.
+
+1. **Flera filer ▾ → Jämför…**. Välj vänster och höger flik; samma flik två gånger jämför två kolumner i en fil.
+2. Välj **Rad mot rad** (rad 1 mot rad 1, i den ordning du ser raderna) eller **Finns någonstans** (varje värde letas upp var som helst i den andra kolumnen).
+3. Ställ in ett eller flera **kolumnpar** — varje par bedöms för sig — och hur de ska jämföras: vanligt, teckenexakt, utan å ä ö eller bara siffror.
+4. Kryssa i **Färga cellerna** och/eller **Resultatkolumn per par**, läs räknarna och skillnaderna, och **Jämför**.
+
+- Rad mot rad går på det du ser: sortera båda flikarna på samma nyckel först, så möts rätt rader.
+- Lika färgas grönt, skiljer sig rött och saknas orange. Lika är avstängt som förval — det är skillnaderna man letar efter.
+- Resultatkolumnen innehåller `lika`, `skiljer sig`, `saknas` eller `båda tomma`, går att filtrera på, och sorterar från lika till saknas. I uppslagsläget står antalet träffar med.
+- `Ctrl+Z` i fliken tar tillbaka både färgen och kolumnen. Notisen efter körningen har ett **Ångra** som backar allihop.
 
 ---
 
