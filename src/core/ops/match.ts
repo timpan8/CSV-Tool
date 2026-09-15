@@ -104,7 +104,8 @@ export function kraverTvaHoger(typ: Matchningstyp): boolean {
  */
 export const NYCKELAVSKILJARE = '\u0000'
 
-function normalisera(value: string, typ: Matchningstyp): string {
+/** Exporterad för att Jämför (`jamfor.ts`) ska jämföra exakt som matchningen gör. */
+export function normalisera(value: string, typ: Matchningstyp): string {
   const v = normalizeAlways(value).trim()
   if (v === '') return ''
 
@@ -1094,7 +1095,7 @@ const PROVTAK = 5_000_000
  * värdena för att normalisera dem. Det dyra — normaliseringen — sker alltså
  * en gång per unikt värde, precis som i `byggNycklar`.
  */
-function nyckelantal(col: Column, typ: Matchningstyp): Map<string, number> {
+export function nyckelantal(col: Column, typ: Matchningstyp): Map<string, number> {
   const antal = codeCounts(col)
   const ut = new Map<string, number>()
   for (let kod = 1; kod < col.dict.length; kod++) {

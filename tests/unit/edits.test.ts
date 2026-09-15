@@ -9,6 +9,7 @@ import { inaktuellaRegler } from '../../src/state/regel.js'
 import {
   dupliceraRader,
   fyllNedat,
+  infogaKolumner,
   klistraIn,
   laggTillLopnummer,
   planeraInklistring,
@@ -439,5 +440,21 @@ describe('vaxlaRegel', () => {
     vaxlaRegel(tab, col, true)
     // En avstängd mall har inget löfte att svika, så statusraden ska tiga.
     expect(inaktuellaRegler(tab)).toEqual([])
+  })
+})
+
+describe('infogaKolumner', () => {
+  it('lägger in färdiga kolumner som ett steg och lägger tillbaka samma objekt vid gör om', () => {
+    const tab = nyTab(frameOf(['A', 'B'], [['1', '2']]))
+    const ny = createColumn('A', 1)
+    ny.codes[0] = intern(ny, 'x')
+    infogaKolumner(tab, [ny], 1, 'Jämförde', 'jamfor')
+    expect(tab.frame.columns.map((c) => c.name)).toEqual(['A', 'A (2)', 'B'])
+    expect(tab.history).toHaveLength(1)
+    undo(tab)
+    expect(tab.frame.columns.map((c) => c.name)).toEqual(['A', 'B'])
+    redo(tab)
+    expect(tab.frame.columns[1]).toBe(ny)
+    expect(getCell(tab.frame.columns[1]!, 0)).toBe('x')
   })
 })

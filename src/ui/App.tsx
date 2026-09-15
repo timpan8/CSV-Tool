@@ -139,6 +139,8 @@ import {
   vantarPaMall,
 } from '../state/kombinera.js'
 import { oppnaSlaIhop, slaIhopOppen, stangSlaIhop } from '../state/slaihop.js'
+import { jamforOppen, oppnaJamfor, stangJamfor } from '../state/jamfor.js'
+import { Jamfor } from './Jamfor.jsx'
 import { nyRegelId, TOMT_FILTER, type Filterregel } from '../core/ops/filter.js'
 import {
   hittaDubbletter,
@@ -583,6 +585,7 @@ export function App() {
    */
   const stangEgnaVyer = () => {
     stangSlaIhop()
+    stangJamfor()
     stangKombinera()
     setOversiktOppen(false)
     stangPivot()
@@ -1737,8 +1740,9 @@ export function App() {
   const iVerkstaden = verkstadOppen.value
   const iKombinera = kombineraOppen.value
   const iSlaIhop = slaIhopOppen.value
+  const iJamfor = jamforOppen.value
   const iPivot = pivotOppen.value
-  const egenVy = iVerkstaden || iKombinera || iSlaIhop || iPivot || oversiktOppen
+  const egenVy = iVerkstaden || iKombinera || iSlaIhop || iJamfor || iPivot || oversiktOppen
 
   /*
    * Vilken vy som ligger överst — härlett en gång, läst på två ställen.
@@ -1751,6 +1755,8 @@ export function App() {
    */
   lagen.current.stangEgenVy = iSlaIhop
     ? stangSlaIhop
+    : iJamfor
+      ? stangJamfor
     : iKombinera
       ? stangKombinera
       : oversiktOppen
@@ -1804,6 +1810,7 @@ export function App() {
             y,
             poster: flerfilsmeny({
               slaIhop: () => oppnaSlaIhop(),
+              jamfor: () => oppnaJamfor(),
               kombinera: () => oppnaKombinera(),
               mall: () => oppnaKombinera(true),
               session: sessionslage(),
@@ -2028,7 +2035,15 @@ export function App() {
         </div>
       )}
 
-      {iSlaIhop ? (
+      {iJamfor ? (
+        <Jamfor
+          flikar={tabs.value.map((t) => ({ id: t.id, frame: t.frame, tab: t }))}
+          aktivId={tab?.id ?? null}
+          onKlar={(text, angra) =>
+            notify(text, angra ? { atgard: { etikett: t('Ångra'), kor: angra } } : undefined)
+          }
+        />
+      ) : iSlaIhop ? (
         <SlaIhop
           flikar={tabs.value.map((t) => ({ id: t.id, frame: t.frame }))}
           aktivId={tab?.id ?? null}
@@ -2368,6 +2383,7 @@ export function App() {
                 oppnaTabellverktyg('dubbletter')
               },
               slaIhop: () => oppnaSlaIhop(),
+              jamfor: () => oppnaJamfor(),
               kombinera: () => oppnaKombinera(),
               mall: () => oppnaKombinera(true),
               sammanfatta: () => setSammanfatta({ startkolumn: palettKolumn?.id ?? null }),
@@ -2540,6 +2556,7 @@ function stadMeny(
  */
 function flerfilsmeny(handlers: {
   slaIhop: () => void
+  jamfor: () => void
   kombinera: () => void
   mall: () => void
   session: Sessionslage
@@ -2550,6 +2567,11 @@ function flerfilsmeny(handlers: {
       etikett: t('Slå ihop…'),
       skal: t('rader som hör ihop läggs sida vid sida, matchat på en nyckel'),
       kor: handlers.slaIhop,
+    },
+    {
+      etikett: t('Jämför…'),
+      skal: t('två kolumner mot varandra: vad är lika, vad skiljer sig, vad saknas'),
+      kor: handlers.jamfor,
     },
     {
       etikett: t('Kombinera…'),

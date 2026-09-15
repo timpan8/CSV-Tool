@@ -56,6 +56,7 @@ export interface Kommandohandlare {
   filter: () => void
   dubbletter: () => void
   slaIhop: () => void
+  jamfor: () => void
   lopnummer: () => void
   fortsattVerkstad: () => void
   kombinera: () => void
@@ -180,6 +181,14 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
       ord: 'matcha merge join koppla',
       beskrivning: t('Rader som hör ihop läggs sida vid sida, matchat på en nyckel.'),
       kor: h.slaIhop,
+    })
+    lagg({
+      id: 'jamfor',
+      grupp: t('Tabell'),
+      etikett: t('Jämför med en annan fil…'),
+      ord: 'diff compare skillnad jämförelse kolumner',
+      beskrivning: t('Två kolumner mot varandra, rad för rad eller var som helst: lika, skiljer sig, saknas.'),
+      kor: h.jamfor,
     })
     if (lage.parkerad !== null) {
       // Bara när det finns något att gå tillbaka till. En post som nästan

@@ -339,6 +339,12 @@ export const SKAL: Record<string, string> = {
   'Filen laddades ner.': 'The file was downloaded.',
   'Kombinera…': 'Combine…',
   'Slå ihop…': 'Merge…',
+  'Jämför…': 'Compare…',
+  'två kolumner mot varandra: vad är lika, vad skiljer sig, vad saknas':
+    'two columns against each other: what matches, what differs, what is missing',
+  'Jämför med en annan fil…': 'Compare with another file…',
+  'Två kolumner mot varandra, rad för rad eller var som helst: lika, skiljer sig, saknas.':
+    'Two columns against each other, row by row or anywhere: equal, different, missing.',
   'Sätt ihop data ur flera filer — bredvid varandra, ovanpå varandra, eller in i en mall.':
     'Put data from several files together — side by side, stacked, or into a template.',
   'rader som hör ihop läggs sida vid sida, matchat på en nyckel':
