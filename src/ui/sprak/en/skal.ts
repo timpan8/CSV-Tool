@@ -114,6 +114,11 @@ export const SKAL: Record<string, string> = {
   /* ---------- Flikraden ---------- */
   Namnlös: 'Untitled',
   'Stäng {0}': 'Close {0}',
+  'Dubbelklicka för att byta namn': 'Double-click to rename',
+  'Nytt namn för {0}': 'New name for {0}',
+  'Byt namn på filen {0}…': 'Rename the file {0}…',
+  'Namnet följer med till exporten och till Excel-bladet.':
+    'The name carries over to the export and to the Excel sheet.',
   'Påbörjad sammanslagning med rader kvar att beta av':
     'Merge under way, with rows left to work through',
 

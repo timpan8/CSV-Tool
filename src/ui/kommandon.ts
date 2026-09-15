@@ -31,6 +31,8 @@ export interface Kommando {
 
 export interface Kommandolage {
   harFil: boolean
+  /** Den öppna filens namn, för kommandot som döper om den. */
+  filnamn: string | null
   /** Namnet på kolumnen kommandona gäller, eller null. */
   kolumn: string | null
   kolumnDold: boolean
@@ -45,6 +47,7 @@ export interface Kommandolage {
 export interface Kommandohandlare {
   oppnaFil: () => void
   klistraSomFil: () => void
+  dopOmFil: () => void
   exportera: () => void
   profiler: () => void
   sok: () => void
@@ -122,6 +125,14 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
     kor: h.borjaOm,
   })
   if (lage.harFil) {
+    lagg({
+      id: 'dopomfil',
+      grupp: t('Fil'),
+      etikett: tf('Byt namn på filen {0}…', lage.filnamn ?? ''),
+      ord: 'rename flik tab döp namn',
+      beskrivning: t('Namnet följer med till exporten och till Excel-bladet.'),
+      kor: h.dopOmFil,
+    })
     lagg({
       id: 'exportera',
       grupp: t('Fil'),

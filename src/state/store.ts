@@ -9,7 +9,7 @@ import type { Sorteringsniva } from '../core/ops/sort.js'
 import { aktivaRegler, TOMT_FILTER, type Filter } from '../core/ops/filter.js'
 import type { Dubblettnyckel } from '../core/ops/duplicates.js'
 import { cell, klamp, type Selection } from './selection.js'
-import { reserveraFrameId } from '../core/frame/frame.js'
+import { reserveraFrameId, unikFilnamn } from '../core/frame/frame.js'
 import type { Profilsteg } from '../core/ops/profil.js'
 import { laddaFlikar, lagringsfel, rensaLagring, sparaFlikar } from './lagring.js'
 // Cirkeln store ↔ matchning är ofarlig: båda sidor använder den andres
@@ -89,6 +89,18 @@ export interface Tab {
    * därför den ett verktyg ska lyssna på.
    */
   dataRevision: number
+  /**
+   * Räknare för det som ligger i ramen men utanför historiken: filnamnet,
+   * kolumnbredder, kolumnfärger.
+   *
+   * Lagringen skriver bara om den tunga ramen när den ändrats, och mätte det
+   * förut på `dataRevision` ensam. Ett namnbyte eller en ny bredd utan en
+   * enda ändrad cell blev då aldrig skrivet, och försvann vid nästa
+   * omladdning. Utseende går inte att ångra och bumpar därför inte
+   * `dataRevision` — men det ska sparas, och det här är räknaren som säger
+   * det.
+   */
+  utseendeRevision: number
   activeColumnId: ColumnId | null
   /** Sant tills innehållet exporterats — visas som prick i fliken. */
   smutsig: boolean
@@ -148,7 +160,7 @@ export function touch(): void {
  * lilla posten med filter, markering och namn behöver det. Utan den här
  * bokföringen skulle varje piltangent skriva om hela filen.
  */
-const skrivet = new Map<string, { data: number; latt: string }>()
+const skrivet = new Map<string, { data: number; utseende: number; latt: string }>()
 
 let sparTimer: ReturnType<typeof setTimeout> | null = null
 /** Sant när något ändrats som ännu inte hunnit skrivas. */
@@ -197,11 +209,13 @@ async function skrivFlikar(): Promise<void> {
       markering: tab.markering,
       smutsig: tab.smutsig,
       aktiv: tab.id === aktiv,
-      ramenAndrad: tidigare?.data !== tab.dataRevision,
+      ramenAndrad:
+        tidigare?.data !== tab.dataRevision || tidigare?.utseende !== tab.utseendeRevision,
       // Revisionen fryses i ögonblicksbilden. Skrivningen är asynkron, och en
       // redigering som landar medan den pågår ska inte bokföras som skriven —
       // det var den inte, och nästa jämförelse måste se skillnaden.
       data: tab.dataRevision,
+      utseende: tab.utseendeRevision,
       latt: lattSignatur(tab, i, tab.id === aktiv),
     }
   })
@@ -226,7 +240,7 @@ async function skrivFlikar(): Promise<void> {
     return
   }
   skrivet.clear()
-  for (const f of sparbara) skrivet.set(f.id, { data: f.data, latt: f.latt })
+  for (const f of sparbara) skrivet.set(f.id, { data: f.data, utseende: f.utseende, latt: f.latt })
 }
 
 /**
@@ -265,6 +279,7 @@ export async function aterstallFlikar(): Promise<number> {
     refreshView(tab)
     skrivet.set(tab.id, {
       data: tab.dataRevision,
+      utseende: tab.utseendeRevision,
       latt: '',
     })
     return { tab, aktiv: s.aktiv }
@@ -558,6 +573,7 @@ export function nyTab(frame: Frame): Tab {
     cursor: 0,
     bortglomda: 0,
     dataRevision: 0,
+    utseendeRevision: 0,
     activeColumnId: frame.columns[0]?.id ?? null,
     smutsig: false,
     viewSpec: { ...TOM_VY },
@@ -578,6 +594,34 @@ export function openFrame(frame: Frame): Tab {
   // gick en fil man öppnat och sedan lämnat orörd förlorad vid omladdning.
   schemalaggSpar()
   return tab
+}
+
+/**
+ * Bokför en utseendeändring i ramen — bredd, färg — så att den sparas.
+ *
+ * Utanför historiken med flit: Ctrl+Z som backar en kolumnbredd känns
+ * trasigt. Se `Tab.utseendeRevision` för varför den ändå måste räknas.
+ */
+export function bumpaUtseende(tab: Tab): void {
+  tab.utseendeRevision += 1
+  touch()
+}
+
+/**
+ * Döper om fliken.
+ *
+ * Namnet är filens namn: exporten föreslår det, Excel-bladet heter så, och
+ * sammanslagningens flikar bär det. Krockar det med en annan öppen flik får
+ * det ett löpnummer, så att två flikar aldrig går att förväxla i raden.
+ * Returnerar falskt när inget ändrades — ett tomt namn eller samma som förut.
+ */
+export function dopOmFlik(tab: Tab, namn: string): boolean {
+  const onskat = namn.trim()
+  if (onskat === '' || onskat === tab.frame.name) return false
+  const andra = tabs.value.filter((t) => t.id !== tab.id).map((t) => t.frame.name)
+  tab.frame.name = unikFilnamn(andra, onskat)
+  bumpaUtseende(tab)
+  return true
 }
 
 export function closeTab(id: string): void {

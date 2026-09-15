@@ -397,6 +397,18 @@ input[type='radio'] {
   white-space: nowrap;
 }
 
+/* Namnfältet tar flikens plats medan man skriver, i samma typsnitt. */
+.flik__namnfalt {
+  font: inherit;
+  color: var(--text);
+  background: var(--yta);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  padding: 0 4px;
+  width: 14ch;
+  min-width: 6ch;
+}
+
 .flik__antal {
   color: var(--text-svagast);
   font-variant-numeric: tabular-nums;

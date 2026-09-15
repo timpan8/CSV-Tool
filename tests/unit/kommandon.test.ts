@@ -32,6 +32,7 @@ function handlare(): { h: Kommandohandlare; korda: string[] } {
     stada: (id) => korda.push(`stada:${id}`),
     verktyg: (n) => korda.push(`verktyg:${n}`),
     dopOm: r('dopOm'),
+    dopOmFil: r('dopOmFil'),
     duplicera: r('duplicera'),
     vaxlaDold: r('vaxlaDold'),
     taBortKolumn: r('taBortKolumn'),
@@ -57,6 +58,7 @@ function handlare(): { h: Kommandohandlare; korda: string[] } {
 
 const LAGE = {
   harFil: true,
+  filnamn: 'kunder.csv',
   kolumn: 'Ort',
   kolumnDold: false,
   harMarkering: true,
