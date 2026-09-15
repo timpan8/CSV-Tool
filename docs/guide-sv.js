@@ -114,7 +114,21 @@ window.GUIDE_SV = {
           lead: 'Har du kopierat en hel tabell någon annanstans ifrån öppnar `Ctrl+Skift+V` den som en egen flik i stället för att skriva in den i tabellen du står i.',
           notes: [
             '`Ctrl+C` kopierar markeringen som TSV, alltså det Excel förstår. `Ctrl+V` klistrar in TSV eller CSV.',
-            'Är det inklistrade större än markeringen frågar verktyget om det ska lägga till plats, klippa av, eller öppna som en egen fil. Det klipper aldrig av i tysthet.'
+            'Är det inklistrade större än markeringen frågar verktyget om det ska lägga till plats, klippa av, eller öppna som en egen fil. Det klipper aldrig av i tysthet.',
+            'Inklistringarna heter `Inklistrat 1`, `Inklistrat 2` och så vidare, så två inklistrade flikar går att skilja åt.'
+          ]
+        },
+        {
+          id: 'byt-namn', t: 'Byt namn på en fil', img: 'flik-byt-namn.png', imgWidth: 520,
+          cap: 'Flikraden med namnfältet öppet.',
+          lead: 'Namnet på fliken är filens namn: exporten föreslår det, och Excel-bladet heter så.',
+          steps: [
+            'Dubbelklicka på flikens namn, skriv det nya och tryck `Enter`. `Escape` ångrar.',
+            'Eller högerklicka på fliken → **Byt namn…**, eller sök *byt namn på filen* i kommandopaletten.'
+          ],
+          notes: [
+            'Krockar namnet med en annan öppen flik får det ett löpnummer, som `kunder (2).csv`.',
+            'Namnet är utseende, inte data: det hamnar inte i ångra-historiken, men det sparas till nästa gång.'
           ]
         }
       ]
@@ -124,15 +138,32 @@ window.GUIDE_SV = {
       sections: [
         {
           id: 'sortera', t: 'Sortera', img: 'sortera.png',
-          cap: 'Sorteringspanelen med två nivåer.',
-          lead: 'Flernivåsortering med svensk ordning: `Öberg` efter `Zetterlund`, och `Kund 2` före `Kund 10`.',
+          cap: 'Sorteringspanelen med två nivåer, varav en på färg.',
+          lead: 'Flernivåsortering med svensk ordning: `Öberg` efter `Zetterlund`, och `Kund 2` före `Kund 10`. I första hand en kolumn, i andra hand en annan — och en nivå kan gå på cellernas färg i stället för deras värde.',
           steps: [
             'Klicka på pilen i en kolumnrubrik. Skift-klicka i nästa rubrik för att lägga till en nivå.',
-            'Eller öppna **Sortera** i redigeringsfältet och bygg listan där — nivåerna går att dra om.'
+            'För fler val: **Sortera** i redigeringsfältet, kolumnmenyn → **Sortera → Sortera på flera kolumner…**, eller ett klick på **Sorterat:**-chippet i statusraden. Panelen visar nivåerna i prioritetsordning, med riktningen i ord — *minst först*, *äldst först*, *A→Ö*.',
+            'Välj **Efter: Färg** på en nivå för att sortera på cellernas färg. Flytta nivåer med ↑ och ↓, eller dra dem.'
           ],
           notes: [
-            'Talkolumner sorteras numeriskt och datumkolumner som datum, oavsett hur de är skrivna. Tomma celler hamnar alltid sist, åt båda hållen.',
+            'Rader som är lika på nivå 1 ordnas efter nivå 2, och så vidare.',
+            'Talkolumner sorteras numeriskt och datumkolumner som datum, oavsett hur de är skrivna. Tomma celler hamnar alltid sist, åt båda hållen; en nivå på färg lägger de ofärgade sist av samma skäl.',
             'Rättar du en cell efter att ha sorterat ligger raden kvar under markören. Statusraden erbjuder **Sortera om** när du är klar.'
+          ]
+        },
+        {
+          id: 'farg', t: 'Färg', img: 'farg.png',
+          cap: 'Tabellen med färgade celler och en färgad kolumnrubrik.',
+          lead: 'Sju färger att markera med: celler, rader eller en hel kolumn. Färgen är en markering för ögat — och något att sortera på.',
+          steps: [
+            'Markera cellerna, högerklicka → **Färg** och välj en färg. **Ta bort färg** tar bort den.',
+            'Högerklicka på ett radnummer → **Färga raden** för hela raden.',
+            'Kolumnmenyn → **Kolumnfärg** ger rubriken en färg, som en etikett för att hitta kolumnen. **Färga alla celler** ligger i samma undermeny.'
+          ],
+          notes: [
+            'Cellfärgen är ett ångra-steg och följer med i Excel-exporten som en fyllning. En CSV har ingen plats för färg, och exportdialogen säger det.',
+            'Färgerna finns kvar när du öppnar sidan nästa gång, och följer med när rader kopieras till en sammanslagning eller delas till rader.',
+            '**Sortera** kan ordna raderna efter färg, och **Jämför två filer** färgar skillnaderna åt dig.'
           ]
         },
         {
@@ -416,7 +447,7 @@ window.GUIDE_SV = {
     },
     {
       id: 'flera-filer', t: 'Flera filer', sub: 'Sätt ihop data ur flera källor',
-      intro: 'De tre sätten att sätta ihop data ur flera filer ligger under **Flera filer ▾** i redigeringsfältet. Öppna filerna som var sin flik först.',
+      intro: 'Sätten att sätta ihop och jämföra data ur flera filer ligger under **Flera filer ▾** i redigeringsfältet. Öppna filerna som var sin flik först.',
       sections: [
         {
           id: 'slaihop', t: 'Slå ihop två filer', img: 'slaihop.png',
@@ -481,6 +512,23 @@ window.GUIDE_SV = {
             'Mallen bestämmer vilka kolumner resultatet har, vad de heter och i vilken ordning de kommer.',
             'Exempelrader i mallen följer aldrig med, men visas som ledtråd i kartan.',
             'Kolumner som finns i filerna men inte i mallen kastas inte i tysthet — de frågas om.'
+          ]
+        },
+        {
+          id: 'jamfor', t: 'Jämför två filer', img: 'jamfor.png',
+          cap: 'Jämförelsevyn med två filer, ett kolumnpar och skillnaderna.',
+          lead: 'Ställer en kolumn mot en annan — i två filer, eller i samma fil — och säger per rad vad som är lika, vad som skiljer sig och vad som saknas. Svaret skrivs som färg i cellerna, som en resultatkolumn, eller båda.',
+          steps: [
+            '**Flera filer ▾ → Jämför…**. Välj vänster och höger flik; samma flik två gånger jämför två kolumner i en fil.',
+            'Välj **Rad mot rad** (rad 1 mot rad 1, i den ordning du ser raderna) eller **Finns någonstans** (varje värde letas upp var som helst i den andra kolumnen).',
+            'Ställ in ett eller flera **kolumnpar** — varje par bedöms för sig — och hur de ska jämföras: vanligt, teckenexakt, utan å ä ö eller bara siffror.',
+            'Kryssa i **Färga cellerna** och/eller **Resultatkolumn per par**, läs räknarna och skillnaderna, och **Jämför**.'
+          ],
+          notes: [
+            'Rad mot rad går på det du ser: sortera båda flikarna på samma nyckel först, så möts rätt rader.',
+            'Lika färgas grönt, skiljer sig rött och saknas orange. Lika är avstängt som förval — det är skillnaderna man letar efter.',
+            'Resultatkolumnen innehåller `lika`, `skiljer sig`, `saknas` eller `båda tomma`, går att filtrera på, och sorterar från lika till saknas. I uppslagsläget står antalet träffar med.',
+            '`Ctrl+Z` i fliken tar tillbaka både färgen och kolumnen. Notisen efter körningen har ett **Ångra** som backar allihop.'
           ]
         }
       ]

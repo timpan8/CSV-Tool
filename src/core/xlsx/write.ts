@@ -1,6 +1,7 @@
 import { zipSync, strToU8 } from 'fflate'
 import type { Column, Frame } from '../types.js'
 import { getCell } from '../frame/column.js'
+import { FARGER, cellfarg } from '../frame/farg.js'
 import { parseNumber } from '../infer.js'
 import { selectForExport, type ExportOptions } from '../csv/stringify.js'
 
@@ -62,20 +63,40 @@ export function datumTillSerie(value: string): number | null {
 const STIL_DATUM = 1
 const STIL_RUBRIK = 2
 
-function cellXml(ref: string, col: Column, value: string): string {
-  if (value === '') return ''
+/**
+ * Stilindex för en färgad cell.
+ *
+ * Efter de tre grundstilarna ligger tre stilar per palettfärg — vanlig,
+ * datum och rubrik — i palettens ordning. Det här är enda stället som vet
+ * om det; `STILAR` byggs ur samma tal.
+ */
+type Variant = 'vanlig' | 'datum' | 'rubrik'
+const VARIANTER: Variant[] = ['vanlig', 'datum', 'rubrik']
+
+function stilFor(farg: number, variant: Variant): number {
+  if (farg === 0) return variant === 'datum' ? STIL_DATUM : variant === 'rubrik' ? STIL_RUBRIK : 0
+  return 3 + (farg - 1) * VARIANTER.length + VARIANTER.indexOf(variant)
+}
+
+function medStil(stil: number): string {
+  return stil === 0 ? '' : ` s="${stil}"`
+}
+
+function cellXml(ref: string, col: Column, value: string, farg: number): string {
+  // En färgad tom cell skrivs ändå — färgen är det Excel ska visa.
+  if (value === '') return farg === 0 ? '' : `<c r="${ref}"${medStil(stilFor(farg, 'vanlig'))}/>`
 
   if (col.type === 'number') {
     const n = parseNumber(value)
-    if (n !== null) return `<c r="${ref}"><v>${n}</v></c>`
+    if (n !== null) return `<c r="${ref}"${medStil(stilFor(farg, 'vanlig'))}><v>${n}</v></c>`
   }
   if (col.type === 'date') {
     const serie = datumTillSerie(value)
-    if (serie !== null) return `<c r="${ref}" s="${STIL_DATUM}"><v>${serie}</v></c>`
+    if (serie !== null) return `<c r="${ref}"${medStil(stilFor(farg, 'datum'))}><v>${serie}</v></c>`
   }
   // Textceller behåller ledande nollor, långa siffersträngar och allt annat
   // Excel annars skulle typa om åt oss.
-  return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xml(value)}</t></is></c>`
+  return `<c r="${ref}"${medStil(stilFor(farg, 'vanlig'))} t="inlineStr"><is><t xml:space="preserve">${xml(value)}</t></is></c>`
 }
 
 function sheetXml(columns: Column[], rows: Uint32Array, includeHeader: boolean): string {
@@ -90,7 +111,7 @@ function sheetXml(columns: Column[], rows: Uint32Array, includeHeader: boolean):
     const celler = columns
       .map(
         (c, i) =>
-          `<c r="${kolumnBokstav(i)}1" s="${STIL_RUBRIK}" t="inlineStr"><is><t xml:space="preserve">${xml(c.name)}</t></is></c>`,
+          `<c r="${kolumnBokstav(i)}1" s="${stilFor(c.farg ?? 0, 'rubrik')}" t="inlineStr"><is><t xml:space="preserve">${xml(c.name)}</t></is></c>`,
       )
       .join('')
     delar.push(`<row r="1">${celler}</row>`)
@@ -101,7 +122,8 @@ function sheetXml(columns: Column[], rows: Uint32Array, includeHeader: boolean):
     const rad = rows[i]!
     let celler = ''
     for (let c = 0; c < columns.length; c++) {
-      celler += cellXml(`${kolumnBokstav(c)}${radnr}`, columns[c]!, getCell(columns[c]!, rad))
+      const col = columns[c]!
+      celler += cellXml(`${kolumnBokstav(c)}${radnr}`, col, getCell(col, rad), cellfarg(col.flags[rad]!))
     }
     delar.push(`<row r="${radnr}">${celler}</row>`)
     radnr += 1
@@ -140,13 +162,24 @@ const STILAR = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
 <numFmts count="1"><numFmt numFmtId="164" formatCode="yyyy\\-mm\\-dd"/></numFmts>
 <fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>
-<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
+<fills count="${2 + FARGER.length}"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>${FARGER.map(
+  (f) => `<fill><patternFill patternType="solid"><fgColor rgb="${f.excel}"/><bgColor indexed="64"/></patternFill></fill>`,
+).join('')}</fills>
 <borders count="1"><border/></borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="3">
+<cellXfs count="${3 + FARGER.length * VARIANTER.length}">
 <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
 <xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
 <xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+${FARGER.map((f) => {
+  // Fyllning 0 och 1 är Excels egna; palettfärg f ligger på f + 1.
+  const fill = f.farg + 1
+  return [
+    `<xf numFmtId="0" fontId="0" fillId="${fill}" borderId="0" xfId="0" applyFill="1"/>`,
+    `<xf numFmtId="164" fontId="0" fillId="${fill}" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/>`,
+    `<xf numFmtId="0" fontId="1" fillId="${fill}" borderId="0" xfId="0" applyFont="1" applyFill="1"/>`,
+  ].join('\n')
+}).join('\n')}
 </cellXfs>
 </styleSheet>`
 

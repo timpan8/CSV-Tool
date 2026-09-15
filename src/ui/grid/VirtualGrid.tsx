@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Column, ColumnId, Frame } from '../../core/types.js'
 import { Flag } from '../../core/types.js'
+import { cellfarg, fargToken } from '../../core/frame/farg.js'
 import { t, tf } from '../sprak.js'
 import { getCell, filledCount, flagCount, matchDictionary } from '../../core/frame/column.js'
 import { TYPE_BADGES, TYPE_LABELS, violatesType } from '../../core/infer.js'
@@ -565,6 +566,8 @@ function Cell(props: CellProps) {
   if (col.type === 'date') classes.push('rutnat__cell--datum')
   if (invalid) classes.push('rutnat__cell--ogiltig')
   if ((flags & Flag.Padded) !== 0) classes.push('rutnat__cell--utfylld')
+  const farg = cellfarg(flags)
+  if (farg !== 0) classes.push(`rutnat__cell--farg-${farg}`)
   if ((flags & Flag.UserEdited) !== 0) classes.push('rutnat__cell--redigerad')
   if (value === '') classes.push('rutnat__cell--tom')
   if (props.markerad) classes.push('rutnat__cell--markerad')
@@ -716,6 +719,7 @@ function Header(props: HeaderProps) {
   if (props.markerad) classes.push('rubrik--markerad')
   if (props.drar) classes.push('rubrik--drar')
   if (props.slappmal) classes.push('rubrik--slappmal')
+  if (props.col.farg) classes.push('rubrik--farg')
 
   const startResize = (event: PointerEvent) => {
     event.preventDefault()
@@ -738,7 +742,13 @@ function Header(props: HeaderProps) {
       class={classes.join(' ')}
       role="columnheader"
       aria-colindex={props.kolindex}
-      style={{ width: `${width}px`, '--typfarg': TYPE_COLOR[col.type] } as never}
+      style={
+        {
+          width: `${width}px`,
+          '--typfarg': TYPE_COLOR[col.type],
+          ...(col.farg ? { '--kolfarg': fargToken(col.farg) } : {}),
+        } as never
+      }
       title={col.name}
       draggable
       onClick={props.onSelect}

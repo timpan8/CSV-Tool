@@ -114,6 +114,36 @@ export const SKAL: Record<string, string> = {
   /* ---------- Flikraden ---------- */
   Namnlös: 'Untitled',
   'Stäng {0}': 'Close {0}',
+  'Dubbelklicka för att byta namn': 'Double-click to rename',
+  'Nytt namn för {0}': 'New name for {0}',
+  'Byt namn på filen {0}…': 'Rename the file {0}…',
+
+  /* ---------- Färg ---------- */
+  Färg: 'Colour',
+  Blå: 'Blue',
+  Orange: 'Orange',
+  Grön: 'Green',
+  Gul: 'Yellow',
+  Rosa: 'Pink',
+  Lila: 'Purple',
+  Röd: 'Red',
+  'Ta bort färg': 'Remove colour',
+  'Färga raden': 'Colour the row',
+  Kolumnfärg: 'Column colour',
+  'en etikett på rubriken, för att hitta kolumnen': 'a label on the header, to find the column',
+  'Färga alla celler': 'Colour every cell',
+  'Cellerna hade ingen färg.': 'The cells had no colour.',
+  'Cellerna hade redan den färgen.': 'The cells already had that colour.',
+  'Tog bort färgen från {0}.': 'Removed the colour from {0}.',
+  'Färgade {0}.': 'Coloured {0}.',
+  'Tog bort färgen från {0}': 'Removed the colour from {0}',
+  'Färgade {0} {1}': 'Coloured {0} {1}',
+  'Färga markeringen {0}': 'Colour the selection {0}',
+  'Ta bort färg från markeringen': 'Remove colour from the selection',
+  'Kolumnfärg på {0}: {1}': 'Column colour on {0}: {1}',
+  'Ta bort kolumnfärgen på {0}': 'Remove the column colour on {0}',
+  'Namnet följer med till exporten och till Excel-bladet.':
+    'The name carries over to the export and to the Excel sheet.',
   'Påbörjad sammanslagning med rader kvar att beta av':
     'Merge under way, with rows left to work through',
 
@@ -154,6 +184,9 @@ export const SKAL: Record<string, string> = {
   'Sortera A→Ö': 'Sort A→Z',
   'Sortera Ö→A': 'Sort Z→A',
   'Lägg till som sorteringsnivå': 'Add as a sorting level',
+  'Sortera på flera kolumner…': 'Sort on several columns…',
+  'nivåer i prioritetsordning, värde eller färg': 'levels in priority order, value or colour',
+  'Klicka för att öppna sorteringspanelen': 'Click to open the sorting panel',
   'Filtrera på kolumnen…': 'Filter on the column…',
   'en rad per värde, med summa och antal för resten av kolumnerna':
     'one row per value, with sum and count for the remaining columns',
@@ -306,6 +339,12 @@ export const SKAL: Record<string, string> = {
   'Filen laddades ner.': 'The file was downloaded.',
   'Kombinera…': 'Combine…',
   'Slå ihop…': 'Merge…',
+  'Jämför…': 'Compare…',
+  'två kolumner mot varandra: vad är lika, vad skiljer sig, vad saknas':
+    'two columns against each other: what matches, what differs, what is missing',
+  'Jämför med en annan fil…': 'Compare with another file…',
+  'Två kolumner mot varandra, rad för rad eller var som helst: lika, skiljer sig, saknas.':
+    'Two columns against each other, row by row or anywhere: equal, different, missing.',
   'Sätt ihop data ur flera filer — bredvid varandra, ovanpå varandra, eller in i en mall.':
     'Put data from several files together — side by side, stacked, or into a template.',
   'rader som hör ihop läggs sida vid sida, matchat på en nyckel':

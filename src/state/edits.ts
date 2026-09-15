@@ -621,6 +621,44 @@ function skapaKolumnerFran(tab: Tab, kall: Column, forh: Forhandsvisning): numbe
 }
 
 /**
+ * Infogar färdigbyggda kolumner som ett ångra-steg.
+ *
+ * Jämförelsens väg in: kolumnerna är redan fyllda, så steget håller bara
+ * fast dem — gör om lägger tillbaka exakt samma kolumnobjekt. `atIndex`
+ * klamras; namnen görs unika här, eftersom det är först nu de möter filens.
+ */
+export function infogaKolumner(
+  tab: Tab,
+  kolumner: readonly Column[],
+  atIndex: number,
+  label: string,
+  kind: string,
+): void {
+  if (kolumner.length === 0) return
+  const tagna = tab.frame.columns.map((c) => c.name)
+  for (const col of kolumner) {
+    col.name = uniqueColumnName(tagna, col.name)
+    tagna.push(col.name)
+  }
+  const index = Math.max(0, Math.min(tab.frame.columns.length, atIndex))
+  const nya = [...kolumner]
+  runStep(tab, {
+    label,
+    kind,
+    vikt: nya.reduce((summa, col) => summa + columnBytes(col), 0),
+    apply: () => {
+      tab.frame.columns.splice(index, 0, ...nya)
+    },
+    revert: () => {
+      for (const col of nya) {
+        const i = tab.frame.columns.indexOf(col)
+        if (i !== -1) tab.frame.columns.splice(i, 1)
+      }
+    },
+  })
+}
+
+/**
  * Fyller mallkolumner på nytt ur sina regler, som **ett** ångra-steg.
  *
  * `korOverKolumner` tar redan en lista kolumner och en enda ögonblicksbild

@@ -1,10 +1,10 @@
 import { useState } from 'preact/hooks'
 import { Verktygspanel } from './Verktygspanel.js'
 import { Notis, Val } from './parts.js'
-import type { Frame } from '../core/types.js'
+import type { ColumnId, ColumnType, Frame } from '../core/types.js'
 import { visibleColumns } from '../core/frame/frame.js'
 import { TYPE_LABELS } from '../core/infer.js'
-import type { Riktning, Sorteringsniva } from '../core/ops/sort.js'
+import { grundFor, type Riktning, type Sorteringsgrund, type Sorteringsniva } from '../core/ops/sort.js'
 import { formatCount } from '../core/locale/sv.js'
 import { startaDrag } from './drag.js'
 import { t, tf } from './sprak.js'
@@ -15,12 +15,20 @@ import { t, tf } from './sprak.js'
  * Nivåerna är en lista och inte en handfull rullgardiner, eftersom ordningen
  * mellan dem *är* betydelsen: "Ort, sedan Belopp" är inte samma sak som
  * "Belopp, sedan Ort". Att kunna dra dem är därför inte en bekvämlighet utan
- * det som gör listan begriplig.
+ * det som gör listan begriplig — och ↑/↓ finns för den som inte drar.
+ *
+ * Varje nivå säger med ord vad den gör. En pil betyder olika saker på olika
+ * kolumner — *minst först* på ett tal, *äldst först* på ett datum — och
+ * panelen är stället där det ska stå, inte gissas. Riktningen står som
+ * *A→Ö* på text oavsett gränssnittets språk, för sorteringen är svensk och
+ * *A→Z* hade lovat en ordning verktyget inte kör.
  */
 export function SortTool(props: {
   frame: Frame
   nivaer: readonly Sorteringsniva[]
   inaktuell: boolean
+  /** Kolumnen markören står i — den som en ny nivå helst ska gälla. */
+  aktivKolumn: ColumnId | null
   onNivaer: (nivaer: Sorteringsniva[]) => void
   onSorteraOm: () => void
   onStang: () => void
@@ -38,13 +46,17 @@ export function SortTool(props: {
   const taBort = (i: number) => props.onNivaer(nivaer.filter((_, j) => j !== i).map((n) => ({ ...n })))
 
   const lagg = () => {
-    const ledig = kolumner.find((c) => !nivaer.some((n) => n.colId === c.id))
+    const anvand = (id: ColumnId) => nivaer.some((n) => n.colId === id)
+    const ledig =
+      (props.aktivKolumn !== null && !anvand(props.aktivKolumn)
+        ? kolumner.find((c) => c.id === props.aktivKolumn)
+        : undefined) ?? kolumner.find((c) => !anvand(c.id))
     if (!ledig) return
     props.onNivaer([...nivaer.map((n) => ({ ...n })), { colId: ledig.id, riktning: 'stigande' }])
   }
 
   const flytta = (fran: number, till: number) => {
-    if (fran === till) return
+    if (fran === till || till < 0 || till >= nivaer.length) return
     const nya = nivaer.map((n) => ({ ...n }))
     const [flyttad] = nya.splice(fran, 1)
     nya.splice(till, 0, flyttad!)
@@ -93,6 +105,8 @@ export function SortTool(props: {
         <div class="kollista">
           {nivaer.map((niva, i) => {
             const col = props.frame.columns.find((c) => c.id === niva.colId)
+            const grund = grundFor(niva)
+            const namn = col?.name ?? ''
             return (
               <div
                 class={`kolrad nivarad${drar === i ? ' kolrad--slappmal' : ''}`}
@@ -109,38 +123,70 @@ export function SortTool(props: {
                 }}
                 onDragEnd={() => setDrar(null)}
               >
-                <span class="kolrad__grepp" aria-hidden="true">
-                  ⠿
-                </span>
-                <span class="nivarad__nr">{i + 1}</span>
-                <select
-                  class="nivarad__kolumn"
-                  value={niva.colId}
-                  onChange={(e) => andra(i, { colId: (e.currentTarget as HTMLSelectElement).value })}
-                >
-                  {props.frame.columns.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                      {c.hidden ? t(' (dold)') : ''}
-                    </option>
-                  ))}
-                </select>
-                <Val
-                  varden={[
-                    { varde: 'stigande' as Riktning, etikett: '↑', titel: stigandeText(col?.type) },
-                    { varde: 'fallande' as Riktning, etikett: '↓', titel: fallandeText(col?.type) },
-                  ]}
-                  valt={niva.riktning}
-                  onValj={(v) => andra(i, { riktning: v })}
-                />
-                <button
-                  class="kolrad__oga"
-                  aria-label={tf('Ta bort nivån {0}', col?.name ?? '')}
-                  title={t('Ta bort nivån')}
-                  onClick={() => taBort(i)}
-                >
-                  ✕
-                </button>
+                <div class="nivarad__rad">
+                  <span class="kolrad__grepp" aria-hidden="true">
+                    ⠿
+                  </span>
+                  <span class="nivarad__nr">{i + 1}</span>
+                  <select
+                    class="nivarad__kolumn"
+                    aria-label={tf('Kolumn för nivån {0}', i + 1)}
+                    value={niva.colId}
+                    onChange={(e) => andra(i, { colId: (e.currentTarget as HTMLSelectElement).value })}
+                  >
+                    {props.frame.columns.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                        {c.hidden ? t(' (dold)') : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    class="kolrad__oga"
+                    aria-label={tf('Flytta nivån {0} upp', namn)}
+                    title={t('Flytta upp')}
+                    disabled={i === 0}
+                    onClick={() => flytta(i, i - 1)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    class="kolrad__oga"
+                    aria-label={tf('Flytta nivån {0} ned', namn)}
+                    title={t('Flytta ned')}
+                    disabled={i === nivaer.length - 1}
+                    onClick={() => flytta(i, i + 1)}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    class="kolrad__oga"
+                    aria-label={tf('Ta bort nivån {0}', namn)}
+                    title={t('Ta bort nivån')}
+                    onClick={() => taBort(i)}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div class="nivarad__rad nivarad__rad--val">
+                  <Val
+                    etikett={t('Efter')}
+                    varden={[
+                      { varde: 'varde' as Sorteringsgrund, etikett: 'Värde' },
+                      { varde: 'farg' as Sorteringsgrund, etikett: 'Färg', titel: 'Cellernas färg, i palettens ordning. Ofärgade sist.' },
+                    ]}
+                    valt={grund}
+                    onValj={(v) => andra(i, { grund: v })}
+                  />
+                  <Val
+                    varden={[
+                      { varde: 'stigande' as Riktning, etikett: riktningsetikett(col?.type, grund, 'stigande') },
+                      { varde: 'fallande' as Riktning, etikett: riktningsetikett(col?.type, grund, 'fallande') },
+                    ]}
+                    valt={niva.riktning}
+                    onValj={(v) => andra(i, { riktning: v })}
+                  />
+                </div>
               </div>
             )
           })}
@@ -149,6 +195,11 @@ export function SortTool(props: {
               {t(
                 'Raderna ligger i filens ordning. Lägg till en nivå, eller klicka på pilen i en kolumnrubrik.',
               )}
+            </p>
+          )}
+          {nivaer.length >= 2 && (
+            <p class="verktyg__sammanfattning">
+              {t('Rader som är lika på nivå 1 ordnas efter nivå 2, och så vidare.')}
             </p>
           )}
         </div>
@@ -160,6 +211,9 @@ export function SortTool(props: {
       <Notis ton="info">
         {t(
           'Sorteringen ändrar bara i vilken ordning raderna visas — inga värden flyttas i filen, och radnumret till vänster fortsätter visa var raden stod. Tomma celler hamnar alltid sist, oavsett riktning: en tom cell är inte det minsta värdet, den saknas.',
+        )}{' '}
+        {t(
+          'En nivå på färg lägger raderna i palettens ordning — blå, orange, grön, gul, rosa, lila, röd — med de ofärgade sist.',
         )}
       </Notis>
     </Verktygspanel>
@@ -167,20 +221,23 @@ export function SortTool(props: {
 }
 
 /*
- * `A→Ö` och `Ö→A` översätts inte.
+ * Riktningen med ord. `A→Ö` och `Ö→A` översätts inte: sorteringen är svensk
+ * oavsett gränssnittets språk — å ä ö ligger efter z — och `A→Z` hade lovat
+ * en ordning verktyget inte kör. Riktningen är beteende, inte etikett.
  *
- * Sorteringen är svensk oavsett gränssnittets språk — å ä ö ligger efter z —
- * och `A→Z` hade lovat en ordning verktyget inte kör. Riktningen är beteende,
- * inte etikett.
+ * Etiketterna går genom `Val`, som översätter dem själv; därför står de här
+ * som svenska literaler och inte som `t(...)`.
  */
-function stigandeText(type: string | undefined): string {
-  if (type === 'number') return t('Minst först')
-  if (type === 'date') return t('Äldst först')
-  return `A→Ö${type ? ` (${t(TYPE_LABELS[type as never] ?? '')})` : ''}`.trim()
-}
-
-function fallandeText(type: string | undefined): string {
-  if (type === 'number') return t('Störst först')
-  if (type === 'date') return t('Nyast först')
-  return 'Ö→A'
+function riktningsetikett(
+  type: ColumnType | undefined,
+  grund: Sorteringsgrund,
+  riktning: Riktning,
+): string {
+  const stigande = riktning === 'stigande'
+  if (grund === 'farg') return stigande ? 'Färgordning' : 'Omvänd färgordning'
+  if (type === 'number') return stigande ? 'Minst först' : 'Störst först'
+  if (type === 'date') return stigande ? 'Äldst först' : 'Nyast först'
+  if (type === 'bool') return stigande ? 'Nej först' : 'Ja först'
+  const typ = type ? ` (${t(TYPE_LABELS[type] ?? '')})` : ''
+  return stigande ? `A→Ö${typ}` : `Ö→A${typ}`
 }

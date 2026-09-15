@@ -447,6 +447,14 @@
   line-height: 1;
 }
 
+/* Kolumnfärgen som en prick, så att den syns även i listan. */
+.kolrad__farg {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+
 .kolrad__namn {
   flex: 1;
   overflow: hidden;
@@ -735,6 +743,14 @@
   font-size: 11.5px;
 }
 
+/* Färgrutan före etiketten i färgmenyerna. */
+.meny__farg {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: none;
+}
+
 .meny__genvag {
   margin-left: auto;
   color: var(--text-svagast);
@@ -871,7 +887,21 @@
 /* ---------- Sorteringsnivåer ---------- */
 
 .nivarad {
+  gap: 4px;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* Två rader per nivå: kolumnen med sina knappar, och valen under. */
+.nivarad__rad {
+  display: flex;
+  align-items: center;
   gap: 6px;
+}
+
+.nivarad__rad--val {
+  padding-left: 22px;
+  flex-wrap: wrap;
 }
 
 .nivarad__nr {

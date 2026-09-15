@@ -50,6 +50,8 @@ export interface MenyPost {
   undermeny?: (MenyPost | 'avdelare')[]
   /** Skäl till att posten inte går att välja. Visas som förklaring. */
   inaktiv?: string
+  /** CSS-färg för en ruta före etiketten, i färgmenyerna. */
+  farg?: string
   kor?: () => void
 }
 
@@ -198,6 +200,7 @@ function Niva(props: {
               props.onStang()
             }}
           >
+            {post.farg && <span class="meny__farg" style={{ background: post.farg }} aria-hidden="true" />}
             <span class="meny__etikett">{post.etikett}</span>
             {post.skal && <span class="meny__skal">{post.skal}</span>}
             {post.genvag && <span class="meny__genvag">{post.genvag}</span>}

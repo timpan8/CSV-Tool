@@ -1,6 +1,7 @@
 import { normalizeAlways, stripDiacritics } from '../core/locale/sv.js'
 import { STADNINGAR } from '../core/ops/clean.js'
 import { VERKTYG, type Verktygsnamn } from './verktyg.js'
+import { FARGER, fargetikettGement } from './fargetikett.js'
 import { t, tf } from './sprak.js'
 
 /**
@@ -31,6 +32,8 @@ export interface Kommando {
 
 export interface Kommandolage {
   harFil: boolean
+  /** Den öppna filens namn, för kommandot som döper om den. */
+  filnamn: string | null
   /** Namnet på kolumnen kommandona gäller, eller null. */
   kolumn: string | null
   kolumnDold: boolean
@@ -45,6 +48,7 @@ export interface Kommandolage {
 export interface Kommandohandlare {
   oppnaFil: () => void
   klistraSomFil: () => void
+  dopOmFil: () => void
   exportera: () => void
   profiler: () => void
   sok: () => void
@@ -52,6 +56,7 @@ export interface Kommandohandlare {
   filter: () => void
   dubbletter: () => void
   slaIhop: () => void
+  jamfor: () => void
   lopnummer: () => void
   fortsattVerkstad: () => void
   kombinera: () => void
@@ -65,6 +70,8 @@ export interface Kommandohandlare {
   dopOm: () => void
   duplicera: () => void
   vaxlaDold: () => void
+  fargaMarkering: (farg: number) => void
+  kolumnfarg: (farg: number) => void
   taBortKolumn: () => void
   infogaKolumn: () => void
   filtreraKolumn: () => void
@@ -123,6 +130,14 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
   })
   if (lage.harFil) {
     lagg({
+      id: 'dopomfil',
+      grupp: t('Fil'),
+      etikett: tf('Byt namn på filen {0}…', lage.filnamn ?? ''),
+      ord: 'rename flik tab döp namn',
+      beskrivning: t('Namnet följer med till exporten och till Excel-bladet.'),
+      kor: h.dopOmFil,
+    })
+    lagg({
       id: 'exportera',
       grupp: t('Fil'),
       etikett: t('Exportera…'),
@@ -166,6 +181,14 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
       ord: 'matcha merge join koppla',
       beskrivning: t('Rader som hör ihop läggs sida vid sida, matchat på en nyckel.'),
       kor: h.slaIhop,
+    })
+    lagg({
+      id: 'jamfor',
+      grupp: t('Tabell'),
+      etikett: t('Jämför med en annan fil…'),
+      ord: 'diff compare skillnad jämförelse kolumner',
+      beskrivning: t('Två kolumner mot varandra, rad för rad eller var som helst: lika, skiljer sig, saknas.'),
+      kor: h.jamfor,
     })
     if (lage.parkerad !== null) {
       // Bara när det finns något att gå tillbaka till. En post som nästan
@@ -274,6 +297,43 @@ export function byggKommandon(lage: Kommandolage, h: Kommandohandlare): Kommando
         etikett: tf('Visa ogiltiga värden i {0}', kol),
         ord: 'problem fel',
         kor: h.visaOgiltiga,
+      })
+    }
+
+    if (lage.harMarkering) {
+      for (const f of FARGER) {
+        lagg({
+          id: `farg:${f.farg}`,
+          grupp: t('Färg'),
+          etikett: tf('Färga markeringen {0}', fargetikettGement(f.farg)),
+          ord: 'färg color colour markera',
+          kor: () => h.fargaMarkering(f.farg),
+        })
+      }
+      lagg({
+        id: 'farg:0',
+        grupp: t('Färg'),
+        etikett: t('Ta bort färg från markeringen'),
+        ord: 'färg color colour',
+        kor: () => h.fargaMarkering(0),
+      })
+    }
+    if (kol !== null) {
+      for (const f of FARGER) {
+        lagg({
+          id: `kolfarg:${f.farg}`,
+          grupp: t('Färg'),
+          etikett: tf('Kolumnfärg på {0}: {1}', kol, fargetikettGement(f.farg)),
+          ord: 'färg color colour rubrik etikett',
+          kor: () => h.kolumnfarg(f.farg),
+        })
+      }
+      lagg({
+        id: 'kolfarg:0',
+        grupp: t('Färg'),
+        etikett: tf('Ta bort kolumnfärgen på {0}', kol),
+        ord: 'färg color colour',
+        kor: () => h.kolumnfarg(0),
       })
     }
 

@@ -76,6 +76,37 @@ export function uniqueColumnName(existing: Iterable<string>, wanted: string): st
   }
 }
 
+/**
+ * Ger ett filnamn som inte krockar med de öppna flikarna.
+ *
+ * Två inklistringar hette förut båda `inklistrat.csv`, och två flikar med
+ * samma namn går inte att skilja åt i flikraden. Slutar namnet på ett tal
+ * räknas talet upp — `Inklistrat 1` → `Inklistrat 2` — så att inklistringarna
+ * numreras i den ordning de gjordes. Annars läggs `(2)` före ändelsen, som
+ * för kolumner: `Kunder.csv` → `Kunder (2).csv`.
+ */
+export function unikFilnamn(existing: Iterable<string>, wanted: string): string {
+  const taken = new Set<string>()
+  for (const name of existing) taken.add(name.toLocaleLowerCase('sv'))
+  const ledigt = (namn: string) => !taken.has(namn.toLocaleLowerCase('sv'))
+  const base = wanted.trim() === '' ? 'Namnlös' : wanted.trim()
+  if (ledigt(base)) return base
+
+  const andelse = /\.(csv|txt|tsv|xlsx)$/i.exec(base)?.[0] ?? ''
+  const stam = base.slice(0, base.length - andelse.length)
+  const numrerat = /^(.*?)(\d+)$/.exec(stam)
+  if (numrerat) {
+    for (let n = Number(numrerat[2]) + 1; ; n++) {
+      const candidate = `${numrerat[1]}${n}${andelse}`
+      if (ledigt(candidate)) return candidate
+    }
+  }
+  for (let n = 2; ; n++) {
+    const candidate = `${stam} (${n})${andelse}`
+    if (ledigt(candidate)) return candidate
+  }
+}
+
 /** Flyttar en kolumn till ett nytt index i visningsordningen. */
 export function moveColumn(frame: Frame, id: ColumnId, toIndex: number): void {
   const from = columnIndex(frame, id)
@@ -124,6 +155,7 @@ export function duplicateColumn(frame: Frame, id: ColumnId): Column | undefined 
   copy.dictIndex = new Map(src.dictIndex)
   copy.codes = src.codes.slice()
   copy.flags = src.flags.slice()
+  if (src.farg) copy.farg = src.farg
   copy.typeLocked = src.typeLocked
   frame.columns.splice(columnIndex(frame, id) + 1, 0, copy)
   return copy

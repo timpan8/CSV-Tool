@@ -1,6 +1,7 @@
 import type { ColumnId, Frame } from '../types.js'
 import { findColumn, identityView } from '../frame/frame.js'
 import { kolumnrang, TOM_RANG } from '../frame/rank.js'
+import { ANTAL_FARGER, cellfarg } from '../frame/farg.js'
 
 /**
  * Flernivåsortering.
@@ -18,10 +19,20 @@ import { kolumnrang, TOM_RANG } from '../frame/rank.js'
 
 export type Riktning = 'stigande' | 'fallande'
 
+/** Vad nivån ordnar efter: cellens värde, eller cellens färg. */
+export type Sorteringsgrund = 'varde' | 'farg'
+
 export interface Sorteringsniva {
   colId: ColumnId
   riktning: Riktning
+  /**
+   * Valfri, och läses som `'varde'` när den saknas — så att de sorteringar
+   * som redan ligger sparade i någons webbläsare betyder samma sak som förut.
+   */
+  grund?: Sorteringsgrund
 }
+
+export const grundFor = (niva: Sorteringsniva): Sorteringsgrund => niva.grund ?? 'varde'
 
 /**
  * Ett stabilt räknesorteringssvep.
@@ -68,6 +79,21 @@ function hinkarFor(frame: Frame, niva: Sorteringsniva): { hink: Uint32Array; ant
   const col = findColumn(frame, niva.colId)
   if (!col) return null
 
+  if (grundFor(niva) === 'farg') {
+    /*
+     * Färgen ordnas som paletten står — blå först, röd sist — och ofärgade
+     * celler hamnar sist oavsett riktning, av samma skäl som tomma: att sakna
+     * färg är inte den minsta färgen.
+     */
+    const hink = new Uint32Array(frame.rowCount)
+    const sista = ANTAL_FARGER - 1
+    for (let r = 0; r < frame.rowCount; r++) {
+      const f = cellfarg(col.flags[r]!)
+      hink[r] = f === 0 ? ANTAL_FARGER : niva.riktning === 'fallande' ? sista - (f - 1) : f - 1
+    }
+    return { hink, antal: ANTAL_FARGER }
+  }
+
   const { rang, hinkar } = kolumnrang(col)
   const hink = new Uint32Array(frame.rowCount)
   const sista = hinkar > 0 ? hinkar - 1 : 0
@@ -108,7 +134,7 @@ export function beskrivSortering(frame: Frame, nivaer: readonly Sorteringsniva[]
     .map((n) => {
       const col = findColumn(frame, n.colId)
       if (!col) return null
-      return `${col.name} ${PIL[n.riktning]}${col.hidden ? ' (dold)' : ''}`
+      return `${col.name}${grundFor(n) === 'farg' ? ' (färg)' : ''} ${PIL[n.riktning]}${col.hidden ? ' (dold)' : ''}`
     })
     .filter((t): t is string => t !== null)
     .join(', ')

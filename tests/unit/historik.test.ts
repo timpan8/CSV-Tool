@@ -5,8 +5,11 @@ import {
   HISTORIKTAK,
   canRedo,
   canUndo,
+  dopOmFlik,
   historikvikt,
   nyTab,
+  openFrame,
+  tabs,
   redo,
   runStep,
   undo,
@@ -164,5 +167,34 @@ describe('minnestaket', () => {
     // historiken bara för att någon glömt väga det.
     expect(tab.history).toHaveLength(200)
     expect(tab.bortglomda).toBe(0)
+  })
+})
+
+describe('dopOmFlik', () => {
+  it('byter namn utan att röra historiken, men bokför det som utseende', () => {
+    const tab = tomTab()
+    const fore = tab.utseendeRevision
+    expect(dopOmFlik(tab, ' Kunder 2024 ')).toBe(true)
+    expect(tab.frame.name).toBe('Kunder 2024')
+    expect(tab.history).toHaveLength(0)
+    expect(tab.dataRevision).toBe(0)
+    expect(tab.utseendeRevision).toBe(fore + 1)
+  })
+
+  it('avvisar ett tomt namn och samma namn', () => {
+    const tab = tomTab()
+    expect(dopOmFlik(tab, '')).toBe(false)
+    expect(dopOmFlik(tab, 'test')).toBe(false)
+    expect(tab.utseendeRevision).toBe(0)
+  })
+
+  it('får ett löpnummer när namnet krockar med en annan öppen flik', () => {
+    tabs.value = []
+    const a = openFrame(createFrame('kunder.csv', [createColumn('A', 1)], 1))
+    const b = openFrame(createFrame('order.csv', [createColumn('A', 1)], 1))
+    expect(dopOmFlik(b, 'kunder.csv')).toBe(true)
+    expect(b.frame.name).toBe('kunder (2).csv')
+    expect(a.frame.name).toBe('kunder.csv')
+    tabs.value = []
   })
 })

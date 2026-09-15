@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks'
 import type { Column, ColumnId, Frame } from '../core/types.js'
 import type { AppliedStep, Tab } from '../state/store.js'
 import { TYPE_LABELS } from '../core/infer.js'
+import { fargToken } from '../core/frame/farg.js'
 import { formatCount } from '../core/locale/sv.js'
 import { startaDrag } from './drag.js'
 import { t, tf } from './sprak.js'
@@ -103,6 +104,13 @@ export function ColumnPanel(props: {
                 >
                   {col.hidden ? '○' : '●'}
                 </button>
+                {col.farg && (
+                  <span
+                    class="kolrad__farg"
+                    style={{ background: fargToken(col.farg) }}
+                    aria-hidden="true"
+                  />
+                )}
                 <span class="kolrad__namn">{col.name}</span>
                 <TypMarke col={col} />
               </div>

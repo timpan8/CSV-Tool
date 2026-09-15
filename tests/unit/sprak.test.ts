@@ -129,7 +129,7 @@ describe('ordboken', () => {
      * en rad man klistrat in och glömt skriva om. De få som stämmer står
      * uppräknade här, så att de är ett beslut och inte ett förbiseende.
      */
-    const LIKA_PÅ_BÅDA = new Set(['Filter', 'Filter…', 'Format', '{0} — {1}'])
+    const LIKA_PÅ_BÅDA = new Set(['Filter', 'Filter…', 'Format', 'Orange', '{0} — {1}'])
     const likadana = Object.entries(EN)
       .filter(([sv, en]) => sv === en && !LIKA_PÅ_BÅDA.has(sv))
       .map(([sv]) => sv)

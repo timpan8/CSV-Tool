@@ -1,6 +1,7 @@
 import type { ColumnId, Frame } from '../core/types.js'
 import { findColumn, identityView } from '../core/frame/frame.js'
-import { sorteraNiva, sorteraRader, type Sorteringsniva } from '../core/ops/sort.js'
+import { grundFor, sorteraNiva, sorteraRader, type Sorteringsniva } from '../core/ops/sort.js'
+import { FARGMASK } from '../core/types.js'
 import { hittaDubbletter, type Dubblettgrupper, type Dubblettnyckel } from '../core/ops/duplicates.js'
 
 /**
@@ -58,9 +59,29 @@ export interface Ordning {
  * innebörd helt. Utan den detaljen skulle en beloppskolumn tyst byta från
  * text- till talordning utan att någon fick veta det.
  */
-export function nyckelsignatur(frame: Frame, kolumner: readonly ColumnId[]): number {
+export function nyckelsignatur(
+  frame: Frame,
+  kolumner: readonly ColumnId[],
+  fargkolumner: readonly ColumnId[] = [],
+): number {
   // FNV-1a. Vi behöver inte kryptografisk styrka, bara att en ändring syns.
   let h = 0x811c9dc5
+  /*
+   * En nivå på färg hashar färgbitarna i stället för koderna. Bara de: en
+   * färgning ska inte göra en värdesortering inaktuell, och en rättad cell
+   * ska inte göra en färgsortering det.
+   */
+  for (const id of fargkolumner) {
+    const col = findColumn(frame, id)
+    if (!col) {
+      h = Math.imul(h ^ 0xfe, 0x01000193)
+      continue
+    }
+    const flags = col.flags
+    for (let r = 0; r < flags.length; r++) {
+      h = Math.imul(h ^ (flags[r]! & FARGMASK), 0x01000193)
+    }
+  }
   for (const id of kolumner) {
     const col = findColumn(frame, id)
     if (!col) {
@@ -117,9 +138,10 @@ export function beraknaOrdning(
   }
 
   const kolumner = [
-    ...kopia.map((n) => n.colId),
+    ...kopia.filter((n) => grundFor(n) === 'varde').map((n) => n.colId),
     ...(dubbletter ? nyckelkolumnerFor(frame, dubbletter) : []),
   ]
+  const fargkolumner = kopia.filter((n) => grundFor(n) === 'farg').map((n) => n.colId)
 
   return {
     rader,
@@ -128,7 +150,7 @@ export function beraknaOrdning(
     dubbletter: dubbletter === null ? null : { ...dubbletter, strunta: { ...dubbletter.strunta } },
     radantal: frame.rowCount,
     dataRevision,
-    signatur: nyckelsignatur(frame, kolumner),
+    signatur: nyckelsignatur(frame, kolumner, fargkolumner),
     inaktuell: false,
   }
 }
@@ -153,7 +175,10 @@ function likaDubbletter(a: Dubblettnyckel | null, b: Dubblettnyckel | null): boo
 
 function likaNivaer(a: readonly Sorteringsniva[], b: readonly Sorteringsniva[]): boolean {
   if (a.length !== b.length) return false
-  return a.every((n, i) => n.colId === b[i]!.colId && n.riktning === b[i]!.riktning)
+  return a.every(
+    (n, i) =>
+      n.colId === b[i]!.colId && n.riktning === b[i]!.riktning && grundFor(n) === grundFor(b[i]!),
+  )
 }
 
 /**
@@ -192,10 +217,14 @@ export function synkaOrdning(
   // Grinden är inte en optimering utan en förutsättning: utan den skulle
   // varje tangenttryck i sökrutan kosta en hash över hela tabellen.
   if (ordning.dataRevision !== lage.dataRevision) {
-    const signatur = nyckelsignatur(frame, [
-      ...ordning.nivaer.map((n) => n.colId),
-      ...(ordning.dubbletter ? nyckelkolumnerFor(frame, ordning.dubbletter) : []),
-    ])
+    const signatur = nyckelsignatur(
+      frame,
+      [
+        ...ordning.nivaer.filter((n) => grundFor(n) === 'varde').map((n) => n.colId),
+        ...(ordning.dubbletter ? nyckelkolumnerFor(frame, ordning.dubbletter) : []),
+      ],
+      ordning.nivaer.filter((n) => grundFor(n) === 'farg').map((n) => n.colId),
+    )
     ordning.dataRevision = lage.dataRevision
     // Ändrade användaren en helt annan kolumn är ordningen fortfarande giltig,
     // och då ska ingen banderoll dyka upp och påstå motsatsen.

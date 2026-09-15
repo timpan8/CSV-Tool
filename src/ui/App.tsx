@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'preact/hooks'
 import type { Column, ColumnId, ColumnType, Frame } from '../core/types.js'
+import { fargToken } from '../core/frame/farg.js'
+import { FARGER, fargetikett } from './fargetikett.js'
+import { fargaCeller, sattKolumnfarg } from '../state/farg.js'
 import {
   columnIndex,
   duplicateColumn,
@@ -9,6 +12,7 @@ import {
   removeColumn,
   sammaInnehall,
   uniqueColumnName,
+  unikFilnamn,
 } from '../core/frame/frame.js'
 import { formatCount } from '../core/locale/sv.js'
 import { parseDelimitedText } from '../core/csv/parse.js'
@@ -53,6 +57,8 @@ import {
   viewIsLimited,
   glomSparat,
   borjaOm,
+  bumpaUtseende,
+  dopOmFlik,
   type Tab,
 } from '../state/store.js'
 import {
@@ -133,6 +139,8 @@ import {
   vantarPaMall,
 } from '../state/kombinera.js'
 import { oppnaSlaIhop, slaIhopOppen, stangSlaIhop } from '../state/slaihop.js'
+import { jamforOppen, oppnaJamfor, stangJamfor } from '../state/jamfor.js'
+import { Jamfor } from './Jamfor.jsx'
 import { nyRegelId, TOMT_FILTER, type Filterregel } from '../core/ops/filter.js'
 import {
   hittaDubbletter,
@@ -215,6 +223,8 @@ export function App() {
   const [egnaBehallna, setEgnaBehallna] = useState<Map<number, number>>(new Map())
   const palettFil = useRef<HTMLInputElement>(null)
   const [meny, setMeny] = useState<MenyLage | null>(null)
+  /** Fliken vars namn redigeras i flikraden, eller null. */
+  const [dopOmFlikId, setDopOmFlikId] = useState<string | null>(null)
   const [laddar, setLaddar] = useState<string | null>(null)
   const [slappOver, setSlappOver] = useState(false)
   const [sokOppen, setSokOppen] = useState(false)
@@ -287,6 +297,12 @@ export function App() {
           message: tf('Innehållet är identiskt med den redan öppna fliken ”{0}”.', dubblett.frame.name),
         })
       }
+      if (inklistrade.current.has(file)) {
+        parsed.name = unikFilnamn(
+          tabs.value.map((t) => t.frame.name),
+          parsed.name,
+        )
+      }
       const flik = openFrame(parsed)
       // Filen öppnades från kombineringsvyns "Öppna mallfil…". Den gick samma
       // väg som alla andra filer, genom importdialogen — en mall som lästs med
@@ -343,10 +359,23 @@ export function App() {
     setKö((current) => [...current, exempelfil(EXEMPELFIL_MALL, 'exempel-mall.csv')])
   }
 
+  /**
+   * Filerna som kom ur urklippet, så att inläsningen känner igen dem.
+   *
+   * Namnet räknas ut när texten klistras in, men fliken från förra
+   * inklistringen finns inte i fliklistan förrän filen lästs klart — så två
+   * snabba inklistringar fick båda `Inklistrat 1`. Inläsningen räknar därför
+   * om namnet i öppningsögonblicket, och bara för de här filerna: en riktig
+   * fil som öppnas två gånger ska fortfarande heta vad den heter.
+   */
+  const inklistrade = useRef(new WeakSet<File>())
+
   /** Öppnar text från urklipp som en ny flik. */
   const oppnaText = (text: string, namn: string) => {
     const blob = new Blob([text], { type: 'text/csv' })
-    setKö((current) => [...current, new File([blob], namn, { type: 'text/csv' })])
+    const fil = new File([blob], namn, { type: 'text/csv' })
+    inklistrade.current.add(fil)
+    setKö((current) => [...current, fil])
   }
 
   /* ---------- Kolumnåtgärder ---------- */
@@ -546,9 +575,11 @@ export function App() {
     const col = findColumn(frame, id)
     if (!col) return
     // Bredd är utseende, inte data, och hör inte hemma i ångra-historiken —
-    // annars känns Ctrl+Z trasigt när den backar en kolumnbredd.
+    // annars känns Ctrl+Z trasigt när den backar en kolumnbredd. Men den ska
+    // sparas, och det är `bumpaUtseende` som ser till det.
     col.width = bredd
-    touch()
+    if (tab) bumpaUtseende(tab)
+    else touch()
   }
 
   /* ---------- Vy ---------- */
@@ -573,6 +604,7 @@ export function App() {
    */
   const stangEgnaVyer = () => {
     stangSlaIhop()
+    stangJamfor()
     stangKombinera()
     setOversiktOppen(false)
     stangPivot()
@@ -786,7 +818,15 @@ export function App() {
   /** Öppnar urklippstexten som en egen flik, som i det tomma läget. */
   const klistraInSomNyFil = (text: string) => {
     if (text.trim() === '') return
-    oppnaText(text, 'inklistrat.csv')
+    // Inklistringarna numreras: två flikar som båda heter `inklistrat.csv`
+    // går inte att skilja åt, och det är just två man har när man jämför.
+    oppnaText(
+      text,
+      unikFilnamn(
+        tabs.value.map((t) => t.frame.name),
+        'Inklistrat 1',
+      ),
+    )
   }
 
   /**
@@ -1114,8 +1154,49 @@ export function App() {
     ]
   }
 
+  /**
+   * Färgar markeringen — eller hela raderna, när `helaRaden` är satt.
+   *
+   * Cellmenyn färgar de celler man markerat; radmenyn färgar raderna tvärs
+   * över alla synliga kolumner. Samma steg, samma Ångra i notisen.
+   */
+  const fargaMarkeringen = (farg: number, helaRaden = false) => {
+    const nu = nuLage()
+    if (!nu?.sel) return
+    const r = rect(nu.sel)
+    const kolumner = helaRaden ? nu.kolumner : nu.kolumner.slice(r.k1, r.k2 + 1)
+    const andrade = fargaCeller(nu.tab, kolumner, selectedRows(nu.tab, nu.sel), farg)
+    if (andrade === 0) {
+      notify(t(farg === 0 ? 'Cellerna hade ingen färg.' : 'Cellerna hade redan den färgen.'))
+      return
+    }
+    notify(
+      farg === 0
+        ? tf('Tog bort färgen från {0}.', celler(andrade))
+        : tf('Färgade {0}.', celler(andrade)),
+      { atgard: { etikett: t('Ångra'), kor: () => undo(nu.tab) } },
+    )
+  }
+
+  /** Färgar varje cell i kolumnen. */
+  const fargaKolumn = (id: ColumnId, farg: number) => {
+    if (!frame || !tab) return
+    const col = findColumn(frame, id)
+    if (!col) return
+    const alla = Array.from({ length: frame.rowCount }, (_, i) => i)
+    const andrade = fargaCeller(tab, [col], alla, farg)
+    if (andrade === 0) return
+    notify(
+      farg === 0
+        ? tf('Tog bort färgen från {0}.', celler(andrade))
+        : tf('Färgade {0}.', celler(andrade)),
+      { atgard: { etikett: t('Ångra'), kor: () => undo(tab) } },
+    )
+  }
+
   const radmenyposter = (): (MenyPost | 'avdelare')[] =>
     radMeny({
+      farga: (farg) => fargaMarkeringen(farg, true),
       infogaFore: () => {
         const nu = nuLage()
         if (nu?.sel) infogaRader(nu.tab, nu.sel.fokusRad, 1, false)
@@ -1145,6 +1226,12 @@ export function App() {
       flyttaForst: (i) => flyttaKolumn(i, 0),
       flyttaSist: (i) => flyttaKolumn(i, frame.columns.length - 1),
       anpassaBredd: (i) => anpassaKolumnbredd(i),
+      kolumnfarg: (i, farg) => {
+        const c = findColumn(frame, i)
+        if (c) sattKolumnfarg(tab, c, farg)
+      },
+      fargaAlla: fargaKolumn,
+      farg: col.farg ?? 0,
       visaOgiltiga,
       verktyg: verktygsposter([col]),
       regel: regelposter(col),
@@ -1153,6 +1240,12 @@ export function App() {
       sammanfatta: (i) => setSammanfatta({ startkolumn: i }),
       sortera: (i, riktning) => sattSortering(tab, [{ colId: i, riktning }]),
       laggSortering: (i) => vaxlaSortering(tab, i, true),
+      sorteraFlera: (i) => {
+        // Från kolumnens meny: kolumnen blir första nivån om ingen finns.
+        // Panelen ska öppnas med något att ställa in, inte tom.
+        if (!tab.viewSpec.sortering?.length) sattSortering(tab, [{ colId: i, riktning: 'stigande' }])
+        oppnaTabellverktyg('sortera')
+      },
       sortriktning: tab.viewSpec.sortering?.find((n) => n.colId === id)?.riktning ?? null,
       taBort: taBortKolumn,
       dold: col.hidden,
@@ -1207,6 +1300,7 @@ export function App() {
         }
       } },
       { etikett: t('Töm'), genvag: 'Delete', kor: tomMarkering },
+      { etikett: t('Färg'), undermeny: fargmeny((f) => fargaMarkeringen(f)) },
       'avdelare',
       {
         etikett: tf('Filtrera på ”{0}”', kort(varde)),
@@ -1665,8 +1759,9 @@ export function App() {
   const iVerkstaden = verkstadOppen.value
   const iKombinera = kombineraOppen.value
   const iSlaIhop = slaIhopOppen.value
+  const iJamfor = jamforOppen.value
   const iPivot = pivotOppen.value
-  const egenVy = iVerkstaden || iKombinera || iSlaIhop || iPivot || oversiktOppen
+  const egenVy = iVerkstaden || iKombinera || iSlaIhop || iJamfor || iPivot || oversiktOppen
 
   /*
    * Vilken vy som ligger överst — härlett en gång, läst på två ställen.
@@ -1679,6 +1774,8 @@ export function App() {
    */
   lagen.current.stangEgenVy = iSlaIhop
     ? stangSlaIhop
+    : iJamfor
+      ? stangJamfor
     : iKombinera
       ? stangKombinera
       : oversiktOppen
@@ -1732,6 +1829,7 @@ export function App() {
             y,
             poster: flerfilsmeny({
               slaIhop: () => oppnaSlaIhop(),
+              jamfor: () => oppnaJamfor(),
               kombinera: () => oppnaKombinera(),
               mall: () => oppnaKombinera(true),
               session: sessionslage(),
@@ -1899,6 +1997,10 @@ export function App() {
               tab={t}
               aktiv={t.id === tab?.id}
               iVerkstad={verkstadForFlik(t.id) !== null}
+              redigerar={dopOmFlikId === t.id}
+              onBorjaDopOm={() => setDopOmFlikId(t.id)}
+              onKlarDopOm={() => setDopOmFlikId(null)}
+              onMeny={(x, y) => setMeny({ x, y, poster: flikmeny(t, () => setDopOmFlikId(t.id)) })}
             />
           ))}
         </div>
@@ -1952,7 +2054,15 @@ export function App() {
         </div>
       )}
 
-      {iSlaIhop ? (
+      {iJamfor ? (
+        <Jamfor
+          flikar={tabs.value.map((t) => ({ id: t.id, frame: t.frame, tab: t }))}
+          aktivId={tab?.id ?? null}
+          onKlar={(text, angra) =>
+            notify(text, angra ? { atgard: { etikett: t('Ångra'), kor: angra } } : undefined)
+          }
+        />
+      ) : iSlaIhop ? (
         <SlaIhop
           flikar={tabs.value.map((t) => ({ id: t.id, frame: t.frame }))}
           aktivId={tab?.id ?? null}
@@ -2143,6 +2253,7 @@ export function App() {
               frame={frame}
               nivaer={tab.viewSpec.sortering ?? []}
               inaktuell={sorteringenArInaktuell(tab)}
+              aktivKolumn={tab.activeColumnId}
               onNivaer={(nivaer) => sattSortering(tab, nivaer)}
               onSorteraOm={() => sorteraOm(tab)}
               onStang={() => setTabellverktyg(null)}
@@ -2217,6 +2328,10 @@ export function App() {
         onBorjaOm={() => setBorjaOmOppen(true)}
         onSorteraOm={() => tab && sorteraOm(tab)}
         onRensaSortering={() => tab && rensaSortering(tab)}
+        onOppnaSortering={() => {
+          stangEgnaVyer()
+          oppnaTabellverktyg('sortera')
+        }}
         onRensaVy={() => {
           if (!tab) return
           setSokOppen(false)
@@ -2242,6 +2357,7 @@ export function App() {
           kommandon={byggKommandon(
             {
               harFil: frame !== null,
+              filnamn: frame?.name ?? null,
               kolumn: palettKolumn?.name ?? null,
               kolumnDold: palettKolumn?.hidden ?? false,
               harMarkering: markering !== null,
@@ -2286,6 +2402,7 @@ export function App() {
                 oppnaTabellverktyg('dubbletter')
               },
               slaIhop: () => oppnaSlaIhop(),
+              jamfor: () => oppnaJamfor(),
               kombinera: () => oppnaKombinera(),
               mall: () => oppnaKombinera(true),
               sammanfatta: () => setSammanfatta({ startkolumn: palettKolumn?.id ?? null }),
@@ -2299,8 +2416,13 @@ export function App() {
               stada,
               verktyg: (namn) => palettKolumn && oppnaVerktyg(namn, palettKolumn.id),
               dopOm: () => palettKolumn && dopOmKolumn(palettKolumn.id),
+              dopOmFil: () => tab && setDopOmFlikId(tab.id),
               duplicera: () => palettKolumn && dupliceraKolumn(palettKolumn.id),
               vaxlaDold: () => palettKolumn && vaxlaDold(palettKolumn.id),
+              fargaMarkering: (farg) => fargaMarkeringen(farg),
+              kolumnfarg: (farg) => {
+                if (tab && palettKolumn) sattKolumnfarg(tab, palettKolumn, farg)
+              },
               taBortKolumn: () => palettKolumn && taBortKolumn(palettKolumn.id),
               infogaKolumn: () => infogaKolumn(),
               lopnummer: laggTillNummerkolumn,
@@ -2453,6 +2575,7 @@ function stadMeny(
  */
 function flerfilsmeny(handlers: {
   slaIhop: () => void
+  jamfor: () => void
   kombinera: () => void
   mall: () => void
   session: Sessionslage
@@ -2463,6 +2586,11 @@ function flerfilsmeny(handlers: {
       etikett: t('Slå ihop…'),
       skal: t('rader som hör ihop läggs sida vid sida, matchat på en nyckel'),
       kor: handlers.slaIhop,
+    },
+    {
+      etikett: t('Jämför…'),
+      skal: t('två kolumner mot varandra: vad är lika, vad skiljer sig, vad saknas'),
+      kor: handlers.jamfor,
     },
     {
       etikett: t('Kombinera…'),
@@ -2502,16 +2630,38 @@ function flerfilsmeny(handlers: {
   ]
 }
 
+/**
+ * Färgmenyn: paletten som poster, med en ruta i färgen före namnet, och
+ * *Ta bort färg* sist. `aktiv` markerar den färg som gäller nu, där det
+ * finns en — kolumnfärgen har en, en markering har många.
+ */
+function fargmeny(valj: (farg: number) => void, aktiv?: number): (MenyPost | 'avdelare')[] {
+  return [
+    ...FARGER.map(
+      (f): MenyPost => ({
+        etikett: fargetikett(f.farg),
+        farg: fargToken(f.farg),
+        ...(aktiv !== undefined ? { aktiv: aktiv === f.farg } : {}),
+        kor: () => valj(f.farg),
+      }),
+    ),
+    'avdelare',
+    { etikett: t('Ta bort färg'), kor: () => valj(0) },
+  ]
+}
+
 function radMeny(handlers: {
   infogaFore: () => void
   infogaEfter: () => void
   duplicera: () => void
+  farga: (farg: number) => void
   taBort: () => void
 }): (MenyPost | 'avdelare')[] {
   return [
     { etikett: t('Infoga rad ovanför'), kor: handlers.infogaFore },
     { etikett: t('Infoga rad nedanför'), kor: handlers.infogaEfter },
     { etikett: t('Dubblera markerade rader'), kor: handlers.duplicera },
+    { etikett: t('Färga raden'), undermeny: fargmeny(handlers.farga) },
     'avdelare',
     { etikett: t('Ta bort markerade rader'), fara: true, kor: handlers.taBort },
   ]
@@ -2529,6 +2679,10 @@ function kolumnMeny(
     flyttaForst: (id: ColumnId) => void
     flyttaSist: (id: ColumnId) => void
     anpassaBredd: (id: ColumnId) => void
+    kolumnfarg: (id: ColumnId, farg: number) => void
+    fargaAlla: (id: ColumnId, farg: number) => void
+    /** Kolumnens nuvarande etikettfärg, 0 för ingen. */
+    farg: number
     visaOgiltiga: (id: ColumnId) => void
     /** Verktygen, färdigsorterade efter vad kolumnen innehåller. */
     verktyg: (MenyPost | 'avdelare')[]
@@ -2538,6 +2692,8 @@ function kolumnMeny(
     sammanfatta: (id: ColumnId) => void
     sortera: (id: ColumnId, riktning: Riktning) => void
     laggSortering: (id: ColumnId) => void
+    /** Öppnar sorteringspanelen — vägen till flera nivåer och färg. */
+    sorteraFlera: (id: ColumnId) => void
     sortriktning: Riktning | null
     taBort: (id: ColumnId) => void
     dold: boolean
@@ -2569,18 +2725,58 @@ function kolumnMeny(
     { etikett: t('Flytta först'), kor: () => handlers.flyttaForst(id) },
     { etikett: t('Flytta sist'), kor: () => handlers.flyttaSist(id) },
     { etikett: t('Anpassa bredden efter innehållet'), kor: () => handlers.anpassaBredd(id) },
+    {
+      /*
+       * En post och inte två, för menyn är redan hög: en rad till och
+       * undermenyerna når under fönsterkanten på en vanlig skärm. Färgen
+       * på rubriken är det man oftast vill ha; att färga alla celler ligger
+       * ett steg in.
+       */
+      etikett: t('Kolumnfärg'),
+      skal: t('en etikett på rubriken, för att hitta kolumnen'),
+      undermeny: [
+        ...fargmeny((f) => handlers.kolumnfarg(id, f), handlers.farg),
+        'avdelare',
+        {
+          etikett: t('Färga alla celler'),
+          undermeny: fargmeny((f) => handlers.fargaAlla(id, f)),
+        },
+      ],
+    },
     'avdelare',
     {
-      etikett: t('Sortera A→Ö'),
-      aktiv: handlers.sortriktning === 'stigande',
-      kor: () => handlers.sortera(id, 'stigande'),
+      /*
+       * Sorteringen som en undermeny. Menyn nådde under fönsterkanten på en
+       * vanlig skärm när kolumnfärgen kom till, och tre poster om samma sak
+       * är en grupp — de fick bli den.
+       */
+      etikett: t('Sortera'),
+      skal:
+        handlers.sortriktning === 'stigande'
+          ? 'A→Ö'
+          : handlers.sortriktning === 'fallande'
+            ? 'Ö→A'
+            : undefined,
+      undermeny: [
+        {
+          etikett: t('Sortera A→Ö'),
+          aktiv: handlers.sortriktning === 'stigande',
+          kor: () => handlers.sortera(id, 'stigande'),
+        },
+        {
+          etikett: t('Sortera Ö→A'),
+          aktiv: handlers.sortriktning === 'fallande',
+          kor: () => handlers.sortera(id, 'fallande'),
+        },
+        { etikett: t('Lägg till som sorteringsnivå'), kor: () => handlers.laggSortering(id) },
+        'avdelare',
+        {
+          etikett: t('Sortera på flera kolumner…'),
+          skal: t('nivåer i prioritetsordning, värde eller färg'),
+          kor: () => handlers.sorteraFlera(id),
+        },
+      ],
     },
-    {
-      etikett: t('Sortera Ö→A'),
-      aktiv: handlers.sortriktning === 'fallande',
-      kor: () => handlers.sortera(id, 'fallande'),
-    },
-    { etikett: t('Lägg till som sorteringsnivå'), kor: () => handlers.laggSortering(id) },
     'avdelare',
     { etikett: t('Filtrera på kolumnen…'), kor: () => handlers.filtrera(id) },
     {
@@ -2617,34 +2813,102 @@ function FilValjare({ onFiler }: { onFiler: (files: File[]) => void }) {
   )
 }
 
+/**
+ * Flikens meny: samma två saker som fliken själv kan, som text.
+ *
+ * Dubbelklicket och krysset finns kvar, men en meny är det man provar när
+ * man inte vet att dubbelklicket finns — och den kan säga vad F2 gör.
+ */
+function flikmeny(tab: Tab, borjaDopOm: () => void): (MenyPost | 'avdelare')[] {
+  return [
+    { etikett: t('Byt namn…'), genvag: 'F2', kor: borjaDopOm },
+    'avdelare',
+    { etikett: t('Stäng'), kor: () => stangFlik(tab) },
+  ]
+}
+
+/** Stänger fliken, med samma frågor oavsett om det var krysset eller menyn. */
+function stangFlik(tab: Tab): void {
+  if (
+    tab.smutsig &&
+    !window.confirm(`${tab.frame.name} har ändringar som inte exporterats. Stänga ändå?`)
+  ) {
+    return
+  }
+  /*
+   * En stängd källfil tar verkstaden med sig.
+   *
+   * Sessionen bär fysiska radindex in i just den här ramen; utan den
+   * finns inget att para ihop. Förut låg sessionen kvar som en zombie
+   * med två döda flik-id och gick varken att nå eller städa, och
+   * menyraden sa "ingen påbörjad sammanslagning" fast det fanns en.
+   */
+  const s = verkstad.value
+  const iSession = s !== null && (s.vansterTabId === tab.id || s.hogerTabId === tab.id)
+  if (iSession) {
+    const ogjort = ogjortArbete(s)
+    if (
+      ogjort > 0 &&
+      !window.confirm(
+        `${tab.frame.name} används av en påbörjad sammanslagning med ${ogjort} beslut. Stänger du fliken går de förlorade.`,
+      )
+    ) {
+      return
+    }
+    kastaVerkstad()
+  }
+  closeTab(tab.id)
+}
+
 function FlikKnapp({
   tab,
   aktiv,
   iVerkstad,
+  redigerar,
+  onBorjaDopOm,
+  onKlarDopOm,
+  onMeny,
 }: {
   tab: Tab
   aktiv: boolean
   /** Fliken hör till en påbörjad sammanslagning med rader kvar. */
   iVerkstad: boolean
+  /** Namnet redigeras i ett fält i stället för att visas. */
+  redigerar: boolean
+  onBorjaDopOm: () => void
+  onKlarDopOm: () => void
+  onMeny: (x: number, y: number) => void
 }) {
   return (
-    <span class={`flik${aktiv ? ' flik--aktiv' : ''}`}>
-      <button
-        class="flik__namn"
-        style={{
-          border: 0,
-          background: 'transparent',
-          padding: 0,
-          color: 'inherit',
-          font: 'inherit',
-        }}
-        onClick={() => {
-          activeTabId.value = tab.id
-        }}
-      >
-        {tab.smutsig && '● '}
-        {tab.frame.name || t('Namnlös')}
-      </button>
+    <span
+      class={`flik${aktiv ? ' flik--aktiv' : ''}`}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        onMeny(e.clientX, e.clientY)
+      }}
+    >
+      {redigerar ? (
+        <Fliknamnsfalt tab={tab} onKlar={onKlarDopOm} />
+      ) : (
+        <button
+          class="flik__namn"
+          style={{
+            border: 0,
+            background: 'transparent',
+            padding: 0,
+            color: 'inherit',
+            font: 'inherit',
+          }}
+          title={t('Dubbelklicka för att byta namn')}
+          onClick={() => {
+            activeTabId.value = tab.id
+          }}
+          onDblClick={onBorjaDopOm}
+        >
+          {tab.smutsig && '● '}
+          {tab.frame.name || t('Namnlös')}
+        </button>
+      )}
       {/*
         Märket följer med fliken, så att det syns även när man står i en helt
         annan fil. Utan det vore chippet i statusraden osynligt tills man
@@ -2659,42 +2923,59 @@ function FlikKnapp({
       <button
         class="flik__stang"
         aria-label={tf('Stäng {0}', tab.frame.name)}
-        onClick={() => {
-          if (
-            tab.smutsig &&
-            !window.confirm(`${tab.frame.name} har ändringar som inte exporterats. Stänga ändå?`)
-          ) {
-            return
-          }
-          /*
-           * En stängd källfil tar verkstaden med sig.
-           *
-           * Sessionen bär fysiska radindex in i just den här ramen; utan den
-           * finns inget att para ihop. Förut låg sessionen kvar som en zombie
-           * med två döda flik-id och gick varken att nå eller städa, och
-           * menyraden sa "ingen påbörjad sammanslagning" fast det fanns en.
-           */
-          const s = verkstad.value
-          const iSession =
-            s !== null && (s.vansterTabId === tab.id || s.hogerTabId === tab.id)
-          if (iSession) {
-            const ogjort = ogjortArbete(s)
-            if (
-              ogjort > 0 &&
-              !window.confirm(
-                `${tab.frame.name} används av en påbörjad sammanslagning med ${ogjort} beslut. Stänger du fliken går de förlorade.`,
-              )
-            ) {
-              return
-            }
-            kastaVerkstad()
-          }
-          closeTab(tab.id)
-        }}
+        onClick={() => stangFlik(tab)}
       >
         ✕
       </button>
     </span>
+  )
+}
+
+/**
+ * Namnfältet i fliken.
+ *
+ * Enter och blur sparar, Escape kastar. Ett fält i fliken i stället för en
+ * dialog, eftersom namnet är det enda som ändras och det står redan där.
+ * Sparas inget — tomt fält, samma namn — står det gamla kvar utan besked;
+ * det är ingen händelse.
+ */
+function Fliknamnsfalt({ tab, onKlar }: { tab: Tab; onKlar: () => void }) {
+  const [namn, setNamn] = useState(tab.frame.name)
+  const falt = useRef<HTMLInputElement>(null)
+  // Escape avmonterar fältet, och avmonteringen ger ett blur — som annars
+  // hade sparat det man just kastade.
+  const klar = useRef(false)
+  useEffect(() => {
+    falt.current?.focus()
+    falt.current?.select()
+  }, [])
+  const spara = () => {
+    if (klar.current) return
+    klar.current = true
+    dopOmFlik(tab, namn)
+    onKlar()
+  }
+  return (
+    <input
+      ref={falt}
+      class="flik__namnfalt"
+      aria-label={tf('Nytt namn för {0}', tab.frame.name)}
+      value={namn}
+      onInput={(e) => setNamn((e.currentTarget as HTMLInputElement).value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          spara()
+        } else if (e.key === 'Escape') {
+          e.preventDefault()
+          klar.current = true
+          onKlar()
+        }
+        // Rutnätets tangentbordsgenvägar ska inte se tangenterna.
+        e.stopPropagation()
+      }}
+      onBlur={spara}
+    />
   )
 }
 

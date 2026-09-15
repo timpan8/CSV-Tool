@@ -17,6 +17,7 @@ import {
   restoreRows,
   createFrame,
   sammaInnehall,
+  unikFilnamn,
 } from '../../src/core/frame/frame.js'
 import { createColumn, resetColumnIds } from '../../src/core/frame/column.js'
 import { Flag, type Frame } from '../../src/core/types.js'
@@ -291,5 +292,32 @@ describe('reserveraFrameId', () => {
     reserveraFrameId('inte-ett-id')
     const efter = newFrameId()
     expect(Number.parseInt(efter.slice(1), 36)).toBe(Number.parseInt(fore.slice(1), 36) + 1)
+  })
+})
+
+describe('unikFilnamn', () => {
+  it('lämnar ett ledigt namn i fred', () => {
+    expect(unikFilnamn(['kunder.csv'], 'order.csv')).toBe('order.csv')
+  })
+
+  it('räknar upp ett namn som slutar på ett tal', () => {
+    expect(unikFilnamn(['Inklistrat 1'], 'Inklistrat 1')).toBe('Inklistrat 2')
+    expect(unikFilnamn(['Inklistrat 1', 'Inklistrat 2'], 'Inklistrat 1')).toBe('Inklistrat 3')
+    // Talet räknas upp före ändelsen.
+    expect(unikFilnamn(['rapport-2024.csv'], 'rapport-2024.csv')).toBe('rapport-2025.csv')
+  })
+
+  it('lägger löpnumret före ändelsen annars', () => {
+    expect(unikFilnamn(['kunder.csv'], 'kunder.csv')).toBe('kunder (2).csv')
+    expect(unikFilnamn(['kunder.csv', 'kunder (2).csv'], 'kunder.csv')).toBe('kunder (3).csv')
+    expect(unikFilnamn(['Kunder'], 'Kunder')).toBe('Kunder (2)')
+  })
+
+  it('är skiftlägesokänsligt och trimmar', () => {
+    expect(unikFilnamn(['KUNDER.CSV'], ' kunder.csv ')).toBe('kunder (2).csv')
+  })
+
+  it('ger ett tomt namn ett namn', () => {
+    expect(unikFilnamn([], '   ')).toBe('Namnlös')
   })
 })
