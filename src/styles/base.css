@@ -753,6 +753,16 @@ input[type='radio'] {
 
 .sortchip__text {
   color: var(--text-svag);
+  border: 0;
+  background: transparent;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+
+.sortchip__text:hover {
+  color: var(--text);
+  text-decoration: underline;
 }
 
 .sortchip--inaktuell .sortchip__text {

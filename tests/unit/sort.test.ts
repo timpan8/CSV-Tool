@@ -5,6 +5,7 @@ import { createFrame } from '../../src/core/frame/frame.js'
 import { kolumnrang, nollstallRangcache, TOM_RANG } from '../../src/core/frame/rank.js'
 import { beskrivSortering, sorteraRader, type Sorteringsniva } from '../../src/core/ops/sort.js'
 import type { ColumnType, Frame } from '../../src/core/types.js'
+import { cellfarg, medFarg } from '../../src/core/frame/farg.js'
 
 function frameOf(headers: string[], rows: string[][], typer: ColumnType[] = []): Frame {
   const columns = headers.map((name, i) => createColumn(name, rows.length, typer[i] ?? 'text'))
@@ -30,9 +31,19 @@ function naivt(frame: Frame, nivaer: Sorteringsniva[]): number[] {
   return rader.sort((a, b) => {
     for (const niva of nivaer) {
       const col = frame.columns.find((c) => c.id === niva.colId)!
-      const { rang } = kolumnrang(col)
-      const ra = rang[col.codes[a]!]!
-      const rb = rang[col.codes[b]!]!
+      let ra: number
+      let rb: number
+      if (niva.grund === 'farg') {
+        // Ofärgad är "tom": alltid sist.
+        const fa = cellfarg(col.flags[a]!)
+        const fb = cellfarg(col.flags[b]!)
+        ra = fa === 0 ? TOM_RANG : fa
+        rb = fb === 0 ? TOM_RANG : fb
+      } else {
+        const { rang } = kolumnrang(col)
+        ra = rang[col.codes[a]!]!
+        rb = rang[col.codes[b]!]!
+      }
       if (ra === rb) continue
       if (ra === TOM_RANG) return 1
       if (rb === TOM_RANG) return -1
@@ -336,5 +347,50 @@ describe('kolumnens egen ordning', () => {
     const med = kolumnrang(col).rang
     // Utan kontrollen i cachen hade den gamla rangen kommit tillbaka.
     expect(Array.from(med)).not.toEqual(Array.from(utan))
+  })
+})
+
+describe('sortering på färg', () => {
+  function farga(frame: Frame, kol: number, farger: number[]) {
+    const col = frame.columns[kol]!
+    farger.forEach((f, r) => (col.flags[r] = medFarg(col.flags[r]!, f)))
+  }
+
+  it('lägger raderna i palettens ordning med de ofärgade sist, åt båda hållen', () => {
+    const frame = frameOf(['Ort'], [['a'], ['b'], ['c'], ['d'], ['e']])
+    farga(frame, 0, [0, 7, 3, 0, 1])
+    const id = frame.columns[0]!.id
+    expect(Array.from(sorteraRader(frame, [{ colId: id, riktning: 'stigande', grund: 'farg' }]))).toEqual([4, 2, 1, 0, 3])
+    expect(Array.from(sorteraRader(frame, [{ colId: id, riktning: 'fallande', grund: 'farg' }]))).toEqual([1, 2, 4, 0, 3])
+  })
+
+  it('stämmer med den naiva sorteringen för blandade nivåer på värde och färg', () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.tuple(fc.constantFrom('a', 'b', 'c', ''), fc.integer({ min: 0, max: 7 })), { minLength: 1, maxLength: 40 }),
+        fc.constantFrom<Sorteringsniva['riktning']>('stigande', 'fallande'),
+        fc.constantFrom<Sorteringsniva['riktning']>('stigande', 'fallande'),
+        fc.boolean(),
+        (rader, r1, r2, fargForst) => {
+          const frame = frameOf(['A'], rader.map(([v]) => [v]))
+          farga(frame, 0, rader.map(([, f]) => f))
+          const id = frame.columns[0]!.id
+          const varde: Sorteringsniva = { colId: id, riktning: r1 }
+          const farg: Sorteringsniva = { colId: id, riktning: r2, grund: 'farg' }
+          const nivaer = fargForst ? [farg, varde] : [varde, farg]
+          expect(Array.from(sorteraRader(frame, nivaer))).toEqual(naivt(frame, nivaer))
+        },
+      ),
+    )
+  })
+
+  it('beskrivningen säger att nivån går på färg', () => {
+    const frame = frameOf(['Ort', 'Status'], [['a', 'x']])
+    expect(
+      beskrivSortering(frame, [
+        { colId: frame.columns[1]!.id, riktning: 'stigande', grund: 'farg' },
+        { colId: frame.columns[0]!.id, riktning: 'fallande' },
+      ]),
+    ).toBe('Status (färg) ↑, Ort ↓')
   })
 })

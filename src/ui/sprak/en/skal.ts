@@ -184,6 +184,9 @@ export const SKAL: Record<string, string> = {
   'Sortera A→Ö': 'Sort A→Z',
   'Sortera Ö→A': 'Sort Z→A',
   'Lägg till som sorteringsnivå': 'Add as a sorting level',
+  'Sortera på flera kolumner…': 'Sort on several columns…',
+  'nivåer i prioritetsordning, värde eller färg': 'levels in priority order, value or colour',
+  'Klicka för att öppna sorteringspanelen': 'Click to open the sorting panel',
   'Filtrera på kolumnen…': 'Filter on the column…',
   'en rad per värde, med summa och antal för resten av kolumnerna':
     'one row per value, with sum and count for the remaining columns',

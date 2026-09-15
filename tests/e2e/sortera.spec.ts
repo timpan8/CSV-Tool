@@ -188,3 +188,50 @@ test('pilen säger om kolumnen är sorterad eller bara går att sortera', async 
   await page.locator('.sortchip__stang').click()
   await expect(pil).toHaveText('↕')
 })
+
+test('panelen säger med ord vad riktningen betyder, och flyttar nivåer med knappar', async ({ page }) => {
+  await oppnaExempel(page)
+  await sortpil(page, 'Belopp').click()
+  await sortpil(page, 'Ort').click({ modifiers: ['Shift'] })
+  await page.getByRole('button', { name: /^Sortera \(2\)$/ }).click()
+
+  const panel = page.locator('.verktyg')
+  await expect(panel).toContainText('2 nivåer')
+  // Ett tal sorteras minst först; en text A→Ö.
+  await expect(panel.getByRole('radio', { name: 'Minst först' })).toHaveAttribute('aria-checked', 'true')
+  await expect(panel.getByRole('radio', { name: /^A→Ö/ })).toHaveAttribute('aria-checked', 'true')
+  await expect(panel).toContainText('Rader som är lika på nivå 1 ordnas efter nivå 2')
+
+  await page.getByRole('button', { name: 'Flytta nivån Ort upp' }).click()
+  await expect(page.locator('.statusrad')).toContainText('Sorterat: Ort ↑, Belopp ↑')
+  await expect(page.getByRole('button', { name: 'Flytta nivån Ort upp' })).toBeDisabled()
+})
+
+test('en nivå kan gå på färg, och de färgade raderna hamnar först', async ({ page }) => {
+  await oppnaExempel(page)
+  // Färga Örebro rött och Boden grönt: grönt ligger före rött i paletten.
+  for (const [ort, farg] of [
+    ['Örebro', 'Röd'],
+    ['Boden', 'Grön'],
+  ] as const) {
+    await page.getByRole('gridcell', { name: ort, exact: true }).first().click({ button: 'right' })
+    await page.locator('.meny').first().getByRole('menuitem', { name: 'Färg', exact: true }).hover()
+    await page.locator('.meny--under .meny__post', { hasText: new RegExp(`^${farg}$`) }).click()
+  }
+
+  await page.getByRole('button', { name: 'Meny för kolumnen Ort' }).click()
+  await page.locator('.meny').first().getByRole('menuitem', { name: /^Sortera/ }).hover()
+  await page.locator('.meny--under').getByRole('menuitem', { name: /Sortera på flera kolumner/ }).click()
+  // Kolumnen man kom ifrån är redan första nivån.
+  await expect(page.locator('.statusrad')).toContainText('Sorterat: Ort ↑')
+  await page.locator('.verktyg').getByRole('radio', { name: 'Färg' }).click()
+
+  await expect(page.locator('.statusrad')).toContainText('Sorterat: Ort (färg) ↑')
+  const orter = await kolumn(page, 5)
+  expect(orter.slice(0, 2)).toEqual(['Boden', 'Örebro'])
+
+  // Klick på chippet öppnar panelen igen.
+  await page.locator('.verktyg .verktyg__stang, .verktyg [aria-label="Stäng"]').first().click()
+  await page.locator('.sortchip__text').click()
+  await expect(page.locator('.verktyg')).toContainText('1 nivå')
+})

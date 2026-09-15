@@ -22,6 +22,7 @@ import {
   taBortRader,
 } from '../../src/state/edits.js'
 import { computeView } from '../../src/state/view.js'
+import { fargaCeller } from '../../src/state/farg.js'
 
 function frameOf(headers: string[], rows: string[][]): Frame {
   const columns = headers.map((name) => createColumn(name, rows.length))
@@ -111,6 +112,37 @@ describe('frysningen', () => {
     redigeraCell(tab, 0, 1, '999')
     // Banderollen får inte ljuga: Belopp ingår inte i sorteringen.
     expect(sorteringenArInaktuell(tab)).toBe(false)
+  })
+
+  it('en färgning gör en färgnivå inaktuell, men inte en värdenivå', () => {
+    const tab = tabOf(['Ort'], ORTER)
+    const col = tab.frame.columns[0]!
+    sattSortering(tab, [{ colId: col.id, riktning: 'stigande' }])
+    fargaCeller(tab, [col], [0], 3)
+    expect(sorteringenArInaktuell(tab)).toBe(false)
+
+    sattSortering(tab, [{ colId: col.id, riktning: 'stigande', grund: 'farg' }])
+    expect(kolumn(tab, 0)[0]).toBe('Malmö')
+    expect(sorteringenArInaktuell(tab)).toBe(false)
+    fargaCeller(tab, [col], [3], 1)
+    expect(sorteringenArInaktuell(tab)).toBe(true)
+    sorteraOm(tab)
+    expect(kolumn(tab, 0)[0]).toBe('Lund')
+    expect(sorteringenArInaktuell(tab)).toBe(false)
+
+    // En rättad cell rör inte färgerna, så färgordningen står sig.
+    redigeraCell(tab, 0, 0, 'Lundby')
+    expect(sorteringenArInaktuell(tab)).toBe(false)
+  })
+
+  it('att byta grund på en nivå räknar om ordningen', () => {
+    const tab = tabOf(['Ort'], ORTER)
+    const col = tab.frame.columns[0]!
+    fargaCeller(tab, [col], [4], 2)
+    sattSortering(tab, [{ colId: col.id, riktning: 'stigande' }])
+    expect(kolumn(tab, 0)[0]).toBe('Boden')
+    sattSortering(tab, [{ colId: col.id, riktning: 'stigande', grund: 'farg' }])
+    expect(kolumn(tab, 0)[0]).toBe('Ystad')
   })
 
   it('en typändring på nyckelkolumnen gör ordningen inaktuell', () => {

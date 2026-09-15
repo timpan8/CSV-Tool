@@ -1218,6 +1218,12 @@ export function App() {
       sammanfatta: (i) => setSammanfatta({ startkolumn: i }),
       sortera: (i, riktning) => sattSortering(tab, [{ colId: i, riktning }]),
       laggSortering: (i) => vaxlaSortering(tab, i, true),
+      sorteraFlera: (i) => {
+        // Från kolumnens meny: kolumnen blir första nivån om ingen finns.
+        // Panelen ska öppnas med något att ställa in, inte tom.
+        if (!tab.viewSpec.sortering?.length) sattSortering(tab, [{ colId: i, riktning: 'stigande' }])
+        oppnaTabellverktyg('sortera')
+      },
       sortriktning: tab.viewSpec.sortering?.find((n) => n.colId === id)?.riktning ?? null,
       taBort: taBortKolumn,
       dold: col.hidden,
@@ -2213,6 +2219,7 @@ export function App() {
               frame={frame}
               nivaer={tab.viewSpec.sortering ?? []}
               inaktuell={sorteringenArInaktuell(tab)}
+              aktivKolumn={tab.activeColumnId}
               onNivaer={(nivaer) => sattSortering(tab, nivaer)}
               onSorteraOm={() => sorteraOm(tab)}
               onStang={() => setTabellverktyg(null)}
@@ -2287,6 +2294,10 @@ export function App() {
         onBorjaOm={() => setBorjaOmOppen(true)}
         onSorteraOm={() => tab && sorteraOm(tab)}
         onRensaSortering={() => tab && rensaSortering(tab)}
+        onOppnaSortering={() => {
+          stangEgnaVyer()
+          oppnaTabellverktyg('sortera')
+        }}
         onRensaVy={() => {
           if (!tab) return
           setSokOppen(false)
@@ -2640,6 +2651,8 @@ function kolumnMeny(
     sammanfatta: (id: ColumnId) => void
     sortera: (id: ColumnId, riktning: Riktning) => void
     laggSortering: (id: ColumnId) => void
+    /** Öppnar sorteringspanelen — vägen till flera nivåer och färg. */
+    sorteraFlera: (id: ColumnId) => void
     sortriktning: Riktning | null
     taBort: (id: ColumnId) => void
     dold: boolean
@@ -2715,6 +2728,12 @@ function kolumnMeny(
           kor: () => handlers.sortera(id, 'fallande'),
         },
         { etikett: t('Lägg till som sorteringsnivå'), kor: () => handlers.laggSortering(id) },
+        'avdelare',
+        {
+          etikett: t('Sortera på flera kolumner…'),
+          skal: t('nivåer i prioritetsordning, värde eller färg'),
+          kor: () => handlers.sorteraFlera(id),
+        },
       ],
     },
     'avdelare',

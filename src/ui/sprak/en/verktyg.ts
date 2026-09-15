@@ -322,6 +322,21 @@ export const VERKTYG: Record<string, string> = {
 
 
   /* ---------- Sortera ---------- */
+  'Kolumn för nivån {0}': 'Column for level {0}',
+  'Flytta nivån {0} upp': 'Move the level {0} up',
+  'Flytta nivån {0} ned': 'Move the level {0} down',
+  Efter: 'By',
+  Värde: 'Value',
+  'Cellernas färg, i palettens ordning. Ofärgade sist.':
+    'The colour of the cells, in palette order. Uncoloured last.',
+  Färgordning: 'Palette order',
+  'Omvänd färgordning': 'Reverse palette order',
+  'Nej först': 'No first',
+  'Ja först': 'Yes first',
+  'Rader som är lika på nivå 1 ordnas efter nivå 2, och så vidare.':
+    'Rows that tie on level 1 are ordered by level 2, and so on.',
+  'En nivå på färg lägger raderna i palettens ordning — blå, orange, grön, gul, rosa, lila, röd — med de ofärgade sist.':
+    'A level on colour puts the rows in palette order — blue, orange, green, yellow, pink, purple, red — with the uncoloured last.',
   /* `Sortera` och `Ta bort sorteringen` står i skalets modul — kommandot,
      kolumnmenyn och panelen delar samma ord. */
   'Ingen sortering': 'No sorting',

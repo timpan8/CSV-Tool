@@ -36,6 +36,8 @@ export function Statusrad(props: {
   onRensaVy: () => void
   onSorteraOm: () => void
   onRensaSortering: () => void
+  /** Klick på chippets text öppnar sorteringspanelen. */
+  onOppnaSortering: () => void
   onFortsattVerkstad: () => void
   onUppdateraRegler: () => void
   onBorjaOm: () => void
@@ -83,7 +85,18 @@ export function Statusrad(props: {
               : t('Så här är raderna sorterade.')
           }
         >
-          <span class="sortchip__text">{tf('Sorterat: {0}', props.sorterat)}</span>
+          {/*
+            Texten är en knapp: chippet är det ställe man tittar på när man
+            undrar hur raderna ligger, och därför också det ställe man ska
+            kunna ändra det från.
+          */}
+          <button
+            class="sortchip__text"
+            title={t('Klicka för att öppna sorteringspanelen')}
+            onClick={props.onOppnaSortering}
+          >
+            {tf('Sorterat: {0}', props.sorterat)}
+          </button>
           {props.sorteringInaktuell && (
             <button class="sortchip__knapp" onClick={props.onSorteraOm}>
               {t('Sortera om')}

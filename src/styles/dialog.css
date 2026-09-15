@@ -887,7 +887,21 @@
 /* ---------- Sorteringsnivåer ---------- */
 
 .nivarad {
+  gap: 4px;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* Två rader per nivå: kolumnen med sina knappar, och valen under. */
+.nivarad__rad {
+  display: flex;
+  align-items: center;
   gap: 6px;
+}
+
+.nivarad__rad--val {
+  padding-left: 22px;
+  flex-wrap: wrap;
 }
 
 .nivarad__nr {
